@@ -220,3 +220,95 @@ upload-keystore.jks
 - Посмотри что сейчас в папках android/app/src/main/res/mipmap-*/
 - Обычно там должны быть ic_launcher.png разных размеров
 Самый простой путь — использовать онлайн-генератор, он сразу создаст все нужные размеры и положит в zip-архиве.
+
+###  Работа с GIT
+## Последовательность команд в терминале для работы с GIT 
+# Последовательность шагов должна быть следующая:
+# 1. Проверка наличия установленной версии Git:
+  - git --version
+  # ожидание: 
+    - git version 2.39.2.windows.1
+# 2. Проверка конфигурации Git:
+  - git config --list
+  # ожидание: 
+    - user.name=Pavel Sofein
+    - user.email=sfpavelg@gmail.com
+# 3. Проверка состояния Git (состояние репозитория, но если небыло инициализации, то выдаст ошибку о том, что репозиторий не инициализирован, в этом случае выполните пункт №4):
+  - git status
+  # ожидание: 
+    - On branch main
+    - nothing to commit, working tree clean
+# 4. Инициализация репозитория (в репозитории проекта будет создан файл .git, который содержит всю информацию о состоянии репозитория): 
+  - git init
+  # ожидание: 
+    - Initialized empty Git repository in C:/Project/Bible/bible_app/.git/
+# 5. Добавление файлов в индекс для последующего коммита (. точка означает выбор всех файлов, или укажите конкретные файлы): 
+  - git add .
+  # ожидание: 
+    - 10 files changed, 10 insertions(+)
+    - create mode 100644 android/app/src/main/AndroidManifest.xml
+    - create mode 100644 android/app/src/main/assets/flutter_assets/AssetManifest.json
+    - create mode 100644 android/app/src/main/assets/flutter_assets/FontManifest.json
+    - create mode 100644 android/app/src/main/assets/flutter_assets/LICENSE
+    - create mode 100644 android/app/src/main/assets/flutter_assets/fonts/NotoSans-Regular.ttf
+    - create mode 100644 android/app/src/main/assets/flutter_assets/fonts/NotoSans-Regular.ttf
+    - create mode 100644 android/app/src/main/assets/flutter_assets/fonts/NotoSans-Regular.ttf
+    - create mode 100644 android/app/src/main/assets/flutter_assets/fonts/NotoSans-Regular.ttf
+# 6. Создание коммита с названием "Initial commit" (создание начального коммита, который будет содержать все добавленные в индекс файлы): 
+  - git commit -m "Initial commit"
+  # ожидание: 
+    - [main (root-commit) 8b90451] Initial commit
+    - 10 files changed, 10 insertions(+)
+    - create mode 100644 android/app/src/main/AndroidManifest.xml
+    - create mode 100644 android/app/src/main/assets/flutter_assets/AssetManifest.json
+    - create mode 100644 android/app/src/main/assets/flutter_assets/FontManifest.json
+    - create mode 100644 android/app/src/main/assets/flutter_assets/LICENSE
+    - create mode 100644 android/app/src/main/assets/flutter_assets/fonts/NotoSans-Regular.ttf
+    - create mode 100644 android/app/src/main/assets/flutter_assets/fonts/NotoSans-Regular.ttf
+    - create mode 100644 android/app/src/main/assets/flutter_assets/fonts/NotoSans-Regular.ttf
+# 7. Добавление удаленного репозитория, например на GitHub, для последующей отправки изменений (если он ещё не был добавлен ранее):
+  - git remote add origin https://github.com/sfpavelg/Bible.git
+  # ожидание: 
+    - fatal: remote origin already exists.
+# 8. Проверка удаленного репозитория:
+  - git remote -v
+  # ожидание: 
+    - origin  https://github.com/sfpavelg/Bible.git (fetch)
+    - origin  https://github.com/sfpavelg/Bible.git (push)
+# 9. Отправка изменений на удаленный репозиторий (если он отправляется в перваый раз): 
+  - git push -u origin main
+  # ожидание: 
+    - Enumerating objects: 10, done.
+    - Counting objects: 100% (10/10), done.
+    - Delta compression using up to 8 threads
+    - Compressing objects: 100% (10/10), done.
+    - Writing objects: 100% (10/10), 1.02 KiB | 1.02 MiB/s, done.
+    - Total 10 (delta 0), reused 0 (delta 0), pack-reused 0
+    - To https://github.com/sfpavelg/Bible.git
+    -  * [new branch]      main -> main
+    - branch 'main' set up to track 'origin/main'.
+# 10. Последующая отправка изменений на удаленный репозиторий (если он уже был отправлен ранее): 
+  - git push
+  # ожидание: 
+    - Everything up-to-date
+# 11. Дополнитеольные команды для проверки. 
+# Проверка состояния Git после отправки изменений на удаленный репозиторий:
+  - git status
+  # ожидание: 
+    - On branch main
+    - nothing to commit, working tree clean
+  # Это значит все коммиты запушены в удалённый репозиторий.
+# Так же можног выполнить команду проверки локальных коммитов (верхние 5 коммитов):
+  - git log --oneline -5
+  # ожидаю: 
+   - 8b90451 (HEAD -> main) ver02
+   - d47ebc8 ver01
+  # есть два коммита: ver01 и ver02
+# Так же можног выполнить команду проверки коммитов на удаленном репозитории(--all - из всех веток,   -10 - отобрать верхние 10 коммитов):
+  - git log --oneline --graph --all -10
+  # ожидаю: 
+   - 8b90451 (HEAD -> main) ver02
+   - d47ebc8 ver01
+  # есть два коммита: ver01 и ver02
+
+

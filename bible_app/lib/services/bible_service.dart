@@ -15,12 +15,12 @@ class BibleService {
   Future<void> loadBibleData() async {
     try {
       // Загрузка Ветхого Завета
-      String oldTestamentData = await rootBundle.loadString('assets/bible/old_testament.json');
+      String oldTestamentData = await rootBundle.loadString('assets/bible/old_testament_correct.json');
       final oldTestamentJson = json.decode(oldTestamentData) as Map<String, dynamic>;
       _oldTestament = _convertJsonToBibleData(oldTestamentJson);
       
-      // Загрузка Нового Завета
-      String newTestamentData = await rootBundle.loadString('assets/bible/new_testament.json');
+      // Загрузка Нового Заветa
+      String newTestamentData = await rootBundle.loadString('assets/bible/new_testament_correct.json');
       final newTestamentJson = json.decode(newTestamentData) as Map<String, dynamic>;
       _newTestament = _convertJsonToBibleData(newTestamentJson);
       

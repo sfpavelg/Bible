@@ -54,45 +54,63 @@ class _BibleScreenState extends State<BibleScreen> {
                 const SizedBox(width: 4),
                 
                 // Кнопка названия книги
-                TextButton(
-                  onPressed: () {
-                    _showBookSelectionDialog(context);
-                  },
-                  style: TextButton.styleFrom(
-                    backgroundColor: Colors.lightBlue[50],
-                    padding: EdgeInsets.symmetric(horizontal: isWide ? 8 : 4, vertical: 6),
-                    minimumSize: Size.zero,
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.lightBlue[50],
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text(
-                    BibleService().getBookAbbreviation(appProvider.currentBook),
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontSize: isWide ? 14 : 12,
-                      fontWeight: FontWeight.bold,
+                  constraints: const BoxConstraints(
+                    minWidth: 48,
+                    minHeight: 36,
+                  ),
+                  child: TextButton(
+                    onPressed: () {
+                      _showBookSelectionDialog(context);
+                    },
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.symmetric(horizontal: isWide ? 8 : 4, vertical: 6),
+                      minimumSize: Size.zero,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    child: Text(
+                      BibleService().getBookAbbreviation(appProvider.currentBook),
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontSize: isWide ? 14 : 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ),
                 
                 const SizedBox(width: 4),
                 
                 // Кнопка номера главы
-                TextButton(
-                  onPressed: () {
-                    _showChapterSelectionDialog(context);
-                  },
-                  style: TextButton.styleFrom(
-                    backgroundColor: Colors.lightBlue[50],
-                    padding: EdgeInsets.symmetric(horizontal: isWide ? 8 : 4, vertical: 6),
-                    minimumSize: Size.zero,
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.lightBlue[50],
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text(
-                    '${appProvider.currentChapter}',
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontSize: isWide ? 14 : 12,
-                      fontWeight: FontWeight.bold,
+                  constraints: const BoxConstraints(
+                    minWidth: 36, // Фиксированная ширина для 2 символов
+                    minHeight: 36,
+                  ),
+                  child: TextButton(
+                    onPressed: () {
+                      _showChapterSelectionDialog(context);
+                    },
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.symmetric(horizontal: isWide ? 8 : 4, vertical: 6),
+                      minimumSize: Size.zero,
+                    ),
+                    child: Text(
+                      '${appProvider.currentChapter}',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontSize: isWide ? 14 : 12,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ),
@@ -269,37 +287,41 @@ class _BibleScreenState extends State<BibleScreen> {
         return AlertDialog(
           title: Text('Выберите главу (${appProvider.currentBook})'),
           content: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 400),
-            child: GridView.builder(
-              shrinkWrap: true,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 6,
-                crossAxisSpacing: 4,
-                mainAxisSpacing: 4,
+            constraints: BoxConstraints(
+              maxWidth: 400,
+              maxHeight: 300, // Ограничиваем высоту
+            ),
+            child: SingleChildScrollView(
+              child: Wrap(
+                spacing: 4,
+                runSpacing: 4,
+                alignment: WrapAlignment.center,
+                children: List.generate(chapterCount, (index) {
+                  final chapterNumber = index + 1;
+                  return SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        appProvider.changeBookAndChapter(
+                          appProvider.currentBook,
+                          chapterNumber,
+                        );
+                        Navigator.pop(context);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        shape: const CircleBorder(),
+                      ),
+                      child: Text(
+                        '$chapterNumber',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                    ),
+                  );
+                }),
               ),
-              itemCount: chapterCount,
-              itemBuilder: (context, index) {
-                final chapterNumber = index + 1;
-                return ElevatedButton(
-                  onPressed: () {
-                    appProvider.changeBookAndChapter(
-                      appProvider.currentBook,
-                      chapterNumber,
-                    );
-                    Navigator.pop(context);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size(40, 40),
-                    padding: EdgeInsets.zero,
-                    shape: const CircleBorder(),
-                  ),
-                  child: Text(
-                    '$chapterNumber',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 14),
-                  ),
-                );
-              },
             ),
           ),
         );
