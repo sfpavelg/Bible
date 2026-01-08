@@ -18,6 +18,7 @@ class MyApp extends StatelessWidget {
         builder: (context, appProvider, child) {
           return MaterialApp(
             title: 'Библия',
+            debugShowCheckedModeBanner: false,
             theme: ThemeData(
               colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
               useMaterial3: true,

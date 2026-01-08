@@ -175,4 +175,10 @@ class BibleService {
     final bookObj = BibleBook.books.firstWhere((b) => b.name == book, orElse: () => BibleBook.books.first);
     return bookObj.chapters;
   }
+
+  // Получение сокращенного названия книги
+  String getBookAbbreviation(String book) {
+    final bookObj = BibleBook.books.firstWhere((b) => b.name == book, orElse: () => BibleBook.books.first);
+    return bookObj.abbreviation;
+  }
 }

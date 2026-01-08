@@ -49,6 +49,9 @@ class _MainScreenState extends State<MainScreen> {
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
         type: BottomNavigationBarType.fixed,
+        backgroundColor: Colors.lightBlue[100], // Светло-голубой фон
+        selectedItemColor: Colors.blue[800], // Цвет выбранной иконки
+        unselectedItemColor: Colors.grey[600], // Цвет невыбранных иконок
       ),
     );
   }

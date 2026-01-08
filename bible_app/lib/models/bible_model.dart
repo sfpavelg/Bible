@@ -55,10 +55,10 @@ class BibleBook {
     BibleBook(name: 'Малахия', abbreviation: 'Мал', chapters: 4, testament: 'old'),
     
     // Новый Завет
-    BibleBook(name: 'От Матфея', abbreviation: 'Мф', chapters: 28, testament: 'new'),
-    BibleBook(name: 'От Марка', abbreviation: 'Мк', chapters: 16, testament: 'new'),
-    BibleBook(name: 'От Луки', abbreviation: 'Лк', chapters: 24, testament: 'new'),
-    BibleBook(name: 'От Иоанна', abbreviation: 'Ин', chapters: 21, testament: 'new'),
+    BibleBook(name: 'Матфея', abbreviation: 'Мф', chapters: 28, testament: 'new'),
+    BibleBook(name: 'Марка', abbreviation: 'Мк', chapters: 16, testament: 'new'),
+    BibleBook(name: 'Лука', abbreviation: 'Лк', chapters: 24, testament: 'new'),
+    BibleBook(name: 'Иоанна', abbreviation: 'Ин', chapters: 21, testament: 'new'),
     BibleBook(name: 'Деяния', abbreviation: 'Деян', chapters: 28, testament: 'new'),
     BibleBook(name: 'Иакова', abbreviation: 'Иак', chapters: 5, testament: 'new'),
     BibleBook(name: '1 Петра', abbreviation: '1Пет', chapters: 5, testament: 'new'),
