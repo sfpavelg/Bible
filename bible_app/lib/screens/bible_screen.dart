@@ -298,6 +298,8 @@ class _BibleScreenState extends State<BibleScreen> {
                 alignment: WrapAlignment.center,
                 children: List.generate(chapterCount, (index) {
                   final chapterNumber = index + 1;
+                  final isCurrentChapter = chapterNumber == appProvider.currentChapter;
+                  
                   return SizedBox(
                     width: 40,
                     height: 40,
@@ -312,11 +314,20 @@ class _BibleScreenState extends State<BibleScreen> {
                       style: ElevatedButton.styleFrom(
                         padding: EdgeInsets.zero,
                         shape: const CircleBorder(),
+                        backgroundColor: isCurrentChapter 
+                            ? Colors.blue // Синий фон для текущей главы
+                            : Colors.lightBlue[50], // Светло-голубой для остальных
+                        foregroundColor: isCurrentChapter 
+                            ? Colors.white // Белый текст для текущей главы
+                            : Colors.black, // Черный текст для остальных
                       ),
                       child: Text(
                         '$chapterNumber',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 14),
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: isCurrentChapter ? FontWeight.bold : FontWeight.normal,
+                        ),
                       ),
                     ),
                   );
@@ -354,22 +365,26 @@ class _BibleScreenState extends State<BibleScreen> {
                   spacing: 6,
                   runSpacing: 4,
                   children: oldTestamentBooks.map((book) {
+                    final isCurrentBook = book == appProvider.currentBook;
                     return TextButton(
                       onPressed: () {
                         appProvider.changeBookAndChapter(book, 1);
                         Navigator.pop(context);
                       },
                       style: TextButton.styleFrom(
-                        backgroundColor: Colors.lightBlue[50],
+                        backgroundColor: isCurrentBook 
+                            ? Colors.blue // Синий фон для текущей книги
+                            : Colors.lightBlue[50], // Светло-голубой для остальных
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         minimumSize: Size.zero,
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
                       child: Text(
                         BibleService().getBookAbbreviation(book),
-                        style: const TextStyle(
-                          color: Colors.black,
+                        style: TextStyle(
+                          color: isCurrentBook ? Colors.white : Colors.black,
                           fontSize: 12,
+                          fontWeight: isCurrentBook ? FontWeight.bold : FontWeight.normal,
                         ),
                       ),
                     );
@@ -388,22 +403,26 @@ class _BibleScreenState extends State<BibleScreen> {
                   spacing: 6,
                   runSpacing: 4,
                   children: newTestamentBooks.map((book) {
+                    final isCurrentBook = book == appProvider.currentBook;
                     return TextButton(
                       onPressed: () {
                         appProvider.changeBookAndChapter(book, 1);
                         Navigator.pop(context);
                       },
                       style: TextButton.styleFrom(
-                        backgroundColor: Colors.lightBlue[50],
+                        backgroundColor: isCurrentBook 
+                            ? Colors.blue // Синий фон для текущей книги
+                            : Colors.lightBlue[50], // Светло-голубой для остальных
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         minimumSize: Size.zero,
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
                       child: Text(
                         BibleService().getBookAbbreviation(book),
-                        style: const TextStyle(
-                          color: Colors.black,
+                        style: TextStyle(
+                          color: isCurrentBook ? Colors.white : Colors.black,
                           fontSize: 12,
+                          fontWeight: isCurrentBook ? FontWeight.bold : FontWeight.normal,
                         ),
                       ),
                     );

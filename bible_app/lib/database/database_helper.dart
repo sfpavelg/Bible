@@ -1,12 +1,21 @@
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
   
   factory DatabaseHelper() => _instance;
   
-  DatabaseHelper._internal();
+  DatabaseHelper._internal() {
+    // Инициализация для web-сборки
+    if (kIsWeb) {
+      // Для web используем databaseFactoryFfiWeb
+      databaseFactory = databaseFactoryFfiWeb;
+    }
+    // Для нативных платформ используем стандартную инициализацию
+  }
   
   static Database? _database;
   
@@ -17,7 +26,16 @@ class DatabaseHelper {
   }
   
   Future<Database> _initDatabase() async {
-    String path = join(await getDatabasesPath(), 'bible_app.db');
+    String path;
+    
+    if (kIsWeb) {
+      // Для web используем in-memory базу данных
+      path = ':memory:';
+    } else {
+      // Для нативных платформ используем файловую базу
+      path = join(await getDatabasesPath(), 'bible_app.db');
+    }
+    
     return await openDatabase(
       path,
       version: 1,

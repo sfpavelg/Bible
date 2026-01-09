@@ -57,7 +57,7 @@ class BibleBook {
     // Новый Завет
     BibleBook(name: 'Матфея', abbreviation: 'Мф', chapters: 28, testament: 'new'),
     BibleBook(name: 'Марка', abbreviation: 'Мк', chapters: 16, testament: 'new'),
-    BibleBook(name: 'Лука', abbreviation: 'Лк', chapters: 24, testament: 'new'),
+    BibleBook(name: 'Луки', abbreviation: 'Лк', chapters: 24, testament: 'new'),
     BibleBook(name: 'Иоанна', abbreviation: 'Ин', chapters: 21, testament: 'new'),
     BibleBook(name: 'Деяния', abbreviation: 'Деян', chapters: 28, testament: 'new'),
     BibleBook(name: 'Иакова', abbreviation: 'Иак', chapters: 5, testament: 'new'),
