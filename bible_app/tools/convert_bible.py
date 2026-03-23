@@ -74,7 +74,7 @@ BOOK_NAME_MAP = {
 
 def convert_bible_format():
     # Читаем исходный файл
-    with open('assets/bible/full_bible.json', 'r', encoding='utf-8') as f:
+    with open('assets/backup/bible/full_bible.json', 'r', encoding='utf-8') as f:
         data = json.load(f)
     
     # Создаем новую структуру
@@ -112,11 +112,11 @@ def convert_bible_format():
             new_testament[full_name] = book_data
     
     # Сохраняем Ветхий Завет
-    with open('assets/bible/old_testament_full.json', 'w', encoding='utf-8') as f:
+    with open('assets/backup/bible/old_testament_full.json', 'w', encoding='utf-8') as f:
         json.dump(old_testament, f, ensure_ascii=False, indent=2)
     
     # Сохраняем Новый Завет  
-    with open('assets/bible/new_testament_full.json', 'w', encoding='utf-8') as f:
+    with open('assets/backup/bible/new_testament_full.json', 'w', encoding='utf-8') as f:
         json.dump(new_testament, f, ensure_ascii=False, indent=2)
     
     print("Конвертация завершена!")

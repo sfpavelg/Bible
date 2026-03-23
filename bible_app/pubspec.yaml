@@ -106,6 +106,7 @@ flutter:
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/custom-fonts/#from-packages
 
-  # Assets
+  # Assets (только рабочие JSON Библии)
   assets:
-    - assets/bible/
+    - assets/bible/old_testament_correct.json
+    - assets/bible/new_testament_correct.json
