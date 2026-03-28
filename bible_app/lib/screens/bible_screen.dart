@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:bible_app/providers/app_provider.dart';
 import 'package:bible_app/services/bible_service.dart';
+import 'package:bible_app/utils/app_exit.dart';
 
 class BibleScreen extends StatefulWidget {
   const BibleScreen({super.key});
@@ -11,14 +15,60 @@ class BibleScreen extends StatefulWidget {
 }
 
 class _BibleScreenState extends State<BibleScreen> {
+  final ScrollController _scrollController = ScrollController();
+  int? _highlightVerse;
+  Timer? _highlightTimer;
+
+  @override
+  void dispose() {
+    _highlightTimer?.cancel();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _highlightVerseTemporarily(int verse) {
+    _highlightTimer?.cancel();
+    setState(() => _highlightVerse = verse);
+    _highlightTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _highlightVerse = null);
+    });
+  }
+
+  Future<void> _scrollToVerse(int verseNum, int totalVerses) async {
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    if (!_scrollController.hasClients || !mounted) return;
+    final max = _scrollController.position.maxScrollExtent;
+    final t = totalVerses <= 1 ? 0.0 : (verseNum - 1) / (totalVerses - 1);
+    await _scrollController.animateTo(
+      max * t,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final appProvider = Provider.of<AppProvider>(context);
     final verses = appProvider.getCurrentVerses();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    const appBarBg = Color(0xFFB3E5FC);
+    const buttonBg = Color(0xFFE1F5FE);
+    const chromeTextColor = Colors.black;
+    final verseBg = isDark ? Colors.grey.shade900 : Colors.white;
+    final verseTextColor = isDark ? Colors.white : Colors.black;
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.lightBlue[100], // Светло-голубой фон
+        backgroundColor: appBarBg,
+        surfaceTintColor: appBarBg,
+        foregroundColor: chromeTextColor,
+        iconTheme: const IconThemeData(color: Colors.black),
+        actionsIconTheme: const IconThemeData(color: Colors.black),
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(bottom: Radius.circular(14)),
+        ),
         title: LayoutBuilder(
           builder: (context, constraints) {
             final isWide = constraints.maxWidth > 400;
@@ -26,55 +76,41 @@ class _BibleScreenState extends State<BibleScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Кнопка перехода к предыдущей главе
                 Container(
-                  decoration: BoxDecoration(
-                    color: Colors.lightBlue[50], // Такой же фон как у кнопок книг
+                  decoration: const BoxDecoration(
+                    color: buttonBg,
                     shape: BoxShape.circle,
                   ),
-                  constraints: const BoxConstraints(
-                    minWidth: 36, // Уменьшенный диаметр
-                    minHeight: 36, // Уменьшенный диаметр
-                  ),
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                   child: IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.black),
-                    iconSize: isWide ? 18 : 16, // Уменьшенный размер иконок
-                    padding: const EdgeInsets.all(4), // Уменьшенные отступы
-                    onPressed: () {
-                      if (appProvider.currentChapter > 1) {
-                        appProvider.changeBookAndChapter(
-                          appProvider.currentBook,
-                          appProvider.currentChapter - 1,
-                        );
-                      }
+                    icon: const Icon(Icons.arrow_back, color: chromeTextColor),
+                    iconSize: isWide ? 18 : 16,
+                    padding: const EdgeInsets.all(4),
+                    onPressed: () async {
+                      await appProvider.goPrev();
                     },
                   ),
                 ),
-                
                 const SizedBox(width: 4),
-                
-                // Кнопка названия книги
                 Container(
                   decoration: BoxDecoration(
-                    color: Colors.lightBlue[50],
+                    color: buttonBg,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  constraints: const BoxConstraints(
-                    minWidth: 48,
-                    minHeight: 36,
-                  ),
+                  constraints: const BoxConstraints(minWidth: 48, minHeight: 36),
                   child: TextButton(
-                    onPressed: () {
-                      _showBookSelectionDialog(context);
-                    },
+                    onPressed: () => _showBookSelectionDialog(context),
                     style: TextButton.styleFrom(
-                      padding: EdgeInsets.symmetric(horizontal: isWide ? 8 : 4, vertical: 6),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isWide ? 8 : 4,
+                        vertical: 6,
+                      ),
                       minimumSize: Size.zero,
                     ),
                     child: Text(
                       BibleService().getBookAbbreviation(appProvider.currentBook),
                       style: TextStyle(
-                        color: Colors.black,
+                        color: chromeTextColor,
                         fontSize: isWide ? 14 : 12,
                         fontWeight: FontWeight.bold,
                       ),
@@ -83,62 +119,45 @@ class _BibleScreenState extends State<BibleScreen> {
                     ),
                   ),
                 ),
-                
                 const SizedBox(width: 4),
-                
-                // Кнопка номера главы
                 Container(
                   decoration: BoxDecoration(
-                    color: Colors.lightBlue[50],
+                    color: buttonBg,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  constraints: const BoxConstraints(
-                    minWidth: 36, // Фиксированная ширина для 2 символов
-                    minHeight: 36,
-                  ),
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                   child: TextButton(
-                    onPressed: () {
-                      _showChapterSelectionDialog(context);
-                    },
+                    onPressed: () => _showChapterSelectionDialog(context),
                     style: TextButton.styleFrom(
-                      padding: EdgeInsets.symmetric(horizontal: isWide ? 8 : 4, vertical: 6),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isWide ? 8 : 4,
+                        vertical: 6,
+                      ),
                       minimumSize: Size.zero,
                     ),
                     child: Text(
                       '${appProvider.currentChapter}',
                       style: TextStyle(
-                        color: Colors.black,
+                        color: chromeTextColor,
                         fontSize: isWide ? 14 : 12,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
                 ),
-                
                 const SizedBox(width: 4),
-                
-                // Кнопка перехода к следующей главе
                 Container(
-                  decoration: BoxDecoration(
-                    color: Colors.lightBlue[50], // Такой же фон как у кнопок книг
+                  decoration: const BoxDecoration(
+                    color: buttonBg,
                     shape: BoxShape.circle,
                   ),
-                  constraints: const BoxConstraints(
-                    minWidth: 36, // Уменьшенный диаметр
-                    minHeight: 36, // Уменьшенный диаметр
-                  ),
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                   child: IconButton(
-                    icon: const Icon(Icons.arrow_forward, color: Colors.black),
-                    iconSize: isWide ? 18 : 16, // Уменьшенный размер иконок
-                    padding: const EdgeInsets.all(4), // Уменьшенные отступы
-                    onPressed: () {
-                      final chapterCount = BibleService().getChapterCount(appProvider.currentBook);
-                      if (appProvider.currentChapter < chapterCount) {
-                        appProvider.changeBookAndChapter(
-                          appProvider.currentBook,
-                          appProvider.currentChapter + 1,
-                        );
-                      }
+                    icon: const Icon(Icons.arrow_forward, color: chromeTextColor),
+                    iconSize: isWide ? 18 : 16,
+                    padding: const EdgeInsets.all(4),
+                    onPressed: () async {
+                      await appProvider.goNext();
                     },
                   ),
                 ),
@@ -149,59 +168,47 @@ class _BibleScreenState extends State<BibleScreen> {
         actions: [
           Container(
             decoration: BoxDecoration(
-              color: Colors.lightBlue[50],
+              color: buttonBg,
               borderRadius: BorderRadius.circular(8),
             ),
             child: IconButton(
-              icon: const Icon(Icons.search, color: Colors.black),
-              iconSize: 24,
-              onPressed: () {
-                _showSearchDialog(context);
-              },
+              icon: const Icon(Icons.search, color: chromeTextColor),
+              onPressed: () => _showSearchDialog(context),
             ),
           ),
           Container(
             decoration: BoxDecoration(
-              color: Colors.lightBlue[50],
+              color: buttonBg,
               borderRadius: BorderRadius.circular(8),
             ),
             child: PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert, color: Colors.black),
+              icon: const Icon(Icons.more_vert, color: chromeTextColor),
               onSelected: (value) {
                 if (value == 'settings') {
-                  // TODO: Перейти к настройкам
+                  _showSettingsDialog(context);
+                } else if (value == 'support') {
+                  _showSupportDialog(context);
+                } else if (value == 'exit') {
+                  requestAppExit();
                 }
               },
-              itemBuilder: (BuildContext context) => [
-                const PopupMenuItem<String>(
-                  value: 'settings',
-                  child: Text('Настройки'),
-                ),
+              itemBuilder: (context) => const [
+                PopupMenuItem(value: 'settings', child: Text('Настройки')),
+                PopupMenuItem(value: 'support', child: Text('Техподдержка')),
+                PopupMenuDivider(),
+                PopupMenuItem(value: 'exit', child: Text('Выход')),
               ],
             ),
           ),
         ],
       ),
       body: GestureDetector(
-        onHorizontalDragEnd: (details) {
-          // Перелистывание пальцем влево/вправо
+        onHorizontalDragEnd: (details) async {
+          if (details.primaryVelocity == null) return;
           if (details.primaryVelocity! > 0) {
-            // Свайп вправо - предыдущая глава
-            if (appProvider.currentChapter > 1) {
-              appProvider.changeBookAndChapter(
-                appProvider.currentBook,
-                appProvider.currentChapter - 1,
-              );
-            }
+            await appProvider.goPrev();
           } else if (details.primaryVelocity! < 0) {
-            // Свайп влево - следующая глава
-            final chapterCount = BibleService().getChapterCount(appProvider.currentBook);
-            if (appProvider.currentChapter < chapterCount) {
-              appProvider.changeBookAndChapter(
-                appProvider.currentBook,
-                appProvider.currentChapter + 1,
-              );
-            }
+            await appProvider.goNext();
           }
         },
         child: appProvider.isLoading
@@ -209,88 +216,452 @@ class _BibleScreenState extends State<BibleScreen> {
             : verses.isEmpty
                 ? const Center(child: Text('Глава не найдена'))
                 : ListView.builder(
+                    key: ValueKey(
+                      '${appProvider.currentBook}_${appProvider.currentChapter}',
+                    ),
+                    controller: _scrollController,
                     itemCount: verses.length,
                     itemBuilder: (context, index) {
                       final verse = verses[index];
-                      final verseText = '${verse['verse']}. ${verse['text']}';
-                      
-                      // Определяем цвет текста в зависимости от типа контента
-                      Color textColor = Colors.black;
-                      if (verse['type'] == 'speech') {
-                        textColor = Colors.red; // Красный для слов Иисуса и Бога
+                      final num = verse['verse'] as int;
+                      final verseText = '$num. ${verse['text']}';
+                      final isSpeech = verse['type'] == 'speech';
+                      Color textColor = verseTextColor;
+                      if (isSpeech && appProvider.redLettersEnabled) {
+                        textColor = Colors.red;
                       }
-                      
-                      return Container(
-                        color: Colors.white, // Белый фон для текста стихов
+                      final highlighted = _highlightVerse == num;
+                      return Material(
+                        color: highlighted
+                            ? Colors.amber.shade100
+                            : verseBg,
                         child: ListTile(
                           title: Text(
                             verseText,
                             style: TextStyle(
                               fontSize: appProvider.fontSize,
+                              height: appProvider.lineHeight,
                               color: textColor,
-                              fontWeight: verse['type'] == 'speech' ? FontWeight.bold : FontWeight.normal,
+                              fontWeight:
+                                  isSpeech ? FontWeight.bold : FontWeight.normal,
                             ),
                           ),
-                          onTap: () {
-                            // TODO: Показать действия со стихом
-                          },
                         ),
                       );
                     },
                   ),
       ),
-
     );
   }
 
   void _showSearchDialog(BuildContext context) {
+    final appProvider = Provider.of<AppProvider>(context, listen: false);
+    final searchController = TextEditingController();
+    bool includeOld = true;
+    bool includeNew = true;
+    List<Map<String, dynamic>> results = [];
+
     showDialog(
       context: context,
-      builder: (context) {
-        final searchController = TextEditingController();
-        return AlertDialog(
-          title: const Text('Поиск по Библии'),
-          content: TextField(
-            controller: searchController,
-            decoration: const InputDecoration(hintText: 'Введите текст для поиска'),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Отмена'),
-            ),
-            TextButton(
-              onPressed: () {
-                final query = searchController.text;
-                if (query.isNotEmpty) {
-                  // TODO: Реализовать поиск и отображение результатов
-                  Navigator.pop(context);
-                }
-              },
-              child: const Text('Найти'),
-            ),
-          ],
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return AlertDialog(
+              title: const Text('Поиск по Библии'),
+              content: SizedBox(
+                width: 320,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    TextField(
+                      controller: searchController,
+                      decoration: const InputDecoration(
+                        hintText: 'Введите текст',
+                        border: OutlineInputBorder(),
+                      ),
+                      onSubmitted: (_) {
+                        final q = searchController.text.trim();
+                        if (q.isEmpty) return;
+                        results = appProvider.searchBible(
+                          q,
+                          includeOldTestament: includeOld,
+                          includeNewTestament: includeNew,
+                        );
+                        setModalState(() {});
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: CheckboxListTile(
+                            value: includeOld,
+                            onChanged: (v) {
+                              setModalState(() => includeOld = v ?? true);
+                            },
+                            title: const Text('ВЗ'),
+                            controlAffinity: ListTileControlAffinity.leading,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                        Expanded(
+                          child: CheckboxListTile(
+                            value: includeNew,
+                            onChanged: (v) {
+                              setModalState(() => includeNew = v ?? true);
+                            },
+                            title: const Text('НЗ'),
+                            controlAffinity: ListTileControlAffinity.leading,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (results.isNotEmpty)
+                      SizedBox(
+                        height: 220,
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: results.length,
+                          itemBuilder: (context, i) {
+                            final r = results[i];
+                            final book = r['book'] as String;
+                            final ch = r['chapter'] as int;
+                            final v = r['verse'] as int;
+                            final text = (r['text'] as String?) ?? '';
+                            final preview = text.length > 80
+                                ? '${text.substring(0, 80)}…'
+                                : text;
+                            return ListTile(
+                              dense: true,
+                              title: Text(
+                                '$book $ch:$v',
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              subtitle: Text(preview),
+                              onTap: () async {
+                                await appProvider.changeBookAndChapter(book, ch);
+                                if (!mounted) return;
+                                Navigator.pop(dialogContext);
+                                final total =
+                                    appProvider.getCurrentVerses().length;
+                                _highlightVerseTemporarily(v);
+                                unawaited(_scrollToVerse(v, total));
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Закрыть'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    final q = searchController.text.trim();
+                    if (q.isEmpty) return;
+                    results = appProvider.searchBible(
+                      q,
+                      includeOldTestament: includeOld,
+                      includeNewTestament: includeNew,
+                    );
+                    setModalState(() {});
+                  },
+                  child: const Text('Найти'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
   }
 
-  void _showChapterSelectionDialog(BuildContext context) {
+  void _showSettingsDialog(BuildContext context) {
     final appProvider = Provider.of<AppProvider>(context, listen: false);
-    
-    // Получаем реальное количество глав для текущей книги
-    final chapterCount = BibleService().getChapterCount(appProvider.currentBook);
-    
+
+    showDialog(
+      context: context,
+      builder: (dialogRouteContext) {
+        ThemeMode selectedTheme = appProvider.themeMode;
+        double fontSize = appProvider.fontSize;
+        double lineHeight = appProvider.lineHeight;
+        bool redLettersEnabled = appProvider.redLettersEnabled;
+        final screenSize = MediaQuery.of(dialogRouteContext).size;
+        final dialogWidth = (screenSize.width * 0.92).clamp(320.0, 520.0);
+        final dialogMaxHeight = screenSize.height * 0.82;
+
+        return StatefulBuilder(
+          builder: (modalContext, setModalState) {
+            final themeGroup = selectedTheme == ThemeMode.system
+                ? ThemeMode.light
+                : selectedTheme;
+            return Theme(
+              data: ThemeData.light(useMaterial3: true).copyWith(
+                colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+              ),
+              child: Builder(
+                builder: (dialogThemeContext) {
+                  return AlertDialog(
+                    backgroundColor: Colors.lightBlue[50],
+                    titlePadding: const EdgeInsets.fromLTRB(20, 14, 12, 8),
+                    title: Row(
+                      children: [
+                        const Expanded(child: Text('Настройки')),
+                        Material(
+                          color: Colors.lightBlue.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(8),
+                            onTap: () => Navigator.pop(modalContext),
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.blue, width: 1.2),
+                              ),
+                              child: const Icon(Icons.close, size: 20),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    content: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: dialogWidth,
+                        maxHeight: dialogMaxHeight,
+                      ),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Тема',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            RadioListTile<ThemeMode>(
+                              value: ThemeMode.light,
+                              groupValue: themeGroup,
+                              dense: true,
+                              visualDensity: VisualDensity.compact,
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text('Светлая'),
+                              activeColor: Colors.blue,
+                              onChanged: (value) {
+                                if (value == null) return;
+                                setModalState(() => selectedTheme = value);
+                                appProvider.setThemeMode(value);
+                              },
+                            ),
+                            RadioListTile<ThemeMode>(
+                              value: ThemeMode.dark,
+                              groupValue: themeGroup,
+                              dense: true,
+                              visualDensity: VisualDensity.compact,
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text('Тёмная'),
+                              activeColor: Colors.blue,
+                              onChanged: (value) {
+                                if (value == null) return;
+                                setModalState(() => selectedTheme = value);
+                                appProvider.setThemeMode(value);
+                              },
+                            ),
+                            const SizedBox(height: 10),
+                            const Text(
+                              'Размер шрифта',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            SliderTheme(
+                              data: SliderTheme.of(dialogThemeContext).copyWith(
+                                activeTrackColor: Colors.blue,
+                                inactiveTrackColor: Colors.blue.shade100,
+                                thumbColor: Colors.blue,
+                                overlayColor: Colors.blue.withOpacity(0.12),
+                              ),
+                              child: Slider(
+                                value: fontSize.clamp(12.0, 28.0),
+                                min: 12.0,
+                                max: 28.0,
+                                divisions: 16,
+                                label: fontSize.toStringAsFixed(0),
+                                onChanged: (value) {
+                                  setModalState(() => fontSize = value);
+                                  appProvider.changeFontSize(value);
+                                },
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Межстрочный интервал',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            SliderTheme(
+                              data: SliderTheme.of(dialogThemeContext).copyWith(
+                                activeTrackColor: Colors.blue,
+                                inactiveTrackColor: Colors.blue.shade100,
+                                thumbColor: Colors.blue,
+                                overlayColor: Colors.blue.withOpacity(0.12),
+                              ),
+                              child: Slider(
+                                value: lineHeight.clamp(1.0, 2.2),
+                                min: 1.0,
+                                max: 2.2,
+                                divisions: 12,
+                                label: lineHeight.toStringAsFixed(2),
+                                onChanged: (value) {
+                                  setModalState(() => lineHeight = value);
+                                  appProvider.changeLineHeight(value);
+                                },
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text('Красные буквы'),
+                              value: redLettersEnabled,
+                              activeColor: Colors.blue,
+                              onChanged: (value) {
+                                setModalState(() => redLettersEnabled = value);
+                                appProvider.setRedLettersEnabled(value);
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showSupportDialog(BuildContext context) {
+    const supportPayload =
+        'Автор проекта: Софеин Павел Геннадьевич\n'
+        'Контактная почта: sfpavelg@gmail.com\n'
+        'Версия проекта: ver_28_03_2026';
+
+    showDialog(
+      context: context,
+      builder: (routeContext) {
+        return Theme(
+          data: ThemeData.light(useMaterial3: true).copyWith(
+            colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+          ),
+          child: Builder(
+            builder: (_) {
+              return AlertDialog(
+                backgroundColor: Colors.lightBlue[50],
+                titlePadding: const EdgeInsets.fromLTRB(20, 14, 12, 8),
+                title: Row(
+                  children: [
+                    const Expanded(child: Text('Техподдержка')),
+                    Material(
+                      color: Colors.lightBlue.shade100,
+                      borderRadius: BorderRadius.circular(8),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: () => Navigator.pop(routeContext),
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.blue, width: 1.2),
+                          ),
+                          child: const Icon(Icons.close, size: 20),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                content: const SizedBox(
+                  width: 360,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Автор проекта:'),
+                      SizedBox(height: 4),
+                      Text(
+                        'Софеин Павел Геннадьевич',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      SizedBox(height: 12),
+                      Text('Контактная почта:'),
+                      SizedBox(height: 4),
+                      Text(
+                        'sfpavelg@gmail.com',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      SizedBox(height: 12),
+                      Text('Версия проекта:'),
+                      SizedBox(height: 4),
+                      Text(
+                        'ver_28_03_2026',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  Material(
+                    color: Colors.lightBlue.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () async {
+                        await Clipboard.setData(
+                          const ClipboardData(text: supportPayload),
+                        );
+                        if (!routeContext.mounted) return;
+                        ScaffoldMessenger.of(routeContext).showSnackBar(
+                          const SnackBar(
+                            content: Text('Данные техподдержки скопированы'),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.blue, width: 1.2),
+                        ),
+                        child: const Icon(Icons.copy_all, size: 20),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  void _showChapterSelectionDialog(BuildContext context, {String? forBook}) {
+    final appProvider = Provider.of<AppProvider>(context, listen: false);
+    final selectedBook = forBook ?? appProvider.currentBook;
+    final chapterCount = BibleService().getChapterCount(selectedBook);
+
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Text('Выберите главу (${appProvider.currentBook})'),
+          title: Text('Выберите главу ($selectedBook)'),
           content: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: 400,
-              maxHeight: 300, // Ограничиваем высоту
-            ),
+            constraints: const BoxConstraints(maxWidth: 400, maxHeight: 300),
             child: SingleChildScrollView(
               child: Wrap(
                 spacing: 4,
@@ -298,15 +669,15 @@ class _BibleScreenState extends State<BibleScreen> {
                 alignment: WrapAlignment.center,
                 children: List.generate(chapterCount, (index) {
                   final chapterNumber = index + 1;
-                  final isCurrentChapter = chapterNumber == appProvider.currentChapter;
-                  
+                  final isCurrent = selectedBook == appProvider.currentBook &&
+                      chapterNumber == appProvider.currentChapter;
                   return SizedBox(
                     width: 40,
                     height: 40,
                     child: ElevatedButton(
                       onPressed: () {
                         appProvider.changeBookAndChapter(
-                          appProvider.currentBook,
+                          selectedBook,
                           chapterNumber,
                         );
                         Navigator.pop(context);
@@ -314,19 +685,17 @@ class _BibleScreenState extends State<BibleScreen> {
                       style: ElevatedButton.styleFrom(
                         padding: EdgeInsets.zero,
                         shape: const CircleBorder(),
-                        backgroundColor: isCurrentChapter 
-                            ? Colors.blue // Синий фон для текущей главы
-                            : Colors.lightBlue[50], // Светло-голубой для остальных
-                        foregroundColor: isCurrentChapter 
-                            ? Colors.white // Белый текст для текущей главы
-                            : Colors.black, // Черный текст для остальных
+                        backgroundColor:
+                            isCurrent ? Colors.blue : Colors.lightBlue[50],
+                        foregroundColor:
+                            isCurrent ? Colors.white : Colors.black,
                       ),
                       child: Text(
                         '$chapterNumber',
-                        textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 14,
-                          fontWeight: isCurrentChapter ? FontWeight.bold : FontWeight.normal,
+                          fontWeight:
+                              isCurrent ? FontWeight.bold : FontWeight.normal,
                         ),
                       ),
                     ),
@@ -344,10 +713,10 @@ class _BibleScreenState extends State<BibleScreen> {
     final appProvider = Provider.of<AppProvider>(context, listen: false);
     final oldTestamentBooks = appProvider.getBooks('old');
     final newTestamentBooks = appProvider.getBooks('new');
-    
+
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Выберите книгу'),
           content: SingleChildScrollView(
@@ -355,7 +724,6 @@ class _BibleScreenState extends State<BibleScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Ветхий Завет
                 const Text(
                   'Ветхий Завет:',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
@@ -368,14 +736,21 @@ class _BibleScreenState extends State<BibleScreen> {
                     final isCurrentBook = book == appProvider.currentBook;
                     return TextButton(
                       onPressed: () {
-                        appProvider.changeBookAndChapter(book, 1);
-                        Navigator.pop(context);
+                        Navigator.pop(dialogContext);
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (context.mounted) {
+                            _showChapterSelectionDialog(context, forBook: book);
+                          }
+                        });
                       },
                       style: TextButton.styleFrom(
-                        backgroundColor: isCurrentBook 
-                            ? Colors.blue // Синий фон для текущей книги
-                            : Colors.lightBlue[50], // Светло-голубой для остальных
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        backgroundColor: isCurrentBook
+                            ? Colors.blue
+                            : Colors.lightBlue[50],
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         minimumSize: Size.zero,
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
@@ -384,16 +759,15 @@ class _BibleScreenState extends State<BibleScreen> {
                         style: TextStyle(
                           color: isCurrentBook ? Colors.white : Colors.black,
                           fontSize: 12,
-                          fontWeight: isCurrentBook ? FontWeight.bold : FontWeight.normal,
+                          fontWeight: isCurrentBook
+                              ? FontWeight.bold
+                              : FontWeight.normal,
                         ),
                       ),
                     );
                   }).toList(),
                 ),
-                
                 const SizedBox(height: 16),
-                
-                // Новый Завет
                 const Text(
                   'Новый Завет:',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
@@ -406,14 +780,21 @@ class _BibleScreenState extends State<BibleScreen> {
                     final isCurrentBook = book == appProvider.currentBook;
                     return TextButton(
                       onPressed: () {
-                        appProvider.changeBookAndChapter(book, 1);
-                        Navigator.pop(context);
+                        Navigator.pop(dialogContext);
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (context.mounted) {
+                            _showChapterSelectionDialog(context, forBook: book);
+                          }
+                        });
                       },
                       style: TextButton.styleFrom(
-                        backgroundColor: isCurrentBook 
-                            ? Colors.blue // Синий фон для текущей книги
-                            : Colors.lightBlue[50], // Светло-голубой для остальных
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        backgroundColor: isCurrentBook
+                            ? Colors.blue
+                            : Colors.lightBlue[50],
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         minimumSize: Size.zero,
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
@@ -422,7 +803,9 @@ class _BibleScreenState extends State<BibleScreen> {
                         style: TextStyle(
                           color: isCurrentBook ? Colors.white : Colors.black,
                           fontSize: 12,
-                          fontWeight: isCurrentBook ? FontWeight.bold : FontWeight.normal,
+                          fontWeight: isCurrentBook
+                              ? FontWeight.bold
+                              : FontWeight.normal,
                         ),
                       ),
                     );

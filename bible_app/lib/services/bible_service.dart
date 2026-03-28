@@ -132,41 +132,44 @@ class BibleService {
     return verses.firstWhere((v) => v.verse == verse, orElse: () => verses.isNotEmpty ? verses.first : BibleVerse(book: book, chapter: chapter, verse: verse, text: 'Стих не найден'));
   }
   
-  List<BibleVerse> search(String query) {
+  List<BibleVerse> search(
+    String query, {
+    bool includeOldTestament = true,
+    bool includeNewTestament = true,
+  }) {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return [];
+
     List<BibleVerse> results = [];
-    
-    // Поиск по Ветхому Завету
-    _oldTestament.forEach((book, chapters) {
-      chapters.forEach((chapter, verses) {
-        verses.forEach((verse, text) {
-          if (text.toLowerCase().contains(query.toLowerCase())) {
-            results.add(BibleVerse(
-              book: book,
-              chapter: int.parse(chapter),
-              verse: int.parse(verse),
-              text: text,
-            ));
-          }
+
+    void scan(
+      Map<String, Map<String, Map<String, dynamic>>> testament,
+    ) {
+      testament.forEach((book, chapters) {
+        chapters.forEach((chapter, verses) {
+          verses.forEach((verse, verseData) {
+            final vd = verseData is Map<String, dynamic>
+                ? verseData
+                : <String, dynamic>{};
+            final text = (vd['text'] ?? '').toString();
+            if (text.toLowerCase().contains(q)) {
+              results.add(BibleVerse(
+                book: book,
+                chapter: int.parse(chapter),
+                verse: int.parse(verse),
+                text: text,
+                type: (vd['type'] ?? 'narrative').toString(),
+                speaker: vd['speaker'] as String?,
+              ));
+            }
+          });
         });
       });
-    });
-    
-    // Поиск по Новому Завету
-    _newTestament.forEach((book, chapters) {
-      chapters.forEach((chapter, verses) {
-        verses.forEach((verse, text) {
-          if (text.toLowerCase().contains(query.toLowerCase())) {
-            results.add(BibleVerse(
-              book: book,
-              chapter: int.parse(chapter),
-              verse: int.parse(verse),
-              text: text,
-            ));
-          }
-        });
-      });
-    });
-    
+    }
+
+    if (includeOldTestament) scan(_oldTestament);
+    if (includeNewTestament) scan(_newTestament);
+
     return results;
   }
   
