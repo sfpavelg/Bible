@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:bible_app/providers/app_provider.dart';
 import 'package:bible_app/services/bible_service.dart';
 import 'package:bible_app/widgets/app_chrome_overflow_menu.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class BibleScreen extends StatefulWidget {
   const BibleScreen({super.key});
@@ -22,6 +23,14 @@ class _BibleScreenState extends State<BibleScreen> {
   /// Первый стих — долгим нажатием; дальше — обычным касанием. Порядок = порядок копирования.
   final LinkedHashSet<int> _selectedVerses = LinkedHashSet<int>();
   String _navRef = '';
+
+  static const String _kBibleSearchHistoryKey = 'bible_search_matched_history';
+
+  /// Черновик поиска: сохраняется между открытиями, пока не нажали сброс в диалоге.
+  String _searchDraft = '';
+  List<Map<String, dynamic>> _searchResultRows = [];
+  bool _searchIncludeVz = true;
+  bool _searchIncludeNz = true;
 
   @override
   void dispose() {
@@ -368,132 +377,43 @@ class _BibleScreenState extends State<BibleScreen> {
     );
   }
 
-  void _showSearchDialog(BuildContext context) {
+  Future<void> _showSearchDialog(BuildContext context) async {
     final appProvider = Provider.of<AppProvider>(context, listen: false);
-    final searchController = TextEditingController();
-    bool includeOld = true;
-    bool includeNew = true;
-    List<Map<String, dynamic>> results = [];
+    final prefs = await SharedPreferences.getInstance();
+    final history = prefs.getStringList(_kBibleSearchHistoryKey) ?? [];
+    if (!mounted || !context.mounted) return;
 
-    showDialog(
+    await showDialog<void>(
       context: context,
       builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return AlertDialog(
-              title: const Text('Поиск по Библии'),
-              content: SizedBox(
-                width: 320,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    TextField(
-                      controller: searchController,
-                      decoration: const InputDecoration(
-                        hintText: 'Введите текст',
-                        border: OutlineInputBorder(),
-                      ),
-                      onSubmitted: (_) {
-                        final q = searchController.text.trim();
-                        if (q.isEmpty) return;
-                        results = appProvider.searchBible(
-                          q,
-                          includeOldTestament: includeOld,
-                          includeNewTestament: includeNew,
-                        );
-                        setModalState(() {});
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: CheckboxListTile(
-                            value: includeOld,
-                            onChanged: (v) {
-                              setModalState(() => includeOld = v ?? true);
-                            },
-                            title: const Text('ВЗ'),
-                            controlAffinity: ListTileControlAffinity.leading,
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                        ),
-                        Expanded(
-                          child: CheckboxListTile(
-                            value: includeNew,
-                            onChanged: (v) {
-                              setModalState(() => includeNew = v ?? true);
-                            },
-                            title: const Text('НЗ'),
-                            controlAffinity: ListTileControlAffinity.leading,
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (results.isNotEmpty)
-                      SizedBox(
-                        height: 220,
-                        child: ListView.builder(
-                          shrinkWrap: true,
-                          itemCount: results.length,
-                          itemBuilder: (context, i) {
-                            final r = results[i];
-                            final book = r['book'] as String;
-                            final ch = r['chapter'] as int;
-                            final v = r['verse'] as int;
-                            final text = (r['text'] as String?) ?? '';
-                            final preview = text.length > 80
-                                ? '${text.substring(0, 80)}…'
-                                : text;
-                            return ListTile(
-                              dense: true,
-                              title: Text(
-                                '$book $ch:$v',
-                                style: const TextStyle(fontWeight: FontWeight.w600),
-                              ),
-                              subtitle: Text(preview),
-                              onTap: () async {
-                                await appProvider.changeBookAndChapter(book, ch);
-                                if (!mounted) return;
-                                Navigator.pop(dialogContext);
-                                final total =
-                                    appProvider.getCurrentVerses().length;
-                                _highlightVerseTemporarily(v);
-                                unawaited(_scrollToVerse(v, total));
-                              },
-                            );
-                          },
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('Закрыть'),
-                ),
-                FilledButton(
-                  onPressed: () {
-                    final q = searchController.text.trim();
-                    if (q.isEmpty) return;
-                    results = appProvider.searchBible(
-                      q,
-                      includeOldTestament: includeOld,
-                      includeNewTestament: includeNew,
-                    );
-                    setModalState(() {});
-                  },
-                  child: const Text('Найти'),
-                ),
-              ],
-            );
+        return _BibleSearchDialog(
+          appProvider: appProvider,
+          initialQuery: _searchDraft,
+          initialResults: _searchResultRows
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList(),
+          initialVz: _searchIncludeVz,
+          initialNz: _searchIncludeNz,
+          history: history,
+          historyKey: _kBibleSearchHistoryKey,
+          onClosing: (q, results, vz, nz) {
+            _searchDraft = q;
+            _searchResultRows = results;
+            _searchIncludeVz = vz;
+            _searchIncludeNz = nz;
+          },
+          onPickResult: (book, chapter, verse) async {
+            Navigator.pop(dialogContext);
+            await appProvider.changeBookAndChapter(book, chapter);
+            if (!mounted) return;
+            final total = appProvider.getCurrentVerses().length;
+            _highlightVerseTemporarily(verse);
+            unawaited(_scrollToVerse(verse, total));
           },
         );
       },
     );
+    if (mounted) setState(() {});
   }
 
   void _showChapterSelectionDialog(BuildContext context, {String? forBook}) {
@@ -662,6 +582,337 @@ class _BibleScreenState extends State<BibleScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+class _BibleSearchDialog extends StatefulWidget {
+  const _BibleSearchDialog({
+    required this.appProvider,
+    required this.initialQuery,
+    required this.initialResults,
+    required this.initialVz,
+    required this.initialNz,
+    required this.history,
+    required this.historyKey,
+    required this.onClosing,
+    required this.onPickResult,
+  });
+
+  final AppProvider appProvider;
+  final String initialQuery;
+  final List<Map<String, dynamic>> initialResults;
+  final bool initialVz;
+  final bool initialNz;
+  final List<String> history;
+  final String historyKey;
+  final void Function(
+    String query,
+    List<Map<String, dynamic>> results,
+    bool vz,
+    bool nz,
+  ) onClosing;
+  final Future<void> Function(String book, int chapter, int verse) onPickResult;
+
+  @override
+  State<_BibleSearchDialog> createState() => _BibleSearchDialogState();
+}
+
+class _BibleSearchDialogState extends State<_BibleSearchDialog> {
+  late final TextEditingController _queryCtrl;
+  late final FocusNode _focusNode;
+  late List<Map<String, dynamic>> _results;
+  late bool _vz;
+  late bool _nz;
+  late List<String> _history;
+  bool _hasRunSearch = false;
+
+  static const _hintStyle = TextStyle(
+    color: Color(0xFFBDBDBD),
+    fontWeight: FontWeight.w400,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _queryCtrl = TextEditingController(text: widget.initialQuery);
+    _focusNode = FocusNode();
+    _results =
+        widget.initialResults.map((e) => Map<String, dynamic>.from(e)).toList();
+    _vz = widget.initialVz;
+    _nz = widget.initialNz;
+    _history = List<String>.from(widget.history);
+    _hasRunSearch = widget.initialQuery.trim().isNotEmpty ||
+        widget.initialResults.isNotEmpty;
+  }
+
+  @override
+  void dispose() {
+    widget.onClosing(
+      _queryCtrl.text,
+      _results.map((e) => Map<String, dynamic>.from(e)).toList(),
+      _vz,
+      _nz,
+    );
+    _queryCtrl.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _setVz(bool? v) {
+    var vz = v ?? false;
+    var nz = _nz;
+    if (!vz && !nz) {
+      nz = true;
+    }
+    setState(() {
+      _vz = vz;
+      _nz = nz;
+    });
+  }
+
+  void _setNz(bool? v) {
+    var nz = v ?? false;
+    var vz = _vz;
+    if (!vz && !nz) {
+      vz = true;
+    }
+    setState(() {
+      _vz = vz;
+      _nz = nz;
+    });
+  }
+
+  Future<void> _persistHistoryIfMatch(String q) async {
+    if (q.isEmpty || _results.isEmpty) return;
+    _history.remove(q);
+    _history.insert(0, q);
+    if (_history.length > 40) {
+      _history.removeRange(40, _history.length);
+    }
+    final p = await SharedPreferences.getInstance();
+    await p.setStringList(widget.historyKey, List<String>.from(_history));
+    if (mounted) setState(() {});
+  }
+
+  void _runSearch() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final q = _queryCtrl.text.trim();
+    if (q.isEmpty) return;
+    final list = widget.appProvider.searchBible(
+      q,
+      includeOldTestament: _vz,
+      includeNewTestament: _nz,
+    );
+    setState(() {
+      _results = list;
+      _hasRunSearch = true;
+    });
+    if (list.isNotEmpty) {
+      unawaited(_persistHistoryIfMatch(q));
+    }
+  }
+
+  void _clearField() {
+    _queryCtrl.clear();
+    setState(() {
+      _results = [];
+      _hasRunSearch = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final w = MediaQuery.sizeOf(context).width.clamp(320, double.infinity);
+    final contentW = (w * 0.92).clamp(280.0, 640.0);
+
+    return AlertDialog(
+      titlePadding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+      contentPadding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+      title: Row(
+        children: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Закрыть'),
+          ),
+          const Spacer(),
+          FilledButton(
+            onPressed: _runSearch,
+            child: const Text('Найти'),
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: contentW,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            RawAutocomplete<String>(
+              textEditingController: _queryCtrl,
+              focusNode: _focusNode,
+              optionsBuilder: (TextEditingValue tev) {
+                if (tev.text.isEmpty) {
+                  return _history;
+                }
+                final q = tev.text.toLowerCase();
+                return _history
+                    .where((h) => h.toLowerCase().contains(q))
+                    .toList();
+              },
+              onSelected: (s) {
+                _queryCtrl.text = s;
+                _queryCtrl.selection =
+                    TextSelection.collapsed(offset: s.length);
+              },
+              fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                return TextField(
+                  controller: controller,
+                  focusNode: focusNode,
+                  decoration: InputDecoration(
+                    hintText: 'Набери текст',
+                    hintStyle: _hintStyle,
+                    isDense: true,
+                    border: const UnderlineInputBorder(),
+                    enabledBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: Colors.grey.shade400),
+                    ),
+                    focusedBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: Colors.blue.shade700, width: 2),
+                    ),
+                    suffixIcon: Padding(
+                      padding: const EdgeInsetsDirectional.only(end: 4),
+                      child: SizedBox(
+                        width: 36,
+                        height: 36,
+                        child: Material(
+                          color: Colors.grey.shade200,
+                          borderRadius: BorderRadius.circular(4),
+                          clipBehavior: Clip.antiAlias,
+                          child: InkWell(
+                            onTap: _clearField,
+                            child: Icon(
+                              Icons.close,
+                              size: 20,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  onSubmitted: (_) => _runSearch(),
+                );
+              },
+              optionsViewBuilder: (context, onSelected, options) {
+                return Align(
+                  alignment: Alignment.topLeft,
+                  child: Material(
+                    elevation: 6,
+                    borderRadius: BorderRadius.circular(8),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: 220,
+                        maxWidth: contentW,
+                      ),
+                      child: ListView.builder(
+                        padding: EdgeInsets.zero,
+                        shrinkWrap: true,
+                        itemCount: options.length,
+                        itemBuilder: (context, index) {
+                          final o = options.elementAt(index);
+                          return InkWell(
+                            onTap: () => onSelected(o),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 12,
+                              ),
+                              child: Text(o),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Expanded(
+                  child: CheckboxListTile(
+                    value: _vz,
+                    onChanged: _setVz,
+                    title: const Text('ВЗ'),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                  ),
+                ),
+                Expanded(
+                  child: CheckboxListTile(
+                    value: _nz,
+                    onChanged: _setNz,
+                    title: const Text('НЗ'),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                  ),
+                ),
+              ],
+            ),
+            if (_hasRunSearch && _results.isNotEmpty)
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 320),
+                child: Scrollbar(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    itemCount: _results.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, i) {
+                      final r = _results[i];
+                      final book = r['book'] as String;
+                      final ch = r['chapter'] as int;
+                      final v = r['verse'] as int;
+                      final text = (r['text'] as String?) ?? '';
+                      final preview =
+                          text.length > 100 ? '${text.substring(0, 100)}…' : text;
+                      return ListTile(
+                        dense: true,
+                        visualDensity: VisualDensity.compact,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 6),
+                        title: Text(
+                          '$book $ch:$v',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: Text(
+                          preview,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        onTap: () => widget.onPickResult(book, ch, v),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            if (_hasRunSearch)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Найдено совпадений: ${_results.length}',
+                  style: TextStyle(
+                    color: Colors.grey.shade700,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
