@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:bible_app/bootstrap_splash.dart';
 import 'package:bible_app/main_screen.dart';
 import 'package:bible_app/providers/app_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -40,7 +41,7 @@ class MyApp extends StatelessWidget {
       child: Consumer<AppProvider>(
         builder: (context, appProvider, child) {
           return MaterialApp(
-            title: 'Библия',
+            title: 'Bible',
             debugShowCheckedModeBanner: false,
             theme: ThemeData(
               colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
@@ -48,7 +49,9 @@ class MyApp extends StatelessWidget {
             ),
             darkTheme: ThemeData.dark(),
             themeMode: appProvider.themeMode,
-            home: const MainScreen(),
+            home: appProvider.isLoading
+                ? const BootstrapSplash()
+                : const MainScreen(),
           );
         },
       ),

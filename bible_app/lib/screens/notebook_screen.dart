@@ -1,7 +1,8 @@
 import 'package:bible_app/notebook/notebook_list_item.dart';
 import 'package:bible_app/notebook/notebook_repository.dart';
 import 'package:bible_app/notebook/notebook_repository_factory.dart';
-import 'package:bible_app/screens/notebook_editor_screen.dart';
+import 'package:bible_app/screens/notebook_editor_panel.dart';
+import 'package:bible_app/widgets/app_chrome_overflow_menu.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
@@ -19,6 +20,14 @@ class _NotebookScreenState extends State<NotebookScreen> {
   String? _error;
   String _currentDir = '';
   List<NotebookListItem> _items = [];
+
+  String? _editingPath;
+  GlobalKey<NotebookEditorPanelState>? _editorKey;
+  bool _editorDirty = false;
+
+  static const _appBarBg = Color(0xFFB3E5FC);
+  static const _buttonBg = Color(0xFFE1F5FE);
+  static const _chromeFg = Colors.black;
 
   @override
   void initState() {
@@ -56,6 +65,25 @@ class _NotebookScreenState extends State<NotebookScreen> {
         );
       }
     }
+  }
+
+  Future<void> _closeEditor() async {
+    await _editorKey?.currentState?.flushSave();
+    if (!mounted) return;
+    setState(() {
+      _editingPath = null;
+      _editorKey = null;
+      _editorDirty = false;
+    });
+    await _refresh();
+  }
+
+  void _openEditor(String relativePath) {
+    setState(() {
+      _editingPath = relativePath;
+      _editorKey = GlobalKey<NotebookEditorPanelState>();
+      _editorDirty = false;
+    });
   }
 
   String _sanitizeSegment(String raw) {
@@ -110,13 +138,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
       await repo.createFile(rel);
       await _refresh();
       if (!mounted) return;
-      await Navigator.push<void>(
-        context,
-        MaterialPageRoute<void>(
-          builder: (_) => NotebookEditorScreen(repo: repo, relativePath: rel),
-        ),
-      );
-      await _refresh();
+      _openEditor(rel);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -157,7 +179,14 @@ class _NotebookScreenState extends State<NotebookScreen> {
     );
     if (ok != true) return;
     final seg = _sanitizeSegment(ctrl.text);
-    if (seg.isEmpty) return;
+    if (seg.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Введите имя папки')),
+        );
+      }
+      return;
+    }
     final rel = _currentDir.isEmpty ? seg : p.posix.join(_currentDir, seg);
     try {
       await repo.createFolder(rel);
@@ -179,14 +208,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
       await _refresh();
       return;
     }
-    await Navigator.push<void>(
-      context,
-      MaterialPageRoute<void>(
-        builder: (_) =>
-            NotebookEditorScreen(repo: repo, relativePath: item.relativePath),
-      ),
-    );
-    await _refresh();
+    _openEditor(item.relativePath);
   }
 
   void _goUp() {
@@ -232,6 +254,9 @@ class _NotebookScreenState extends State<NotebookScreen> {
         parent == '.' ? newName : p.posix.join(parent, newName);
     try {
       await repo.rename(item.relativePath, toRel);
+      if (_editingPath == item.relativePath) {
+        setState(() => _editingPath = toRel);
+      }
       await _refresh();
     } catch (e) {
       if (mounted) {
@@ -269,7 +294,11 @@ class _NotebookScreenState extends State<NotebookScreen> {
     if (ok != true) return;
     try {
       await repo.delete(item.relativePath);
-      await _refresh();
+      if (_editingPath == item.relativePath) {
+        await _closeEditor();
+      } else {
+        await _refresh();
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -279,36 +308,140 @@ class _NotebookScreenState extends State<NotebookScreen> {
     }
   }
 
+  Widget _chromeIconButton({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onPressed,
+  }) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 2),
+      decoration: BoxDecoration(
+        color: _buttonBg,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: IconButton(
+        icon: Icon(icon, color: _chromeFg, size: 22),
+        tooltip: tooltip,
+        onPressed: onPressed,
+      ),
+    );
+  }
+
+  PreferredSizeWidget _buildListAppBar() {
+    return AppBar(
+      backgroundColor: _appBarBg,
+      surfaceTintColor: _appBarBg,
+      foregroundColor: _chromeFg,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(14)),
+      ),
+      leading: _currentDir.isEmpty
+          ? null
+          : IconButton(
+              icon: const Icon(Icons.arrow_back, color: _chromeFg),
+              onPressed: _goUp,
+            ),
+      titleSpacing: 8,
+      title: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _chromeIconButton(
+              icon: Icons.create_new_folder_outlined,
+              tooltip: 'Новая папка',
+              onPressed: _createFolder,
+            ),
+            _chromeIconButton(
+              icon: Icons.note_add_outlined,
+              tooltip: 'Новый документ',
+              onPressed: _createDocument,
+            ),
+            _chromeIconButton(
+              icon: Icons.refresh,
+              tooltip: 'Обновить список',
+              onPressed: _refresh,
+            ),
+          ],
+        ),
+      ),
+      actions: const [
+        AppChromeOverflowMenu(
+          iconColor: _chromeFg,
+          backgroundColor: _buttonBg,
+        ),
+      ],
+    );
+  }
+
+  PreferredSizeWidget _buildEditorAppBar() {
+    final name = p.basename(_editingPath!);
+    return AppBar(
+      backgroundColor: _appBarBg,
+      surfaceTintColor: _appBarBg,
+      foregroundColor: _chromeFg,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(14)),
+      ),
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back, color: _chromeFg),
+        onPressed: _closeEditor,
+      ),
+      title: Text(
+        name,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(color: _chromeFg, fontSize: 18),
+      ),
+      actions: [
+        if (_editorDirty)
+          const Padding(
+            padding: EdgeInsets.only(right: 4, top: 12),
+            child: Text(
+              '…',
+              style: TextStyle(fontSize: 18, color: Colors.orange),
+            ),
+          ),
+        IconButton(
+          tooltip: 'Сохранить',
+          icon: const Icon(Icons.save_outlined, color: _chromeFg),
+          onPressed: () => _editorKey?.currentState?.saveNow(),
+        ),
+        PopupMenuButton<String>(
+          icon: const Icon(Icons.more_horiz, color: _chromeFg),
+          onSelected: (v) =>
+              _editorKey?.currentState?.runEditorMenuAction(v),
+          itemBuilder: (context) => const [
+            PopupMenuItem(value: 'share', child: Text('Поделиться…')),
+            PopupMenuItem(value: 'export', child: Text('Сохранить в файл…')),
+            PopupMenuItem(value: 'copy', child: Text('Копировать весь текст')),
+            PopupMenuItem(value: 'mail', child: Text('Отправить на почту…')),
+            PopupMenuDivider(),
+            PopupMenuItem(value: 'del', child: Text('Удалить документ')),
+          ],
+        ),
+        const AppChromeOverflowMenu(
+          iconColor: _chromeFg,
+          backgroundColor: _buttonBg,
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final subtitle = _currentDir.isEmpty
         ? (kIsWeb
-            ? 'Хранение в браузере (SharedPreferences)'
+            ? 'Хранение в браузере (память сайта / localStorage)'
             : 'Папка приложения: Documents/bible_notebook')
         : _currentDir.replaceAll('/', ' / ');
 
+    final editing = _editingPath != null && _editorKey != null && _repo != null;
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Блокнот'),
-        leading: _currentDir.isEmpty
-            ? null
-            : IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: _goUp,
-              ),
-        actions: [
-          PopupMenuButton<String>(
-            onSelected: (v) {
-              if (v == 'doc') _createDocument();
-              if (v == 'folder') _createFolder();
-            },
-            itemBuilder: (context) => const [
-              PopupMenuItem(value: 'doc', child: Text('Новый документ .txt')),
-              PopupMenuItem(value: 'folder', child: Text('Новая папка')),
-            ],
-          ),
-        ],
-      ),
+      appBar: editing ? _buildEditorAppBar() : _buildListAppBar(),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -321,95 +454,112 @@ class _NotebookScreenState extends State<NotebookScreen> {
                     ),
                   ),
                 )
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Material(
-                      color: Colors.blue.shade50,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              subtitle,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.blueGrey.shade800,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            const Text(
-                              'Долгий тап — переименовать или удалить.',
-                              style: TextStyle(fontSize: 12),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: _items.isEmpty
-                          ? Center(
-                              child: Text(
-                                _currentDir.isEmpty
-                                    ? 'Нет документов.\nСоздайте новый через меню «⋯».'
-                                    : 'Папка пуста.',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(color: Colors.grey.shade700),
-                              ),
-                            )
-                          : ListView.builder(
-                              itemCount: _items.length,
-                              itemBuilder: (context, i) {
-                                final item = _items[i];
-                                return ListTile(
-                                  leading: Icon(
-                                    item.isFolder
-                                        ? Icons.folder_outlined
-                                        : Icons.description_outlined,
+              : editing
+                  ? NotebookEditorPanel(
+                      key: _editorKey,
+                      repo: _repo!,
+                      relativePath: _editingPath!,
+                      onDirtyChanged: (d) {
+                        if (mounted) setState(() => _editorDirty = d);
+                      },
+                      onDocumentDeleted: () {
+                        _closeEditor();
+                      },
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Material(
+                          color: Colors.blue.shade50,
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  subtitle,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.blueGrey.shade800,
                                   ),
-                                  title: Text(item.name),
-                                  onTap: () => _openItem(item),
-                                  onLongPress: () {
-                                    showModalBottomSheet<void>(
-                                      context: context,
-                                      showDragHandle: true,
-                                      builder: (ctx) => SafeArea(
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            ListTile(
-                                              leading: const Icon(
-                                                Icons.drive_file_rename_outline,
-                                              ),
-                                              title: const Text('Переименовать'),
-                                              onTap: () {
-                                                Navigator.pop(ctx);
-                                                _renameItem(item);
-                                              },
-                                            ),
-                                            ListTile(
-                                              leading: const Icon(
-                                                Icons.delete_outline,
-                                                color: Colors.red,
-                                              ),
-                                              title: const Text('Удалить'),
-                                              onTap: () {
-                                                Navigator.pop(ctx);
-                                                _deleteItem(item);
-                                              },
-                                            ),
-                                          ],
-                                        ),
+                                ),
+                                const SizedBox(height: 6),
+                                const Text(
+                                  'Долгий тап — переименовать или удалить. '
+                                  'Можно перейти на Библию и вставить текст в открытый документ.',
+                                  style: TextStyle(fontSize: 12),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: _items.isEmpty
+                              ? Center(
+                                  child: Text(
+                                    _currentDir.isEmpty
+                                        ? 'Нет документов.\nСоздайте через иконки вверху.'
+                                        : 'Папка пуста.',
+                                    textAlign: TextAlign.center,
+                                    style:
+                                        TextStyle(color: Colors.grey.shade700),
+                                  ),
+                                )
+                              : ListView.builder(
+                                  itemCount: _items.length,
+                                  itemBuilder: (context, i) {
+                                    final item = _items[i];
+                                    return ListTile(
+                                      leading: Icon(
+                                        item.isFolder
+                                            ? Icons.folder_outlined
+                                            : Icons.description_outlined,
                                       ),
+                                      title: Text(item.name),
+                                      onTap: () => _openItem(item),
+                                      onLongPress: () {
+                                        showModalBottomSheet<void>(
+                                          context: context,
+                                          showDragHandle: true,
+                                          builder: (ctx) => SafeArea(
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                ListTile(
+                                                  leading: const Icon(
+                                                    Icons
+                                                        .drive_file_rename_outline,
+                                                  ),
+                                                  title: const Text(
+                                                    'Переименовать',
+                                                  ),
+                                                  onTap: () {
+                                                    Navigator.pop(ctx);
+                                                    _renameItem(item);
+                                                  },
+                                                ),
+                                                ListTile(
+                                                  leading: const Icon(
+                                                    Icons.delete_outline,
+                                                    color: Colors.red,
+                                                  ),
+                                                  title: const Text('Удалить'),
+                                                  onTap: () {
+                                                    Navigator.pop(ctx);
+                                                    _deleteItem(item);
+                                                  },
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      },
                                     );
                                   },
-                                );
-                              },
-                            ),
+                                ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
     );
   }
 }

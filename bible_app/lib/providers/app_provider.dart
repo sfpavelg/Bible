@@ -1,17 +1,28 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:bible_app/services/bible_service.dart';
 import 'package:bible_app/database/database_helper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:bible_app/models/bible_model.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 class AppProvider with ChangeNotifier {
+  /// Ключи в prefs: `sans` | `serif`.
+  static const Map<String, String> verseFontLabels = {
+    'sans': 'Без засечек',
+    'serif': 'С засечками',
+  };
+
   final BibleService _bibleService = BibleService();
   final DatabaseHelper _databaseHelper = DatabaseHelper();
 
   ThemeMode _themeMode = ThemeMode.light;
   double _fontSize = 16.0;
   double _lineHeight = 1.35;
+  double _verseSpacing = 6.0;
+  String _verseFontPreset = 'sans';
   bool _redLettersEnabled = true;
+  bool _keepScreenOn = false;
 
   String _currentBook;
   int _currentChapter;
@@ -22,7 +33,10 @@ class AppProvider with ChangeNotifier {
   ThemeMode get themeMode => _themeMode;
   double get fontSize => _fontSize;
   double get lineHeight => _lineHeight;
+  double get verseSpacing => _verseSpacing;
+  String get verseFontPreset => _verseFontPreset;
   bool get redLettersEnabled => _redLettersEnabled;
+  bool get keepScreenOn => _keepScreenOn;
   String get currentBook => _currentBook;
   int get currentChapter => _currentChapter;
   bool get isLoading => _isLoading;
@@ -42,6 +56,7 @@ class AppProvider with ChangeNotifier {
     try {
       _prefs ??= await SharedPreferences.getInstance();
       _loadUiSettings();
+      await _syncWakelock();
 
       final lastBook = _prefs!.getString('last_book');
       final lastChapter = _prefs!.getInt('last_chapter');
@@ -54,12 +69,34 @@ class AppProvider with ChangeNotifier {
       }
 
       await _bibleService.loadBibleData();
+      await _ensureReadableChapter();
       await _databaseHelper.database;
     } catch (e) {
       print('Ошибка инициализации приложения: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  /// Если JSON не загрузился (часто на web), в коде остаётся минимальный тестовый набор
+  /// (напр. только «Матфея»), а last_book указывает на «Бытие» — список пустой.
+  /// Сбрасываем на первую доступную главу.
+  Future<void> _ensureReadableChapter() async {
+    if (_bibleService.getVerses(_currentBook, _currentChapter).isNotEmpty) {
+      return;
+    }
+    const fallbacks = <(String, int)>[
+      ('Бытие', 1),
+      ('Матфея', 1),
+    ];
+    for (final e in fallbacks) {
+      if (_bibleService.getVerses(e.$1, e.$2).isNotEmpty) {
+        _currentBook = e.$1;
+        _currentChapter = e.$2;
+        await _saveLastPosition();
+        return;
+      }
     }
   }
 
@@ -80,6 +117,23 @@ class AppProvider with ChangeNotifier {
     final redLetters = prefs.getBool('ui_red_letters_enabled');
     if (redLetters != null) {
       _redLettersEnabled = redLetters;
+    }
+
+    final verseSpacing = prefs.getDouble('ui_verse_spacing');
+    if (verseSpacing != null && verseSpacing >= 0 && verseSpacing <= 32) {
+      _verseSpacing = verseSpacing;
+    }
+
+    final stored = prefs.getString('ui_verse_font_preset');
+    final migrated = _migrateVerseFontPreset(stored);
+    _verseFontPreset = migrated;
+    if (stored != migrated) {
+      prefs.setString('ui_verse_font_preset', migrated);
+    }
+
+    final keepOn = prefs.getBool('ui_keep_screen_on');
+    if (keepOn != null) {
+      _keepScreenOn = keepOn;
     }
 
     final theme = prefs.getString('ui_theme_mode');
@@ -146,6 +200,86 @@ class AppProvider with ChangeNotifier {
     final prefs = _prefs ?? await SharedPreferences.getInstance();
     _prefs = prefs;
     await prefs.setBool('ui_red_letters_enabled', _redLettersEnabled);
+  }
+
+  void changeVerseSpacing(double value) {
+    _verseSpacing = value;
+    notifyListeners();
+    _saveVerseSpacing();
+  }
+
+  Future<void> _saveVerseSpacing() async {
+    final prefs = _prefs ?? await SharedPreferences.getInstance();
+    _prefs = prefs;
+    await prefs.setDouble('ui_verse_spacing', _verseSpacing);
+  }
+
+  void setVerseFontPreset(String presetId) {
+    if (!verseFontLabels.containsKey(presetId)) return;
+    _verseFontPreset = presetId;
+    notifyListeners();
+    _saveVerseFontPreset();
+  }
+
+  Future<void> _saveVerseFontPreset() async {
+    final prefs = _prefs ?? await SharedPreferences.getInstance();
+    _prefs = prefs;
+    await prefs.setString('ui_verse_font_preset', _verseFontPreset);
+  }
+
+  /// Платформенные `serif` / `sans-serif` — офлайн, без положенных в бандл TTF.
+  TextStyle bibleVerseTextStyle({
+    required Color color,
+    required FontWeight fontWeight,
+  }) {
+    final family = _verseFontPreset == 'serif' ? 'serif' : 'sans-serif';
+    return TextStyle(
+      inherit: false,
+      fontFamily: family,
+      fontSize: _fontSize,
+      height: _lineHeight,
+      color: color,
+      fontWeight: fontWeight,
+    );
+  }
+
+  /// Старые ключи: system, openSans, tinos, merriweather.
+  static String _migrateVerseFontPreset(String? raw) {
+    if (raw != null && verseFontLabels.containsKey(raw)) {
+      return raw;
+    }
+    switch (raw) {
+      case 'tinos':
+      case 'merriweather':
+        return 'serif';
+      case 'openSans':
+      case 'system':
+        return 'sans';
+      default:
+        return 'sans';
+    }
+  }
+
+  Future<void> setKeepScreenOn(bool enabled) async {
+    _keepScreenOn = enabled;
+    notifyListeners();
+    final prefs = _prefs ?? await SharedPreferences.getInstance();
+    _prefs = prefs;
+    await prefs.setBool('ui_keep_screen_on', enabled);
+    await _syncWakelock();
+  }
+
+  Future<void> _syncWakelock() async {
+    if (kIsWeb) return;
+    try {
+      if (_keepScreenOn) {
+        await WakelockPlus.enable();
+      } else {
+        await WakelockPlus.disable();
+      }
+    } catch (e, st) {
+      debugPrint('WakelockPlus: $e\n$st');
+    }
   }
 
   Future<void> changeBookAndChapter(String book, int chapter) async {

@@ -32,7 +32,7 @@ dependencies:
     sdk: flutter
 
   # Database
-  sqflite: ^2.3.0
+  sqflite: ^2.4.2
   sqflite_common_ffi_web: ^0.4.2+1
   path: ^1.8.3
 
@@ -44,16 +44,27 @@ dependencies:
   go_router: ^12.0.1
 
   # UI & Utilities
-  shared_preferences: ^2.2.2
-  file_picker: ^5.5.0
-  path_provider: ^2.1.1
+  shared_preferences: ^2.5.5
+  file_picker: ^8.1.4
+  path_provider: ^2.1.5
   share_plus: ^7.2.2
-  url_launcher: ^6.2.4
+  url_launcher: ^6.3.2
   flutter_markdown: ^0.6.18
 
   # Icons
   cupertino_icons: ^1.0.2
   material_design_icons_flutter: ^7.0.7296
+  wakelock_plus: ^1.1.4
+
+dependency_overrides:
+  # path_provider_windows / share_plus pull win32; 5.1.x breaks on Dart 3.11 (typed_data API).
+  win32: ^5.10.0
+  # Android API 23: подключаем реализации с minSdk < 24 (без tools:overrideLibrary — иначе краш в рантайме).
+  shared_preferences_android: 2.3.4
+  path_provider_android: 2.2.22
+  # ≥2.0.20 без v1 Registrar; <2.0.34 пока обычно без minSdk 24 в Gradle.
+  flutter_plugin_android_lifecycle: 2.0.33
+  url_launcher_android: 6.3.20
 
 dev_dependencies:
   flutter_test:
@@ -112,3 +123,4 @@ flutter:
   assets:
     - assets/bible/old_testament_correct.json
     - assets/bible/new_testament_correct.json
+    - assets/branding/launch_logo.png

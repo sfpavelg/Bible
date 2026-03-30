@@ -1,11 +1,12 @@
 import 'dart:async';
+import 'dart:collection';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:bible_app/providers/app_provider.dart';
 import 'package:bible_app/services/bible_service.dart';
-import 'package:bible_app/utils/app_exit.dart';
+import 'package:bible_app/widgets/app_chrome_overflow_menu.dart';
 
 class BibleScreen extends StatefulWidget {
   const BibleScreen({super.key});
@@ -18,6 +19,9 @@ class _BibleScreenState extends State<BibleScreen> {
   final ScrollController _scrollController = ScrollController();
   int? _highlightVerse;
   Timer? _highlightTimer;
+  /// Первый стих — долгим нажатием; дальше — обычным касанием. Порядок = порядок копирования.
+  final LinkedHashSet<int> _selectedVerses = LinkedHashSet<int>();
+  String _navRef = '';
 
   @override
   void dispose() {
@@ -46,10 +50,52 @@ class _BibleScreenState extends State<BibleScreen> {
     );
   }
 
+  String? _verseText(List<Map<String, dynamic>> verses, int verseNum) {
+    for (final v in verses) {
+      if (v['verse'] == verseNum) {
+        return v['text'] as String?;
+      }
+    }
+    return null;
+  }
+
+  void _copySelectedVerses(
+    BuildContext context,
+    AppProvider appProvider,
+    List<Map<String, dynamic>> verses,
+  ) {
+    if (_selectedVerses.isEmpty) return;
+    final parts = <String>[];
+    for (final n in _selectedVerses) {
+      final text = _verseText(verses, n);
+      if (text == null) continue;
+      parts.add(
+        '${appProvider.currentBook} ${appProvider.currentChapter}:$n $text',
+      );
+    }
+    if (parts.isEmpty) return;
+    unawaited(Clipboard.setData(ClipboardData(text: parts.join('\n'))));
+    if (!context.mounted) return;
+    final n = parts.length;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          n == 1 ? 'Стих скопирован в буфер' : 'Скопировано стихов: $n',
+        ),
+      ),
+    );
+    setState(() => _selectedVerses.clear());
+  }
+
   @override
   Widget build(BuildContext context) {
     final appProvider = Provider.of<AppProvider>(context);
     final verses = appProvider.getCurrentVerses();
+    final navRef = '${appProvider.currentBook}_${appProvider.currentChapter}';
+    if (_navRef != navRef) {
+      _navRef = navRef;
+      _selectedVerses.clear();
+    }
     final isDark = Theme.of(context).brightness == Brightness.dark;
     const appBarBg = Color(0xFFB3E5FC);
     const buttonBg = Color(0xFFE1F5FE);
@@ -176,30 +222,7 @@ class _BibleScreenState extends State<BibleScreen> {
               onPressed: () => _showSearchDialog(context),
             ),
           ),
-          Container(
-            decoration: BoxDecoration(
-              color: buttonBg,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert, color: chromeTextColor),
-              onSelected: (value) {
-                if (value == 'settings') {
-                  _showSettingsDialog(context);
-                } else if (value == 'support') {
-                  _showSupportDialog(context);
-                } else if (value == 'exit') {
-                  requestAppExit();
-                }
-              },
-              itemBuilder: (context) => const [
-                PopupMenuItem(value: 'settings', child: Text('Настройки')),
-                PopupMenuItem(value: 'support', child: Text('Техподдержка')),
-                PopupMenuDivider(),
-                PopupMenuItem(value: 'exit', child: Text('Выход')),
-              ],
-            ),
-          ),
+          const AppChromeOverflowMenu(),
         ],
       ),
       body: GestureDetector(
@@ -215,40 +238,131 @@ class _BibleScreenState extends State<BibleScreen> {
             ? const Center(child: CircularProgressIndicator())
             : verses.isEmpty
                 ? const Center(child: Text('Глава не найдена'))
-                : ListView.builder(
-                    key: ValueKey(
-                      '${appProvider.currentBook}_${appProvider.currentChapter}',
-                    ),
-                    controller: _scrollController,
-                    itemCount: verses.length,
-                    itemBuilder: (context, index) {
-                      final verse = verses[index];
-                      final num = verse['verse'] as int;
-                      final verseText = '$num. ${verse['text']}';
-                      final isSpeech = verse['type'] == 'speech';
-                      Color textColor = verseTextColor;
-                      if (isSpeech && appProvider.redLettersEnabled) {
-                        textColor = Colors.red;
-                      }
-                      final highlighted = _highlightVerse == num;
-                      return Material(
-                        color: highlighted
-                            ? Colors.amber.shade100
-                            : verseBg,
-                        child: ListTile(
-                          title: Text(
-                            verseText,
-                            style: TextStyle(
-                              fontSize: appProvider.fontSize,
-                              height: appProvider.lineHeight,
-                              color: textColor,
-                              fontWeight:
-                                  isSpeech ? FontWeight.bold : FontWeight.normal,
+                : Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      ListView.builder(
+                        key: ValueKey(
+                          '${appProvider.currentBook}_${appProvider.currentChapter}_${appProvider.verseFontPreset}',
+                        ),
+                        controller: _scrollController,
+                        itemCount: verses.length,
+                        itemBuilder: (context, index) {
+                          final verse = verses[index];
+                          final num = verse['verse'] as int;
+                          final verseText = '$num. ${verse['text']}';
+                          final isSpeech = verse['type'] == 'speech';
+                          Color textColor = verseTextColor;
+                          if (isSpeech && appProvider.redLettersEnabled) {
+                            textColor = Colors.red;
+                          }
+                          final highlighted = _highlightVerse == num;
+                          final selected = _selectedVerses.contains(num);
+                          Color rowBg = verseBg;
+                          if (highlighted) {
+                            rowBg = Colors.amber.shade100;
+                          } else if (selected) {
+                            rowBg = Colors.lightBlue.shade100;
+                          }
+                          final multiSelect =
+                              _selectedVerses.isNotEmpty;
+                          final gap = index < verses.length - 1
+                              ? appProvider.verseSpacing
+                              : 0.0;
+                          return Padding(
+                            padding: EdgeInsets.only(bottom: gap),
+                            child: Material(
+                              color: rowBg,
+                              child: InkWell(
+                                onTap: multiSelect
+                                    ? () {
+                                        setState(() {
+                                          if (_selectedVerses.contains(num)) {
+                                            _selectedVerses.remove(num);
+                                          } else {
+                                            _selectedVerses.add(num);
+                                          }
+                                        });
+                                      }
+                                    : null,
+                                onLongPress: () {
+                                  setState(() {
+                                    if (_selectedVerses.contains(num)) {
+                                      _selectedVerses.remove(num);
+                                    } else {
+                                      _selectedVerses.add(num);
+                                    }
+                                  });
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 2,
+                                  ),
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      verseText,
+                                      style: appProvider.bibleVerseTextStyle(
+                                        color: textColor,
+                                        fontWeight: isSpeech
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
+                          );
+                        },
+                      ),
+                      if (_selectedVerses.isNotEmpty)
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: buttonBg,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: IconButton(
+                                  icon: const Icon(
+                                    Icons.copy_all,
+                                    color: chromeTextColor,
+                                  ),
+                                  tooltip: 'Копировать',
+                                  onPressed: () => _copySelectedVerses(
+                                    context,
+                                    appProvider,
+                                    verses,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: buttonBg,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: IconButton(
+                                  icon: const Icon(
+                                    Icons.close,
+                                    color: chromeTextColor,
+                                  ),
+                                  tooltip: 'Отмена',
+                                  onPressed: () => setState(
+                                    () => _selectedVerses.clear(),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      );
-                    },
+                    ],
                   ),
       ),
     );
@@ -377,274 +491,6 @@ class _BibleScreenState extends State<BibleScreen> {
               ],
             );
           },
-        );
-      },
-    );
-  }
-
-  void _showSettingsDialog(BuildContext context) {
-    final appProvider = Provider.of<AppProvider>(context, listen: false);
-
-    showDialog(
-      context: context,
-      builder: (dialogRouteContext) {
-        ThemeMode selectedTheme = appProvider.themeMode;
-        double fontSize = appProvider.fontSize;
-        double lineHeight = appProvider.lineHeight;
-        bool redLettersEnabled = appProvider.redLettersEnabled;
-        final screenSize = MediaQuery.of(dialogRouteContext).size;
-        final dialogWidth = (screenSize.width * 0.92).clamp(320.0, 520.0);
-        final dialogMaxHeight = screenSize.height * 0.82;
-
-        return StatefulBuilder(
-          builder: (modalContext, setModalState) {
-            final themeGroup = selectedTheme == ThemeMode.system
-                ? ThemeMode.light
-                : selectedTheme;
-            return Theme(
-              data: ThemeData.light(useMaterial3: true).copyWith(
-                colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-              ),
-              child: Builder(
-                builder: (dialogThemeContext) {
-                  return AlertDialog(
-                    backgroundColor: Colors.lightBlue[50],
-                    titlePadding: const EdgeInsets.fromLTRB(20, 14, 12, 8),
-                    title: Row(
-                      children: [
-                        const Expanded(child: Text('Настройки')),
-                        Material(
-                          color: Colors.lightBlue.shade100,
-                          borderRadius: BorderRadius.circular(8),
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(8),
-                            onTap: () => Navigator.pop(modalContext),
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.blue, width: 1.2),
-                              ),
-                              child: const Icon(Icons.close, size: 20),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    content: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxWidth: dialogWidth,
-                        maxHeight: dialogMaxHeight,
-                      ),
-                      child: SingleChildScrollView(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Тема',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            RadioListTile<ThemeMode>(
-                              value: ThemeMode.light,
-                              groupValue: themeGroup,
-                              dense: true,
-                              visualDensity: VisualDensity.compact,
-                              contentPadding: EdgeInsets.zero,
-                              title: const Text('Светлая'),
-                              activeColor: Colors.blue,
-                              onChanged: (value) {
-                                if (value == null) return;
-                                setModalState(() => selectedTheme = value);
-                                appProvider.setThemeMode(value);
-                              },
-                            ),
-                            RadioListTile<ThemeMode>(
-                              value: ThemeMode.dark,
-                              groupValue: themeGroup,
-                              dense: true,
-                              visualDensity: VisualDensity.compact,
-                              contentPadding: EdgeInsets.zero,
-                              title: const Text('Тёмная'),
-                              activeColor: Colors.blue,
-                              onChanged: (value) {
-                                if (value == null) return;
-                                setModalState(() => selectedTheme = value);
-                                appProvider.setThemeMode(value);
-                              },
-                            ),
-                            const SizedBox(height: 10),
-                            const Text(
-                              'Размер шрифта',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            SliderTheme(
-                              data: SliderTheme.of(dialogThemeContext).copyWith(
-                                activeTrackColor: Colors.blue,
-                                inactiveTrackColor: Colors.blue.shade100,
-                                thumbColor: Colors.blue,
-                                overlayColor: Colors.blue.withOpacity(0.12),
-                              ),
-                              child: Slider(
-                                value: fontSize.clamp(12.0, 28.0),
-                                min: 12.0,
-                                max: 28.0,
-                                divisions: 16,
-                                label: fontSize.toStringAsFixed(0),
-                                onChanged: (value) {
-                                  setModalState(() => fontSize = value);
-                                  appProvider.changeFontSize(value);
-                                },
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'Межстрочный интервал',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            SliderTheme(
-                              data: SliderTheme.of(dialogThemeContext).copyWith(
-                                activeTrackColor: Colors.blue,
-                                inactiveTrackColor: Colors.blue.shade100,
-                                thumbColor: Colors.blue,
-                                overlayColor: Colors.blue.withOpacity(0.12),
-                              ),
-                              child: Slider(
-                                value: lineHeight.clamp(1.0, 2.2),
-                                min: 1.0,
-                                max: 2.2,
-                                divisions: 12,
-                                label: lineHeight.toStringAsFixed(2),
-                                onChanged: (value) {
-                                  setModalState(() => lineHeight = value);
-                                  appProvider.changeLineHeight(value);
-                                },
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            SwitchListTile(
-                              contentPadding: EdgeInsets.zero,
-                              title: const Text('Красные буквы'),
-                              value: redLettersEnabled,
-                              activeColor: Colors.blue,
-                              onChanged: (value) {
-                                setModalState(() => redLettersEnabled = value);
-                                appProvider.setRedLettersEnabled(value);
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  void _showSupportDialog(BuildContext context) {
-    const supportPayload =
-        'Автор проекта: Софеин Павел Геннадьевич\n'
-        'Контактная почта: sfpavelg@gmail.com\n'
-        'Версия проекта: ver_28_03_2026';
-
-    showDialog(
-      context: context,
-      builder: (routeContext) {
-        return Theme(
-          data: ThemeData.light(useMaterial3: true).copyWith(
-            colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-          ),
-          child: Builder(
-            builder: (_) {
-              return AlertDialog(
-                backgroundColor: Colors.lightBlue[50],
-                titlePadding: const EdgeInsets.fromLTRB(20, 14, 12, 8),
-                title: Row(
-                  children: [
-                    const Expanded(child: Text('Техподдержка')),
-                    Material(
-                      color: Colors.lightBlue.shade100,
-                      borderRadius: BorderRadius.circular(8),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(8),
-                        onTap: () => Navigator.pop(routeContext),
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.blue, width: 1.2),
-                          ),
-                          child: const Icon(Icons.close, size: 20),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                content: const SizedBox(
-                  width: 360,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Автор проекта:'),
-                      SizedBox(height: 4),
-                      Text(
-                        'Софеин Павел Геннадьевич',
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      SizedBox(height: 12),
-                      Text('Контактная почта:'),
-                      SizedBox(height: 4),
-                      Text(
-                        'sfpavelg@gmail.com',
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      SizedBox(height: 12),
-                      Text('Версия проекта:'),
-                      SizedBox(height: 4),
-                      Text(
-                        'ver_28_03_2026',
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                ),
-                actions: [
-                  Material(
-                    color: Colors.lightBlue.shade100,
-                    borderRadius: BorderRadius.circular(8),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(8),
-                      onTap: () async {
-                        await Clipboard.setData(
-                          const ClipboardData(text: supportPayload),
-                        );
-                        if (!routeContext.mounted) return;
-                        ScaffoldMessenger.of(routeContext).showSnackBar(
-                          const SnackBar(
-                            content: Text('Данные техподдержки скопированы'),
-                          ),
-                        );
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.blue, width: 1.2),
-                        ),
-                        child: const Icon(Icons.copy_all, size: 20),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
         );
       },
     );

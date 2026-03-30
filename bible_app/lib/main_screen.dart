@@ -16,11 +16,8 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   int _selectedIndex = 0;
 
-  static const List<Widget> _screens = [
-    BibleScreen(),
-    NotebookScreen(),
-    JournalScreen(),
-  ];
+  /// Вкладки монтируем лениво: не тянуть path_provider/ФС блокнота на старте (слабые API 23).
+  final Set<int> _mountedTabs = {0};
 
   static const List<BottomNavigationBarItem> _navItems = [
     BottomNavigationBarItem(
@@ -63,10 +60,13 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   Future<void> _loadSelectedTab() async {
     final prefs = await SharedPreferences.getInstance();
     final lastIndex = prefs.getInt('last_tab_index');
-    if (lastIndex != null && lastIndex >= 0 && lastIndex < _screens.length) {
+    if (lastIndex != null &&
+        lastIndex >= 0 &&
+        lastIndex < _navItems.length) {
       if (!mounted) return;
       setState(() {
         _selectedIndex = lastIndex;
+        _mountedTabs.add(lastIndex);
       });
     }
   }
@@ -74,16 +74,40 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
+      _mountedTabs.add(index);
     });
     SharedPreferences.getInstance().then((prefs) {
       prefs.setInt('last_tab_index', _selectedIndex);
     });
   }
 
+  Widget _tabBody(int index) {
+    switch (index) {
+      case 0:
+        return const BibleScreen();
+      case 1:
+        return const NotebookScreen();
+      case 2:
+        return const JournalScreen();
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final tabOrder = _mountedTabs.toList()..sort();
     return Scaffold(
-      body: _screens[_selectedIndex],
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          for (final i in tabOrder)
+            Offstage(
+              offstage: _selectedIndex != i,
+              child: _tabBody(i),
+            ),
+        ],
+      ),
       bottomNavigationBar: BottomNavigationBar(
         items: _navItems,
         currentIndex: _selectedIndex,

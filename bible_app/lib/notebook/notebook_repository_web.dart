@@ -1,20 +1,23 @@
+// ignore_for_file: avoid_web_libraries_in_flutter
+
 import 'dart:convert';
+import 'dart:html' as html;
 
 import 'package:bible_app/notebook/notebook_list_item.dart';
 import 'package:bible_app/notebook/notebook_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-const _prefsKey = 'notebook_web_files_v1';
+/// Раньше блокнот на веб писался только в SharedPreferences; на части сборок
+/// это не попадало в хранилище надёжно. Основное хранилище — localStorage.
+const _legacyPrefsKey = 'notebook_web_files_v1';
+const _localStorageKey = 'bible_app_notebook_v1';
 
 Future<NotebookRepository> openNotebookRepository() async {
-  final prefs = await SharedPreferences.getInstance();
-  return NotebookRepositoryWeb(prefs);
+  return NotebookRepositoryWeb();
 }
 
 class NotebookRepositoryWeb implements NotebookRepository {
-  NotebookRepositoryWeb(this._prefs);
-
-  final SharedPreferences _prefs;
+  NotebookRepositoryWeb();
 
   Map<String, String> _files = {};
 
@@ -23,7 +26,28 @@ class NotebookRepositoryWeb implements NotebookRepository {
 
   @override
   Future<void> init() async {
-    final raw = _prefs.getString(_prefsKey);
+    await _migrateFromSharedPreferencesIfNeeded();
+    _loadFromLocalStorage();
+  }
+
+  Future<void> _migrateFromSharedPreferencesIfNeeded() async {
+    try {
+      final existing = html.window.localStorage[_localStorageKey];
+      if (existing != null && existing.isNotEmpty) return;
+
+      final prefs = await SharedPreferences.getInstance();
+      final legacy = prefs.getString(_legacyPrefsKey);
+      if (legacy == null || legacy.isEmpty) return;
+
+      html.window.localStorage[_localStorageKey] = legacy;
+      await prefs.remove(_legacyPrefsKey);
+    } catch (_) {
+      // миграция необязательна
+    }
+  }
+
+  void _loadFromLocalStorage() {
+    final raw = html.window.localStorage[_localStorageKey];
     if (raw == null || raw.isEmpty) {
       _files = {};
       return;
@@ -37,7 +61,17 @@ class NotebookRepositoryWeb implements NotebookRepository {
   }
 
   Future<void> _persist() async {
-    await _prefs.setString(_prefsKey, jsonEncode(_files));
+    final payload = jsonEncode(_files);
+    try {
+      html.window.localStorage[_localStorageKey] = payload;
+    } on html.DomException catch (e) {
+      throw StateError(
+        'Память браузера переполнена или доступ запрещён (${e.name}). '
+        'Освободите место или отключите блокировку хранилища для сайта.',
+      );
+    } catch (e) {
+      throw StateError('Не удалось сохранить блокнот: $e');
+    }
   }
 
   static List<String> _parts(String rel) => rel
