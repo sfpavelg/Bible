@@ -269,7 +269,9 @@ class _BibleScreenState extends State<BibleScreen> {
                           final selected = _selectedVerses.contains(num);
                           Color rowBg = verseBg;
                           if (highlighted) {
-                            rowBg = Colors.amber.shade100;
+                            rowBg = isDark
+                                ? Colors.blueGrey.shade700
+                                : Colors.amber.shade100;
                           } else if (selected) {
                             rowBg = Colors.lightBlue.shade100;
                           }
@@ -383,33 +385,60 @@ class _BibleScreenState extends State<BibleScreen> {
     final history = prefs.getStringList(_kBibleSearchHistoryKey) ?? [];
     if (!mounted || !context.mounted) return;
 
-    await showDialog<void>(
+    await showGeneralDialog<void>(
       context: context,
-      builder: (dialogContext) {
-        return _BibleSearchDialog(
-          appProvider: appProvider,
-          initialQuery: _searchDraft,
-          initialResults: _searchResultRows
-              .map((e) => Map<String, dynamic>.from(e))
-              .toList(),
-          initialVz: _searchIncludeVz,
-          initialNz: _searchIncludeNz,
-          history: history,
-          historyKey: _kBibleSearchHistoryKey,
-          onClosing: (q, results, vz, nz) {
-            _searchDraft = q;
-            _searchResultRows = results;
-            _searchIncludeVz = vz;
-            _searchIncludeNz = nz;
-          },
-          onPickResult: (book, chapter, verse) async {
-            Navigator.pop(dialogContext);
-            await appProvider.changeBookAndChapter(book, chapter);
-            if (!mounted) return;
-            final total = appProvider.getCurrentVerses().length;
-            _highlightVerseTemporarily(verse);
-            unawaited(_scrollToVerse(verse, total));
-          },
+      barrierDismissible: true,
+      barrierLabel: 'Search',
+      barrierColor: Colors.black38,
+      transitionDuration: const Duration(milliseconds: 180),
+      pageBuilder: (dialogContext, _, __) {
+        final topOffset = MediaQuery.paddingOf(dialogContext).top + kToolbarHeight;
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(8, topOffset + 2, 8, 8),
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: _BibleSearchDialog(
+                appProvider: appProvider,
+                initialQuery: _searchDraft,
+                initialResults: _searchResultRows
+                    .map((e) => Map<String, dynamic>.from(e))
+                    .toList(),
+                initialVz: _searchIncludeVz,
+                initialNz: _searchIncludeNz,
+                history: history,
+                historyKey: _kBibleSearchHistoryKey,
+                onClosing: (q, results, vz, nz) {
+                  _searchDraft = q;
+                  _searchResultRows = results;
+                  _searchIncludeVz = vz;
+                  _searchIncludeNz = nz;
+                },
+                onPickResult: (book, chapter, verse) async {
+                  Navigator.pop(dialogContext);
+                  await appProvider.changeBookAndChapter(book, chapter);
+                  if (!mounted) return;
+                  final total = appProvider.getCurrentVerses().length;
+                  _highlightVerseTemporarily(verse);
+                  unawaited(_scrollToVerse(verse, total));
+                },
+              ),
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (_, animation, __, child) {
+        final curved = CurvedAnimation(parent: animation, curve: Curves.easeOut);
+        return FadeTransition(
+          opacity: curved,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, -0.04),
+              end: Offset.zero,
+            ).animate(curved),
+            child: child,
+          ),
         );
       },
     );
@@ -631,6 +660,9 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
     color: Color(0xFFBDBDBD),
     fontWeight: FontWeight.w400,
   );
+  static const _appBarBg = Color(0xFFB3E5FC);
+  static const _buttonBg = Color(0xFFE1F5FE);
+  static const _chromeTextColor = Colors.black;
 
   @override
   void initState() {
@@ -713,12 +745,68 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
     }
   }
 
-  void _clearField() {
-    _queryCtrl.clear();
-    setState(() {
-      _results = [];
-      _hasRunSearch = false;
-    });
+  List<String> _querySegments() {
+    return _queryCtrl.text
+        .toLowerCase()
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((segment) => segment.isNotEmpty)
+        .toSet()
+        .toList();
+  }
+
+  List<TextSpan> _buildHighlightedSpans(String text, TextStyle baseStyle) {
+    final segments = _querySegments();
+    if (text.isEmpty || segments.isEmpty) {
+      return [TextSpan(text: text, style: baseStyle)];
+    }
+
+    final matches = <({int start, int end})>[];
+    final lowerText = text.toLowerCase();
+    for (final segment in segments) {
+      var from = 0;
+      while (from < lowerText.length) {
+        final index = lowerText.indexOf(segment, from);
+        if (index == -1) break;
+        matches.add((start: index, end: index + segment.length));
+        from = index + segment.length;
+      }
+    }
+    if (matches.isEmpty) {
+      return [TextSpan(text: text, style: baseStyle)];
+    }
+
+    matches.sort((a, b) => a.start.compareTo(b.start));
+    final merged = <({int start, int end})>[];
+    for (final m in matches) {
+      if (merged.isEmpty || m.start > merged.last.end) {
+        merged.add(m);
+      } else if (m.end > merged.last.end) {
+        merged[merged.length - 1] = (start: merged.last.start, end: m.end);
+      }
+    }
+
+    final spans = <TextSpan>[];
+    var cursor = 0;
+    for (final m in merged) {
+      if (m.start > cursor) {
+        spans.add(TextSpan(text: text.substring(cursor, m.start), style: baseStyle));
+      }
+      spans.add(
+        TextSpan(
+          text: text.substring(m.start, m.end),
+          style: baseStyle.copyWith(
+            backgroundColor: Colors.amber.shade300,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      );
+      cursor = m.end;
+    }
+    if (cursor < text.length) {
+      spans.add(TextSpan(text: text.substring(cursor), style: baseStyle));
+    }
+    return spans;
   }
 
   @override
@@ -726,191 +814,281 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
     final w = MediaQuery.sizeOf(context).width.clamp(320, double.infinity);
     final contentW = (w * 0.92).clamp(280.0, 640.0);
 
-    return AlertDialog(
-      titlePadding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-      contentPadding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-      title: Row(
-        children: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Закрыть'),
+    return Material(
+      color: Colors.transparent,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 740),
+        child: Container(
+          decoration: BoxDecoration(
+            color: _appBarBg,
+            borderRadius: BorderRadius.circular(14),
           ),
-          const Spacer(),
-          FilledButton(
-            onPressed: _runSearch,
-            child: const Text('Найти'),
-          ),
-        ],
-      ),
-      content: SizedBox(
-        width: contentW,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            RawAutocomplete<String>(
-              textEditingController: _queryCtrl,
-              focusNode: _focusNode,
-              optionsBuilder: (TextEditingValue tev) {
-                if (tev.text.isEmpty) {
-                  return _history;
-                }
-                final q = tev.text.toLowerCase();
-                return _history
-                    .where((h) => h.toLowerCase().contains(q))
-                    .toList();
-              },
-              onSelected: (s) {
-                _queryCtrl.text = s;
-                _queryCtrl.selection =
-                    TextSelection.collapsed(offset: s.length);
-              },
-              fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-                return TextField(
-                  controller: controller,
-                  focusNode: focusNode,
-                  decoration: InputDecoration(
-                    hintText: 'Набери текст',
-                    hintStyle: _hintStyle,
-                    isDense: true,
-                    border: const UnderlineInputBorder(),
-                    enabledBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: Colors.grey.shade400),
-                    ),
-                    focusedBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: Colors.blue.shade700, width: 2),
-                    ),
-                    suffixIcon: Padding(
-                      padding: const EdgeInsetsDirectional.only(end: 4),
-                      child: SizedBox(
-                        width: 36,
-                        height: 36,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final scale =
+                        (constraints.maxWidth / 420).clamp(0.76, 1.0);
+                    final textScale = scale;
+                    final checkboxScale =
+                        (0.9 + (scale - 0.76) * 0.25).clamp(0.86, 1.0);
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            TextButton.icon(
+                              onPressed: _runSearch,
+                              style: TextButton.styleFrom(
+                                backgroundColor: _buttonBg,
+                                foregroundColor: _chromeTextColor,
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 12 * scale,
+                                  vertical: 8 * scale,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              icon: Icon(Icons.search, size: 18 * scale),
+                              label: Text(
+                                'Найти',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14 * textScale,
+                                ),
+                              ),
+                            ),
+                            const Spacer(),
+                            Transform.scale(
+                              scale: checkboxScale,
+                              child: Checkbox(
+                                value: _vz,
+                                onChanged: _setVz,
+                                visualDensity: VisualDensity.compact,
+                                activeColor: _buttonBg,
+                                checkColor: _chromeTextColor,
+                                side: const BorderSide(
+                                  color: _chromeTextColor,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              'ВЗ',
+                              style: TextStyle(fontSize: 14 * textScale),
+                            ),
+                            SizedBox(width: 8 * scale),
+                            Transform.scale(
+                              scale: checkboxScale,
+                              child: Checkbox(
+                                value: _nz,
+                                onChanged: _setNz,
+                                visualDensity: VisualDensity.compact,
+                                activeColor: _buttonBg,
+                                checkColor: _chromeTextColor,
+                                side: const BorderSide(
+                                  color: _chromeTextColor,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              'НЗ',
+                              style: TextStyle(fontSize: 14 * textScale),
+                            ),
+                            const Spacer(),
+                            Material(
+                              color: _buttonBg,
+                              borderRadius: BorderRadius.circular(8),
+                              clipBehavior: Clip.antiAlias,
+                              child: InkWell(
+                                onTap: () => Navigator.pop(context),
+                                child: SizedBox(
+                                  width: 36 * scale,
+                                  height: 36 * scale,
+                                  child: Icon(
+                                    Icons.close,
+                                    color: _chromeTextColor,
+                                    size: 20 * scale,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  decoration: BoxDecoration(
+                    color: _buttonBg,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                  child: RawAutocomplete<String>(
+                    textEditingController: _queryCtrl,
+                    focusNode: _focusNode,
+                    optionsBuilder: (TextEditingValue tev) {
+                      final normalized = tev.text.toLowerCase().trim();
+                      if (normalized.isEmpty) {
+                        return const Iterable<String>.empty();
+                      }
+                      final segments = normalized
+                          .split(RegExp(r'\s+'))
+                          .where((s) => s.isNotEmpty)
+                          .toList();
+                      return _history.where((h) {
+                        final candidate = h.toLowerCase();
+                        for (final segment in segments) {
+                          if (!candidate.contains(segment)) return false;
+                        }
+                        return true;
+                      });
+                    },
+                    onSelected: (s) {
+                      _queryCtrl.text = s;
+                      _queryCtrl.selection =
+                          TextSelection.collapsed(offset: s.length);
+                    },
+                    fieldViewBuilder:
+                        (context, controller, focusNode, onFieldSubmitted) {
+                      return TextField(
+                        controller: controller,
+                        focusNode: focusNode,
+                        style: const TextStyle(
+                          color: _chromeTextColor,
+                        ),
+                        cursorColor: _chromeTextColor,
+                        decoration: InputDecoration(
+                          hintText: 'Набери текст',
+                          hintStyle: _hintStyle,
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 10,
+                          ),
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                        ),
+                        onSubmitted: (_) => _runSearch(),
+                      );
+                    },
+                    optionsViewBuilder: (context, onSelected, options) {
+                      return Align(
+                        alignment: Alignment.topLeft,
                         child: Material(
-                          color: Colors.grey.shade200,
-                          borderRadius: BorderRadius.circular(4),
-                          clipBehavior: Clip.antiAlias,
-                          child: InkWell(
-                            onTap: _clearField,
-                            child: Icon(
-                              Icons.close,
-                              size: 20,
-                              color: Colors.grey.shade700,
+                          elevation: 6,
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxHeight: 220,
+                              maxWidth: contentW,
+                            ),
+                            child: ListView.builder(
+                              padding: EdgeInsets.zero,
+                              shrinkWrap: true,
+                              itemCount: options.length,
+                              itemBuilder: (context, index) {
+                                final o = options.elementAt(index);
+                                return InkWell(
+                                  onTap: () => onSelected(o),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 12,
+                                    ),
+                                    child: Text(
+                                      o,
+                                      style: TextStyle(color: _chromeTextColor),
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
                           ),
                         ),
-                      ),
-                    ),
-                  ),
-                  onSubmitted: (_) => _runSearch(),
-                );
-              },
-              optionsViewBuilder: (context, onSelected, options) {
-                return Align(
-                  alignment: Alignment.topLeft,
-                  child: Material(
-                    elevation: 6,
-                    borderRadius: BorderRadius.circular(8),
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxHeight: 220,
-                        maxWidth: contentW,
-                      ),
-                      child: ListView.builder(
-                        padding: EdgeInsets.zero,
-                        shrinkWrap: true,
-                        itemCount: options.length,
-                        itemBuilder: (context, index) {
-                          final o = options.elementAt(index);
-                          return InkWell(
-                            onTap: () => onSelected(o),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 12,
-                              ),
-                              child: Text(o),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Expanded(
-                  child: CheckboxListTile(
-                    value: _vz,
-                    onChanged: _setVz,
-                    title: const Text('ВЗ'),
-                    controlAffinity: ListTileControlAffinity.leading,
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                  ),
-                ),
-                Expanded(
-                  child: CheckboxListTile(
-                    value: _nz,
-                    onChanged: _setNz,
-                    title: const Text('НЗ'),
-                    controlAffinity: ListTileControlAffinity.leading,
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                  ),
-                ),
-              ],
-            ),
-            if (_hasRunSearch && _results.isNotEmpty)
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 320),
-                child: Scrollbar(
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    padding: const EdgeInsets.symmetric(horizontal: 2),
-                    itemCount: _results.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (context, i) {
-                      final r = _results[i];
-                      final book = r['book'] as String;
-                      final ch = r['chapter'] as int;
-                      final v = r['verse'] as int;
-                      final text = (r['text'] as String?) ?? '';
-                      final preview =
-                          text.length > 100 ? '${text.substring(0, 100)}…' : text;
-                      return ListTile(
-                        dense: true,
-                        visualDensity: VisualDensity.compact,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 6),
-                        title: Text(
-                          '$book $ch:$v',
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        subtitle: Text(
-                          preview,
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        onTap: () => widget.onPickResult(book, ch, v),
                       );
                     },
                   ),
                 ),
-              ),
-            if (_hasRunSearch)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  'Найдено совпадений: ${_results.length}',
-                  style: TextStyle(
-                    color: Colors.grey.shade700,
-                    fontWeight: FontWeight.w500,
+                if (_hasRunSearch && _results.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 320),
+                      child: Scrollbar(
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          padding: const EdgeInsets.symmetric(horizontal: 2),
+                          itemCount: _results.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (context, i) {
+                            final r = _results[i];
+                            final book = r['book'] as String;
+                            final ch = r['chapter'] as int;
+                            final v = r['verse'] as int;
+                            final text = (r['text'] as String?) ?? '';
+                            final preview = text.length > 100
+                                ? '${text.substring(0, 100)}…'
+                                : text;
+                            return ListTile(
+                              dense: false,
+                              visualDensity: VisualDensity.standard,
+                              contentPadding:
+                                  const EdgeInsets.symmetric(horizontal: 6),
+                              title: Text(
+                                '$book $ch:$v',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: _chromeTextColor,
+                                ),
+                              ),
+                              subtitle: RichText(
+                                text: TextSpan(
+                                  children: _buildHighlightedSpans(
+                                    preview,
+                                    DefaultTextStyle.of(context)
+                                        .style
+                                        .copyWith(
+                                          color: Colors.grey.shade800,
+                                        ),
+                                  ),
+                                ),
+                              ),
+                              onTap: () => widget.onPickResult(book, ch, v),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-          ],
+                ],
+                if (_hasRunSearch)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      'Найдено совпадений: ${_results.length}',
+                      style: const TextStyle(
+                        color: _chromeTextColor,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
     );

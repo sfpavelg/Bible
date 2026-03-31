@@ -424,3 +424,65 @@ void showAppSupportDialog(BuildContext context) {
     },
   );
 }
+
+void showAppHelpDialog(BuildContext context) {
+  showDialog<void>(
+    context: context,
+    builder: (routeContext) {
+      return Theme(
+        data: ThemeData.light(useMaterial3: true).copyWith(
+          colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        ),
+        child: Builder(
+          builder: (_) {
+            return AlertDialog(
+              backgroundColor: Colors.lightBlue[50],
+              titlePadding: const EdgeInsets.fromLTRB(20, 14, 12, 8),
+              title: Row(
+                children: [
+                  const Expanded(child: Text('Помощь')),
+                  Material(
+                    color: Colors.lightBlue.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () => Navigator.pop(routeContext),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.blue, width: 1.2),
+                        ),
+                        child: const Icon(Icons.close, size: 20),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              content: const SizedBox(
+                width: 360,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Как пользоваться поиском:'),
+                    SizedBox(height: 6),
+                    Text('• Введите одно или несколько слов и нажмите "Найти".'),
+                    Text('• Флажками ВЗ и НЗ ограничьте область поиска.'),
+                    Text('• Нажмите на результат, чтобы перейти к стиху.'),
+                    SizedBox(height: 12),
+                    Text('Навигация по Библии:'),
+                    SizedBox(height: 6),
+                    Text('• Кнопки сверху переключают книгу и главу.'),
+                    Text('• Свайп влево/вправо листает главы.'),
+                    Text('• Долгое нажатие на стих включает выбор и копирование.'),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      );
+    },
+  );
+}

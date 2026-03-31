@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 /// Плашки пунктов — тот же оттенок, что у кнопок книги/главы на экране Библии.
 const _kMenuTileBg = Color(0xFFE1F5FE);
 
-/// Меню «⋯» как на экране Библии: настройки, техподдержка, выход.
+/// Меню «⋯» как на экране Библии: настройки, техподдержка, помощь, выход.
 class AppChromeOverflowMenu extends StatelessWidget {
   const AppChromeOverflowMenu({
     super.key,
@@ -41,6 +41,8 @@ class AppChromeOverflowMenu extends StatelessWidget {
         child: PopupMenuButton<String>(
           icon: Icon(Icons.more_vert, color: iconColor),
           tooltip: 'Меню',
+          position: PopupMenuPosition.under,
+          offset: const Offset(0, 8),
           color: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -51,13 +53,15 @@ class AppChromeOverflowMenu extends StatelessWidget {
               showAppSettingsDialog(context);
             } else if (value == 'support') {
               showAppSupportDialog(context);
+            } else if (value == 'help') {
+              showAppHelpDialog(context);
             } else if (value == 'exit') {
               requestAppExit();
             }
           },
           itemBuilder: (context) => [
             PopupMenuItem<String>(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 3),
               value: 'settings',
               child: _menuChoiceTile(
                 label: 'Настройки',
@@ -66,7 +70,7 @@ class AppChromeOverflowMenu extends StatelessWidget {
               ),
             ),
             PopupMenuItem<String>(
-              padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+              padding: const EdgeInsets.fromLTRB(8, 3, 8, 3),
               value: 'support',
               child: _menuChoiceTile(
                 label: 'Техподдержка',
@@ -74,9 +78,17 @@ class AppChromeOverflowMenu extends StatelessWidget {
                 iconColor: iconColor,
               ),
             ),
-            const PopupMenuDivider(height: 1),
             PopupMenuItem<String>(
-              padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+              padding: const EdgeInsets.fromLTRB(8, 3, 8, 3),
+              value: 'help',
+              child: _menuChoiceTile(
+                label: 'Помощь',
+                icon: Icons.help_outline_rounded,
+                iconColor: iconColor,
+              ),
+            ),
+            PopupMenuItem<String>(
+              padding: const EdgeInsets.fromLTRB(8, 3, 8, 8),
               value: 'exit',
               child: _menuChoiceTile(
                 label: 'Выход',
@@ -98,23 +110,30 @@ Widget _menuChoiceTile({
   required Color iconColor,
 }) {
   return Material(
-    color: _kMenuTileBg,
-    borderRadius: BorderRadius.circular(8),
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(10),
     child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: TextStyle(
-                fontWeight: FontWeight.w500,
-                color: iconColor.withOpacity(0.92),
+      padding: const EdgeInsets.all(2),
+      child: Container(
+        decoration: BoxDecoration(
+          color: _kMenuTileBg,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontWeight: FontWeight.w500,
+                  color: iconColor.withOpacity(0.92),
+                ),
               ),
             ),
-          ),
-          Icon(icon, color: iconColor, size: 22),
-        ],
+            Icon(icon, color: iconColor, size: 22),
+          ],
+        ),
       ),
     ),
   );
