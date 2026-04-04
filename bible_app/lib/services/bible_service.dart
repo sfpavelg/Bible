@@ -4,6 +4,68 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:bible_app/models/bible_model.dart';
 
+bool _wordCharAt(String s, int i) {
+  if (i < 0 || i >= s.length) return false;
+  final c = s.codeUnitAt(i);
+  if (c >= 0x30 && c <= 0x39) return true;
+  if (c >= 0x41 && c <= 0x5A) return true;
+  if (c >= 0x61 && c <= 0x7A) return true;
+  if (c >= 0x0410 && c <= 0x044F) return true;
+  if (c == 0x0401 || c == 0x0451) return true;
+  return false;
+}
+
+bool _containsWholeWord(String haystackLower, String wordLower) {
+  if (wordLower.isEmpty) return false;
+  var from = 0;
+  while (from < haystackLower.length) {
+    final i = haystackLower.indexOf(wordLower, from);
+    if (i == -1) return false;
+    final end = i + wordLower.length;
+    final leftOk = i == 0 || !_wordCharAt(haystackLower, i - 1);
+    final rightOk = end >= haystackLower.length || !_wordCharAt(haystackLower, end);
+    if (leftOk && rightOk) return true;
+    from = i + 1;
+  }
+  return false;
+}
+
+/// Совпадения сегментов запроса в тексте (подсветка в поиске).
+List<({int start, int end})> bibleMergedQueryMatches(
+  String text,
+  List<String> segmentsLower, {
+  required bool wholeWordsOnly,
+}) {
+  if (text.isEmpty || segmentsLower.isEmpty) return [];
+  final lowerText = text.toLowerCase();
+  final matches = <({int start, int end})>[];
+  for (final segment in segmentsLower) {
+    if (segment.isEmpty) continue;
+    var from = 0;
+    while (from < lowerText.length) {
+      final i = lowerText.indexOf(segment, from);
+      if (i == -1) break;
+      final end = i + segment.length;
+      final ok = !wholeWordsOnly ||
+          ((i == 0 || !_wordCharAt(lowerText, i - 1)) &&
+              (end >= lowerText.length || !_wordCharAt(lowerText, end)));
+      if (ok) matches.add((start: i, end: end));
+      from = i + 1;
+    }
+  }
+  if (matches.isEmpty) return [];
+  matches.sort((a, b) => a.start.compareTo(b.start));
+  final merged = <({int start, int end})>[];
+  for (final m in matches) {
+    if (merged.isEmpty || m.start > merged.last.end) {
+      merged.add(m);
+    } else if (m.end > merged.last.end) {
+      merged[merged.length - 1] = (start: merged.last.start, end: m.end);
+    }
+  }
+  return merged;
+}
+
 class BibleService {
   static final BibleService _instance = BibleService._internal();
 
@@ -202,9 +264,27 @@ class BibleService {
     String query, {
     bool includeOldTestament = true,
     bool includeNewTestament = true,
+    bool wholeWordsOnly = false,
   }) {
-    final q = query.trim().toLowerCase();
-    if (q.isEmpty) return [];
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return [];
+    final qLower = trimmed.toLowerCase();
+
+    bool verseMatches(String text) {
+      final t = text.toLowerCase();
+      if (!wholeWordsOnly) {
+        return t.contains(qLower);
+      }
+      final tokens = qLower
+          .split(RegExp(r'\s+'))
+          .where((e) => e.isNotEmpty)
+          .toList();
+      if (tokens.isEmpty) return false;
+      for (final token in tokens) {
+        if (!_containsWholeWord(t, token)) return false;
+      }
+      return true;
+    }
 
     final List<BibleVerse> results = [];
 
@@ -218,7 +298,7 @@ class BibleService {
                 ? verseData
                 : <String, dynamic>{};
             final text = (vd['text'] ?? '').toString();
-            if (text.toLowerCase().contains(q)) {
+            if (verseMatches(text)) {
               results.add(BibleVerse(
                 book: book,
                 chapter: int.parse(chapter),

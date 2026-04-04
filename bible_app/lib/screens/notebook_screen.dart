@@ -2,9 +2,11 @@ import 'package:bible_app/notebook/notebook_list_item.dart';
 import 'package:bible_app/notebook/notebook_repository.dart';
 import 'package:bible_app/notebook/notebook_repository_factory.dart';
 import 'package:bible_app/screens/notebook_editor_panel.dart';
+import 'package:bible_app/providers/app_provider.dart';
 import 'package:bible_app/widgets/app_chrome_overflow_menu.dart';
-import 'package:flutter/foundation.dart';
+import 'package:bible_app/widgets/chrome_toolbar_button.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:path/path.dart' as p;
 
 class NotebookScreen extends StatefulWidget {
@@ -313,16 +315,14 @@ class _NotebookScreenState extends State<NotebookScreen> {
     required String tooltip,
     required VoidCallback onPressed,
   }) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 2),
-      decoration: BoxDecoration(
-        color: _buttonBg,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: IconButton(
-        icon: Icon(icon, color: _chromeFg, size: 22),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: ChromeIconButton(
+        icon: icon,
         tooltip: tooltip,
         onPressed: onPressed,
+        foregroundColor: _chromeFg,
+        backgroundColor: _buttonBg,
       ),
     );
   }
@@ -339,9 +339,12 @@ class _NotebookScreenState extends State<NotebookScreen> {
       ),
       leading: _currentDir.isEmpty
           ? null
-          : IconButton(
-              icon: const Icon(Icons.arrow_back, color: _chromeFg),
+          : ChromeIconButton(
+              icon: Icons.arrow_back,
+              tooltip: 'Назад',
               onPressed: _goUp,
+              foregroundColor: _chromeFg,
+              backgroundColor: _buttonBg,
             ),
       titleSpacing: 8,
       title: SingleChildScrollView(
@@ -377,6 +380,8 @@ class _NotebookScreenState extends State<NotebookScreen> {
 
   PreferredSizeWidget _buildEditorAppBar() {
     final name = p.basename(_editingPath!);
+    final chrome = context.watch<AppProvider>().chromeButtonSize;
+    final menuIcon = (chrome * 0.5).clamp(18.0, 30.0);
     return AppBar(
       backgroundColor: _appBarBg,
       surfaceTintColor: _appBarBg,
@@ -386,9 +391,12 @@ class _NotebookScreenState extends State<NotebookScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(14)),
       ),
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back, color: _chromeFg),
+      leading: ChromeIconButton(
+        icon: Icons.arrow_back,
+        tooltip: 'Закрыть',
         onPressed: _closeEditor,
+        foregroundColor: _chromeFg,
+        backgroundColor: _buttonBg,
       ),
       title: Text(
         name,
@@ -404,23 +412,35 @@ class _NotebookScreenState extends State<NotebookScreen> {
               style: TextStyle(fontSize: 18, color: Colors.orange),
             ),
           ),
-        IconButton(
+        ChromeIconButton(
+          icon: Icons.save_outlined,
           tooltip: 'Сохранить',
-          icon: const Icon(Icons.save_outlined, color: _chromeFg),
           onPressed: () => _editorKey?.currentState?.saveNow(),
+          foregroundColor: _chromeFg,
+          backgroundColor: _buttonBg,
         ),
-        PopupMenuButton<String>(
-          icon: const Icon(Icons.more_horiz, color: _chromeFg),
-          onSelected: (v) =>
-              _editorKey?.currentState?.runEditorMenuAction(v),
-          itemBuilder: (context) => const [
+        SizedBox(
+          width: chrome,
+          height: chrome,
+          child: Material(
+            color: _buttonBg,
+            borderRadius: BorderRadius.circular(8),
+            clipBehavior: Clip.antiAlias,
+            child: PopupMenuButton<String>(
+              padding: EdgeInsets.zero,
+              icon: Icon(Icons.more_horiz, color: _chromeFg, size: menuIcon),
+              onSelected: (v) =>
+                  _editorKey?.currentState?.runEditorMenuAction(v),
+              itemBuilder: (context) => const [
             PopupMenuItem(value: 'share', child: Text('Поделиться…')),
             PopupMenuItem(value: 'export', child: Text('Сохранить в файл…')),
             PopupMenuItem(value: 'copy', child: Text('Копировать весь текст')),
             PopupMenuItem(value: 'mail', child: Text('Отправить на почту…')),
             PopupMenuDivider(),
             PopupMenuItem(value: 'del', child: Text('Удалить документ')),
-          ],
+              ],
+            ),
+          ),
         ),
         const AppChromeOverflowMenu(
           iconColor: _chromeFg,
@@ -432,11 +452,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final subtitle = _currentDir.isEmpty
-        ? (kIsWeb
-            ? 'Хранение в браузере (память сайта / localStorage)'
-            : 'Папка приложения: Documents/bible_notebook')
-        : _currentDir.replaceAll('/', ' / ');
+    context.watch<AppProvider>().chromeButtonSize;
 
     final editing = _editingPath != null && _editorKey != null && _repo != null;
 
@@ -469,30 +485,6 @@ class _NotebookScreenState extends State<NotebookScreen> {
                   : Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Material(
-                          color: Colors.blue.shade50,
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  subtitle,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.blueGrey.shade800,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                const Text(
-                                  'Долгий тап — переименовать или удалить. '
-                                  'Можно перейти на Библию и вставить текст в открытый документ.',
-                                  style: TextStyle(fontSize: 12),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
                         Expanded(
                           child: _items.isEmpty
                               ? Center(

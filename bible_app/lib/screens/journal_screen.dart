@@ -1,5 +1,8 @@
+import 'package:bible_app/providers/app_provider.dart';
 import 'package:bible_app/widgets/app_chrome_overflow_menu.dart';
+import 'package:bible_app/widgets/chrome_toolbar_button.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 class JournalScreen extends StatelessWidget {
   const JournalScreen({super.key});
@@ -10,6 +13,7 @@ class JournalScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    context.watch<AppProvider>().chromeButtonSize;
     return Scaffold(
       appBar: AppBar(
         backgroundColor: _appBarBg,
@@ -23,18 +27,14 @@ class JournalScreen extends StatelessWidget {
         automaticallyImplyLeading: false,
         title: Row(
           children: [
-            Container(
-              decoration: BoxDecoration(
-                color: _buttonBg,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: IconButton(
-                icon: const Icon(Icons.calendar_today, color: _chromeFg),
-                tooltip: 'Календарь',
-                onPressed: () {
-                  // TODO: календарь прочтения
-                },
-              ),
+            ChromeIconButton(
+              icon: Icons.calendar_today,
+              tooltip: 'Календарь',
+              foregroundColor: _chromeFg,
+              backgroundColor: _buttonBg,
+              onPressed: () {
+                // TODO: календарь прочтения
+              },
             ),
           ],
         ),

@@ -25,13 +25,10 @@ void showAppSettingsDialog(BuildContext context) {
       if (!AppProvider.verseFontLabels.containsKey(fontPreset)) {
         fontPreset = 'sans';
       }
+      double chromeBtnSize = appProvider.chromeButtonSize;
 
       return StatefulBuilder(
         builder: (modalContext, setModalState) {
-          final themeGroup = selectedTheme == ThemeMode.system
-              ? ThemeMode.light
-              : selectedTheme;
-
           return Theme(
             data: ThemeData.light(useMaterial3: true).copyWith(
               colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
@@ -49,7 +46,7 @@ void showAppSettingsDialog(BuildContext context) {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+                          padding: const EdgeInsets.fromLTRB(16, 10, 8, 6),
                           child: Row(
                             children: [
                               const Expanded(
@@ -86,7 +83,7 @@ void showAppSettingsDialog(BuildContext context) {
                         const Divider(height: 1),
                         Expanded(
                           child: SingleChildScrollView(
-                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+                            padding: const EdgeInsets.fromLTRB(16, 6, 16, 14),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -94,35 +91,57 @@ void showAppSettingsDialog(BuildContext context) {
                                   'Тема',
                                   style: TextStyle(fontWeight: FontWeight.bold),
                                 ),
-                                RadioListTile<ThemeMode>(
-                                  value: ThemeMode.light,
-                                  groupValue: themeGroup,
-                                  dense: true,
-                                  visualDensity: VisualDensity.compact,
-                                  contentPadding: EdgeInsets.zero,
-                                  title: const Text('Светлая'),
-                                  activeColor: Colors.blue,
-                                  onChanged: (value) {
-                                    if (value == null) return;
-                                    setModalState(() => selectedTheme = value);
-                                    appProvider.setThemeMode(value);
+                                const SizedBox(height: 4),
+                                SegmentedButton<ThemeMode>(
+                                  segments: const <ButtonSegment<ThemeMode>>[
+                                    ButtonSegment<ThemeMode>(
+                                      value: ThemeMode.light,
+                                      label: Text('Светлая'),
+                                      icon: Icon(Icons.light_mode_outlined, size: 18),
+                                    ),
+                                    ButtonSegment<ThemeMode>(
+                                      value: ThemeMode.dark,
+                                      label: Text('Тёмная'),
+                                      icon: Icon(Icons.dark_mode_outlined, size: 18),
+                                    ),
+                                  ],
+                                  selected: <ThemeMode>{selectedTheme},
+                                  onSelectionChanged: (Set<ThemeMode> next) {
+                                    if (next.isEmpty) return;
+                                    final m = next.first;
+                                    setModalState(() => selectedTheme = m);
+                                    appProvider.setThemeMode(m);
                                   },
                                 ),
-                                RadioListTile<ThemeMode>(
-                                  value: ThemeMode.dark,
-                                  groupValue: themeGroup,
-                                  dense: true,
-                                  visualDensity: VisualDensity.compact,
-                                  contentPadding: EdgeInsets.zero,
-                                  title: const Text('Тёмная'),
-                                  activeColor: Colors.blue,
-                                  onChanged: (value) {
-                                    if (value == null) return;
-                                    setModalState(() => selectedTheme = value);
-                                    appProvider.setThemeMode(value);
-                                  },
+                                const SizedBox(height: 8),
+                                const Text(
+                                  'Размер кнопок',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
                                 ),
-                                const SizedBox(height: 10),
+                                SliderTheme(
+                                  data: SliderTheme.of(panelThemeContext)
+                                      .copyWith(
+                                    activeTrackColor: Colors.blue,
+                                    inactiveTrackColor: Colors.blue.shade100,
+                                    thumbColor: Colors.blue,
+                                    overlayColor: Colors.blue.withOpacity(0.12),
+                                  ),
+                                  child: Slider(
+                                    value: chromeBtnSize.clamp(
+                                      AppProvider.chromeButtonSizeMin,
+                                      AppProvider.chromeButtonSizeMax,
+                                    ),
+                                    min: AppProvider.chromeButtonSizeMin,
+                                    max: AppProvider.chromeButtonSizeMax,
+                                    divisions: 24,
+                                    label: chromeBtnSize.round().toString(),
+                                    onChanged: (value) {
+                                      setModalState(() => chromeBtnSize = value);
+                                      appProvider.changeChromeButtonSize(value);
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
                                 const Text(
                                   'Шрифт текста',
                                   style: TextStyle(fontWeight: FontWeight.bold),
@@ -160,7 +179,7 @@ void showAppSettingsDialog(BuildContext context) {
                                     appProvider.setVerseFontPreset(value);
                                   },
                                 ),
-                                const SizedBox(height: 12),
+                                const SizedBox(height: 8),
                                 const Text(
                                   'Размер шрифта',
                                   style: TextStyle(fontWeight: FontWeight.bold),
@@ -185,7 +204,7 @@ void showAppSettingsDialog(BuildContext context) {
                                     },
                                   ),
                                 ),
-                                const SizedBox(height: 8),
+                                const SizedBox(height: 5),
                                 const Text(
                                   'Межстрочный интервал',
                                   style: TextStyle(fontWeight: FontWeight.bold),
@@ -210,7 +229,7 @@ void showAppSettingsDialog(BuildContext context) {
                                     },
                                   ),
                                 ),
-                                const SizedBox(height: 8),
+                                const SizedBox(height: 5),
                                 const Text(
                                   'Интервал между стихами',
                                   style: TextStyle(fontWeight: FontWeight.bold),
@@ -235,8 +254,10 @@ void showAppSettingsDialog(BuildContext context) {
                                     },
                                   ),
                                 ),
-                                const SizedBox(height: 8),
+                                const SizedBox(height: 4),
                                 SwitchListTile(
+                                  dense: true,
+                                  visualDensity: VisualDensity.compact,
                                   contentPadding: EdgeInsets.zero,
                                   title: const Text('Красные буквы'),
                                   value: redLettersEnabled,
@@ -249,6 +270,8 @@ void showAppSettingsDialog(BuildContext context) {
                                   },
                                 ),
                                 SwitchListTile(
+                                  dense: true,
+                                  visualDensity: VisualDensity.compact,
                                   contentPadding: EdgeInsets.zero,
                                   title: const Text('Не выключать экран'),
                                   value: keepScreenOn,
@@ -425,6 +448,12 @@ void showAppSupportDialog(BuildContext context) {
   );
 }
 
+/// Заголовки разделов в окне «Помощь» (оглавление).
+const TextStyle _helpDialogTocStyle = TextStyle(
+  fontWeight: FontWeight.bold,
+  fontStyle: FontStyle.italic,
+);
+
 void showAppHelpDialog(BuildContext context) {
   showDialog<void>(
     context: context,
@@ -434,7 +463,9 @@ void showAppHelpDialog(BuildContext context) {
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         ),
         child: Builder(
-          builder: (_) {
+          builder: (dialogContext) {
+            final helpMaxH =
+                MediaQuery.sizeOf(dialogContext).height * 0.65;
             return AlertDialog(
               backgroundColor: Colors.lightBlue[50],
               titlePadding: const EdgeInsets.fromLTRB(20, 14, 12, 8),
@@ -459,26 +490,62 @@ void showAppHelpDialog(BuildContext context) {
                   ),
                 ],
               ),
-              content: const SizedBox(
+              content: SizedBox(
                 width: 360,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Как пользоваться поиском:'),
-                    SizedBox(height: 6),
-                    Text('• Введите одно или несколько слов и нажмите "Найти".'),
-                    Text('• Флажками ВЗ и НЗ ограничьте область поиска.'),
-                    Text('• Нажмите на результат, чтобы перейти к стиху.'),
-                    SizedBox(height: 12),
-                    Text('Навигация по Библии:'),
-                    SizedBox(height: 6),
-                    Text('• Кнопки сверху переключают книгу и главу.'),
-                    Text('• Свайп влево/вправо листает главы.'),
-                    Text('• Долгое нажатие на стих включает выбор и копирование.'),
-                  ],
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxHeight: helpMaxH),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                          Text(
+                            'Как пользоваться поиском:',
+                            style: _helpDialogTocStyle,
+                          ),
+                          SizedBox(height: 6),
+                          Text(
+                            '• Введите одно или несколько слов и нажмите "Найти".',
+                          ),
+                          Text(
+                            '• Флажками ВЗ и НЗ ограничьте область поиска.',
+                          ),
+                          Text(
+                            '• Нажмите на результат, чтобы перейти к стиху.',
+                          ),
+                          SizedBox(height: 12),
+                          Text(
+                            'Навигация по Библии:',
+                            style: _helpDialogTocStyle,
+                          ),
+                          SizedBox(height: 6),
+                          Text(
+                            '• Кнопки сверху переключают книгу и главу.',
+                          ),
+                          Text('• Свайп влево/вправо листает главы.'),
+                          Text(
+                            '• Долгое нажатие на стих включает выбор; коротким нажатием отметьте другие стихи.',
+                          ),
+                          Text(
+                            '• Кнопка «Избранное» в шапке добавляет выбранные стихи в избранное и открывает список.',
+                          ),
+                          SizedBox(height: 12),
+                          Text(
+                            'Блокнот:',
+                            style: _helpDialogTocStyle,
+                          ),
+                          SizedBox(height: 6),
+                          Text(
+                            '• Долгий тап по файлу или папке — переименовать или удалить.',
+                          ),
+                          Text(
+                            '• Можно перейти на Библию и вставить текст в открытый документ.',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-              ),
             );
           },
         ),

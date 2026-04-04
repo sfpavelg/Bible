@@ -1,6 +1,8 @@
+import 'package:bible_app/providers/app_provider.dart';
 import 'package:bible_app/utils/app_exit.dart';
 import 'package:bible_app/widgets/app_chrome_dialogs.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 /// Плашки пунктов — тот же оттенок, что у кнопок книги/главы на экране Библии.
 const _kMenuTileBg = Color(0xFFE1F5FE);
@@ -20,85 +22,95 @@ class AppChromeOverflowMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     // Только светлая тема для «⋯» и выпадающего списка — как панель «Настройки»,
     // без наследования тёмной темы приложения.
-    return Theme(
-      data: ThemeData.light(useMaterial3: true).copyWith(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-        iconTheme: IconThemeData(color: iconColor),
-        popupMenuTheme: PopupMenuThemeData(
-          surfaceTintColor: Colors.transparent,
-          textStyle: const TextStyle(
-            color: Color(0xDD000000),
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
+    return Consumer<AppProvider>(
+      builder: (context, app, _) {
+        final s = app.chromeButtonSize;
+        final iconSz = (s * 0.5).clamp(18.0, 30.0);
+        return Theme(
+          data: ThemeData.light(useMaterial3: true).copyWith(
+            colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+            iconTheme: IconThemeData(color: iconColor),
+            popupMenuTheme: PopupMenuThemeData(
+              surfaceTintColor: Colors.transparent,
+              textStyle: const TextStyle(
+                color: Color(0xDD000000),
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
-        ),
-      ),
-      child: Container(
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: PopupMenuButton<String>(
-          icon: Icon(Icons.more_vert, color: iconColor),
-          tooltip: 'Меню',
-          position: PopupMenuPosition.under,
-          offset: const Offset(0, 8),
-          color: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+          child: Material(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(8),
+            clipBehavior: Clip.antiAlias,
+            child: SizedBox(
+              width: s,
+              height: s,
+              child: PopupMenuButton<String>(
+                padding: EdgeInsets.zero,
+                icon: Icon(Icons.more_vert, color: iconColor, size: iconSz),
+                tooltip: 'Меню',
+                position: PopupMenuPosition.under,
+                offset: const Offset(0, 8),
+                color: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 4,
+                onSelected: (value) {
+                  if (value == 'settings') {
+                    showAppSettingsDialog(context);
+                  } else if (value == 'support') {
+                    showAppSupportDialog(context);
+                  } else if (value == 'help') {
+                    showAppHelpDialog(context);
+                  } else if (value == 'exit') {
+                    requestAppExit();
+                  }
+                },
+                itemBuilder: (context) => [
+                  PopupMenuItem<String>(
+                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 3),
+                    value: 'settings',
+                    child: _menuChoiceTile(
+                      label: 'Настройки',
+                      icon: Icons.settings_outlined,
+                      iconColor: iconColor,
+                    ),
+                  ),
+                  PopupMenuItem<String>(
+                    padding: const EdgeInsets.fromLTRB(8, 3, 8, 3),
+                    value: 'support',
+                    child: _menuChoiceTile(
+                      label: 'Техподдержка',
+                      icon: Icons.support_agent_outlined,
+                      iconColor: iconColor,
+                    ),
+                  ),
+                  PopupMenuItem<String>(
+                    padding: const EdgeInsets.fromLTRB(8, 3, 8, 3),
+                    value: 'help',
+                    child: _menuChoiceTile(
+                      label: 'Помощь',
+                      icon: Icons.help_outline_rounded,
+                      iconColor: iconColor,
+                    ),
+                  ),
+                  PopupMenuItem<String>(
+                    padding: const EdgeInsets.fromLTRB(8, 3, 8, 8),
+                    value: 'exit',
+                    child: _menuChoiceTile(
+                      label: 'Выход',
+                      icon: Icons.logout_rounded,
+                      iconColor: iconColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-          elevation: 4,
-          onSelected: (value) {
-            if (value == 'settings') {
-              showAppSettingsDialog(context);
-            } else if (value == 'support') {
-              showAppSupportDialog(context);
-            } else if (value == 'help') {
-              showAppHelpDialog(context);
-            } else if (value == 'exit') {
-              requestAppExit();
-            }
-          },
-          itemBuilder: (context) => [
-            PopupMenuItem<String>(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 3),
-              value: 'settings',
-              child: _menuChoiceTile(
-                label: 'Настройки',
-                icon: Icons.settings_outlined,
-                iconColor: iconColor,
-              ),
-            ),
-            PopupMenuItem<String>(
-              padding: const EdgeInsets.fromLTRB(8, 3, 8, 3),
-              value: 'support',
-              child: _menuChoiceTile(
-                label: 'Техподдержка',
-                icon: Icons.support_agent_outlined,
-                iconColor: iconColor,
-              ),
-            ),
-            PopupMenuItem<String>(
-              padding: const EdgeInsets.fromLTRB(8, 3, 8, 3),
-              value: 'help',
-              child: _menuChoiceTile(
-                label: 'Помощь',
-                icon: Icons.help_outline_rounded,
-                iconColor: iconColor,
-              ),
-            ),
-            PopupMenuItem<String>(
-              padding: const EdgeInsets.fromLTRB(8, 3, 8, 8),
-              value: 'exit',
-              child: _menuChoiceTile(
-                label: 'Выход',
-                icon: Icons.logout_rounded,
-                iconColor: iconColor,
-              ),
-            ),
-          ],
-        ),
-      ),
+        );
+      },
     );
   }
 }

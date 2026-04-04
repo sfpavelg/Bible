@@ -13,6 +13,9 @@ class AppProvider with ChangeNotifier {
     'serif': 'С засечками',
   };
 
+  static const double chromeButtonSizeMin = 32.0;
+  static const double chromeButtonSizeMax = 56.0;
+
   final BibleService _bibleService = BibleService();
   final DatabaseHelper _databaseHelper = DatabaseHelper();
 
@@ -20,9 +23,10 @@ class AppProvider with ChangeNotifier {
   double _fontSize = 16.0;
   double _lineHeight = 1.35;
   double _verseSpacing = 6.0;
+  double _chromeButtonSize = 40.0;
   String _verseFontPreset = 'sans';
   bool _redLettersEnabled = true;
-  bool _keepScreenOn = false;
+  bool _keepScreenOn = true;
 
   String _currentBook;
   int _currentChapter;
@@ -37,6 +41,7 @@ class AppProvider with ChangeNotifier {
   String get verseFontPreset => _verseFontPreset;
   bool get redLettersEnabled => _redLettersEnabled;
   bool get keepScreenOn => _keepScreenOn;
+  double get chromeButtonSize => _chromeButtonSize;
   String get currentBook => _currentBook;
   int get currentChapter => _currentChapter;
   bool get isLoading => _isLoading;
@@ -142,6 +147,13 @@ class AppProvider with ChangeNotifier {
     } else {
       _themeMode = ThemeMode.light;
     }
+
+    final chrome = prefs.getDouble('ui_chrome_button_size');
+    if (chrome != null &&
+        chrome >= chromeButtonSizeMin &&
+        chrome <= chromeButtonSizeMax) {
+      _chromeButtonSize = chrome;
+    }
   }
 
   Future<void> setThemeMode(ThemeMode mode) async {
@@ -170,6 +182,19 @@ class AppProvider with ChangeNotifier {
     _fontSize = size;
     notifyListeners();
     _saveFontSize();
+  }
+
+  void changeChromeButtonSize(double size) {
+    final v = size.clamp(chromeButtonSizeMin, chromeButtonSizeMax);
+    _chromeButtonSize = v;
+    notifyListeners();
+    _saveChromeButtonSize();
+  }
+
+  Future<void> _saveChromeButtonSize() async {
+    final prefs = _prefs ?? await SharedPreferences.getInstance();
+    _prefs = prefs;
+    await prefs.setDouble('ui_chrome_button_size', _chromeButtonSize);
   }
 
   Future<void> _saveFontSize() async {
@@ -336,6 +361,21 @@ class AppProvider with ChangeNotifier {
     await changeBookAndChapter(prev.name, prev.chapters);
   }
 
+  /// Есть ли куда листать назад (не первая глава «Бытие»).
+  bool get canGoPrevBible {
+    if (_currentChapter > 1) return true;
+    return _prevBook() != null;
+  }
+
+  /// Есть ли куда листать вперёд (не последняя глава «Откровение»).
+  bool get canGoNextBible {
+    final currentObj = _currentBookObj();
+    final chapterCount =
+        currentObj?.chapters ?? _bibleService.getChapterCount(_currentBook);
+    if (_currentChapter < chapterCount) return true;
+    return _nextBook() != null;
+  }
+
   Future<void> _saveLastPosition() async {
     final prefs = _prefs ?? await SharedPreferences.getInstance();
     _prefs = prefs;
@@ -360,11 +400,13 @@ class AppProvider with ChangeNotifier {
     String query, {
     bool includeOldTestament = true,
     bool includeNewTestament = true,
+    bool wholeWordsOnly = false,
   }) {
     final results = _bibleService.search(
       query,
       includeOldTestament: includeOldTestament,
       includeNewTestament: includeNewTestament,
+      wholeWordsOnly: wholeWordsOnly,
     );
     return results.map((verse) => verse.toMap()).toList();
   }
