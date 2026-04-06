@@ -21,7 +21,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
   static const List<BottomNavigationBarItem> _navItems = [
     BottomNavigationBarItem(
-      icon: Icon(Icons.book),
+      icon: Icon(Icons.menu_book),
       label: 'Библия',
     ),
     BottomNavigationBarItem(
@@ -29,8 +29,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       label: 'Блокнот',
     ),
     BottomNavigationBarItem(
-      icon: Icon(Icons.calendar_month),
-      label: 'Журнал',
+      icon: Icon(Icons.event_note),
+      label: 'План',
     ),
   ];
 

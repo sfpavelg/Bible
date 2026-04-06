@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:bible_app/journal/parallel_reading_plan_data.dart';
 import 'package:bible_app/providers/app_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -464,6 +465,7 @@ void showAppHelpDialog(BuildContext context) {
         ),
         child: Builder(
           builder: (dialogContext) {
+            final n = kParallelReadingPlan365.length;
             final helpMaxH =
                 MediaQuery.sizeOf(dialogContext).height * 0.65;
             return AlertDialog(
@@ -498,54 +500,83 @@ void showAppHelpDialog(BuildContext context) {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                          Text(
-                            'Как пользоваться поиском:',
-                            style: _helpDialogTocStyle,
-                          ),
-                          SizedBox(height: 6),
-                          Text(
-                            '• Введите одно или несколько слов и нажмите "Найти".',
-                          ),
-                          Text(
-                            '• Флажками ВЗ и НЗ ограничьте область поиска.',
-                          ),
-                          Text(
-                            '• Нажмите на результат, чтобы перейти к стиху.',
-                          ),
-                          SizedBox(height: 12),
-                          Text(
-                            'Навигация по Библии:',
-                            style: _helpDialogTocStyle,
-                          ),
-                          SizedBox(height: 6),
-                          Text(
-                            '• Кнопки сверху переключают книгу и главу.',
-                          ),
-                          Text('• Свайп влево/вправо листает главы.'),
-                          Text(
-                            '• Долгое нажатие на стих включает выбор; коротким нажатием отметьте другие стихи.',
-                          ),
-                          Text(
-                            '• Кнопка «Избранное» в шапке добавляет выбранные стихи в избранное и открывает список.',
-                          ),
-                          SizedBox(height: 12),
-                          Text(
-                            'Блокнот:',
-                            style: _helpDialogTocStyle,
-                          ),
-                          SizedBox(height: 6),
-                          Text(
-                            '• Долгий тап по файлу или папке — переименовать или удалить.',
-                          ),
-                          Text(
-                            '• Можно перейти на Библию и вставить текст в открытый документ.',
-                          ),
-                        ],
-                      ),
+                      children: [
+                        const Text(
+                          'Как пользоваться поиском:',
+                          style: _helpDialogTocStyle,
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          '• Введите одно или несколько слов и нажмите "Найти".',
+                        ),
+                        const Text(
+                          '• Флажками ВЗ и НЗ ограничьте область поиска.',
+                        ),
+                        const Text(
+                          '• Нажмите на результат, чтобы перейти к стиху.',
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Навигация по Библии:',
+                          style: _helpDialogTocStyle,
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          '• Кнопки сверху переключают книгу и главу.',
+                        ),
+                        const Text('• Свайп влево/вправо листает главы.'),
+                        const Text(
+                          '• Долгое нажатие на стих включает выбор; коротким нажатием отметьте другие стихи.',
+                        ),
+                        const Text(
+                          '• Кнопка «Избранное» в шапке добавляет выбранные стихи в избранное и открывает список.',
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Блокнот:',
+                          style: _helpDialogTocStyle,
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          '• Долгий тап по файлу или папке — переименовать или удалить.',
+                        ),
+                        const Text(
+                          '• Можно перейти на Библию и вставить текст в открытый документ.',
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'План чтения:',
+                          style: _helpDialogTocStyle,
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'Параллельный план',
+                          style: _helpDialogTocStyle,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Чтение Ветхого Завета, Псалтири и Нового Завета параллельно, '
+                          'по заранее заданным порядку глав на каждый день. '
+                          'Дни пронумерованы по порядку (1…$n), без привязки к календарным датам. '
+                          'Отметки «прочитано» сохраняются на устройстве.',
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Хронологический план',
+                          style: _helpDialogTocStyle,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Чтение Библии в порядке, близком к хронологии событий и '
+                          'связанным с ними текстам. '
+                          'Дни пронумерованы по порядку (1…$n), без привязки к календарю. '
+                          'Отметки «прочитано» хранятся отдельно от параллельного плана.',
+                        ),
+                      ],
                     ),
                   ),
                 ),
+              ),
             );
           },
         ),
