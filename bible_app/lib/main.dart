@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:bible_app/bootstrap_splash.dart';
 import 'package:bible_app/main_screen.dart';
@@ -43,6 +44,16 @@ class MyApp extends StatelessWidget {
           return MaterialApp(
             title: 'Bible',
             debugShowCheckedModeBanner: false,
+            locale: const Locale('ru', 'RU'),
+            supportedLocales: const [
+              Locale('ru', 'RU'),
+              Locale('en', 'US'),
+            ],
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
             theme: ThemeData(
               colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
               useMaterial3: true,

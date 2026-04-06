@@ -11,8 +11,8 @@ import 'package:bible_app/widgets/app_chrome_overflow_menu.dart';
 import 'package:bible_app/widgets/chrome_toolbar_button.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Короткое сообщение в одном стиле с копированием: плашка поверх интерфейса
-/// ([Overlay] с корня). Нужно для диалогов и для экрана Библии вместо [SnackBar].
+/// Сообщение над нижней навигацией приложения (диалоги поиска / избранного).
+/// Не перекрывает кнопки «Библия», «Блокнот», «План».
 void _showTransientOverlayMessage(
   BuildContext context,
   String message, {
@@ -26,21 +26,31 @@ void _showTransientOverlayMessage(
     return;
   }
 
+  final bottomGap =
+      MediaQuery.viewPaddingOf(context).bottom + kBottomNavigationBarHeight;
+
   late final OverlayEntry entry;
   entry = OverlayEntry(
     builder: (ctx) => Positioned(
-      left: 16,
-      right: 16,
-      bottom: MediaQuery.paddingOf(ctx).bottom + 16,
+      left: 0,
+      right: 0,
+      bottom: bottomGap,
       child: Material(
-        elevation: 8,
-        borderRadius: BorderRadius.circular(8),
+        elevation: 0,
         color: const Color(0xE6323232),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Container(
+          width: double.infinity,
+          decoration: const BoxDecoration(
+            border: Border(
+              top: BorderSide(color: Color(0x44FFFFFF), width: 1),
+            ),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Text(
             message,
             style: const TextStyle(color: Colors.white, fontSize: 15),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       ),
@@ -98,6 +108,9 @@ class _BibleScreenState extends State<BibleScreen> {
   /// поздний [dispose] предыдущего диалога (он перезаписывал список старыми данными).
   int _favoritesPanelSerial = 0;
 
+  String? _bottomBannerText;
+  Timer? _bottomBannerTimer;
+
   /// Черновик поиска: сохраняется между открытиями, пока не нажали сброс в диалоге.
   String _searchDraft = '';
   List<Map<String, dynamic>> _searchResultRows = [];
@@ -146,7 +159,7 @@ class _BibleScreenState extends State<BibleScreen> {
       });
       unawaited(_persistBookmarks());
       if (context.mounted) {
-        _showTransientOverlayMessage(context, 'Добавлено в избранное');
+        _showBottomBanner('Добавлено в избранное');
       }
     }
     await _showBookmarksPanel(context);
@@ -184,11 +197,21 @@ class _BibleScreenState extends State<BibleScreen> {
     });
     unawaited(_persistBookmarks());
     if (!context.mounted) return;
-    _showTransientOverlayMessage(context, 'Добавлено в избранное');
+    _showBottomBanner('Добавлено в избранное');
+  }
+
+  void _showBottomBanner(String message) {
+    _bottomBannerTimer?.cancel();
+    if (!mounted) return;
+    setState(() => _bottomBannerText = message);
+    _bottomBannerTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _bottomBannerText = null);
+    });
   }
 
   @override
   void dispose() {
+    _bottomBannerTimer?.cancel();
     _highlightTimer?.cancel();
     _scrollController.dispose();
     super.dispose();
@@ -241,8 +264,7 @@ class _BibleScreenState extends State<BibleScreen> {
     unawaited(Clipboard.setData(ClipboardData(text: parts.join('\n'))));
     if (!context.mounted) return;
     final n = parts.length;
-    _showTransientOverlayMessage(
-      context,
+    _showBottomBanner(
       n == 1 ? 'Стих скопирован в буфер' : 'Скопировано стихов: $n',
     );
     setState(() => _selectedVerses.clear());
@@ -380,60 +402,75 @@ class _BibleScreenState extends State<BibleScreen> {
           },
         ),
       ),
-      body: GestureDetector(
-        onHorizontalDragEnd: (details) async {
-          if (details.primaryVelocity == null) return;
-          if (details.primaryVelocity! > 0) {
-            if (appProvider.canGoPrevBible) await appProvider.goPrev();
-          } else if (details.primaryVelocity! < 0) {
-            if (appProvider.canGoNextBible) await appProvider.goNext();
-          }
-        },
-        child: appProvider.isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : verses.isEmpty
-                ? const Center(child: Text('Глава не найдена'))
-                : Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      ListView.builder(
-                        key: ValueKey(
-                          '${appProvider.currentBook}_${appProvider.currentChapter}_${appProvider.verseFontPreset}',
-                        ),
-                        controller: _scrollController,
-                        itemCount: verses.length,
-                        itemBuilder: (context, index) {
-                          final verse = verses[index];
-                          final num = verse['verse'] as int;
-                          final verseText = '$num. ${verse['text']}';
-                          final isSpeech = verse['type'] == 'speech';
-                          Color textColor = verseTextColor;
-                          if (isSpeech && appProvider.redLettersEnabled) {
-                            textColor = Colors.red;
-                          }
-                          final highlighted = _highlightVerse == num;
-                          final selected = _selectedVerses.contains(num);
-                          Color rowBg = verseBg;
-                          if (highlighted) {
-                            rowBg = isDark
-                                ? Colors.blueGrey.shade700
-                                : Colors.amber.shade100;
-                          } else if (selected) {
-                            rowBg = isDark
-                                ? Colors.blueGrey.shade700
-                                : Colors.amber.shade100;
-                          }
-                          final multiSelect = _selectedVerses.isNotEmpty;
-                          final gap = index < verses.length - 1
-                              ? appProvider.verseSpacing
-                              : 0.0;
-                          return Padding(
-                            padding: EdgeInsets.only(bottom: gap),
-                            child: Material(
-                              color: rowBg,
-                              child: InkWell(
-                                onTap: multiSelect
-                                    ? () {
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onHorizontalDragEnd: (details) async {
+                if (details.primaryVelocity == null) return;
+                if (details.primaryVelocity! > 0) {
+                  if (appProvider.canGoPrevBible) await appProvider.goPrev();
+                } else if (details.primaryVelocity! < 0) {
+                  if (appProvider.canGoNextBible) await appProvider.goNext();
+                }
+              },
+              child: appProvider.isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : verses.isEmpty
+                      ? const Center(child: Text('Глава не найдена'))
+                      : Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            ListView.builder(
+                              key: ValueKey(
+                                '${appProvider.currentBook}_${appProvider.currentChapter}_${appProvider.verseFontPreset}',
+                              ),
+                              controller: _scrollController,
+                              itemCount: verses.length,
+                              itemBuilder: (context, index) {
+                                final verse = verses[index];
+                                final num = verse['verse'] as int;
+                                final verseText = '$num. ${verse['text']}';
+                                final isSpeech = verse['type'] == 'speech';
+                                Color textColor = verseTextColor;
+                                if (isSpeech && appProvider.redLettersEnabled) {
+                                  textColor = Colors.red;
+                                }
+                                final highlighted = _highlightVerse == num;
+                                final selected = _selectedVerses.contains(num);
+                                Color rowBg = verseBg;
+                                if (highlighted) {
+                                  rowBg = isDark
+                                      ? Colors.blueGrey.shade700
+                                      : Colors.amber.shade100;
+                                } else if (selected) {
+                                  rowBg = isDark
+                                      ? Colors.blueGrey.shade700
+                                      : Colors.amber.shade100;
+                                }
+                                final multiSelect = _selectedVerses.isNotEmpty;
+                                final gap = index < verses.length - 1
+                                    ? appProvider.verseSpacing
+                                    : 0.0;
+                                return Padding(
+                                  padding: EdgeInsets.only(bottom: gap),
+                                  child: Material(
+                                    color: rowBg,
+                                    child: InkWell(
+                                      onTap: multiSelect
+                                          ? () {
+                                              setState(() {
+                                                if (_selectedVerses
+                                                    .contains(num)) {
+                                                  _selectedVerses.remove(num);
+                                                } else {
+                                                  _selectedVerses.add(num);
+                                                }
+                                              });
+                                            }
+                                          : null,
+                                      onLongPress: () {
                                         setState(() {
                                           if (_selectedVerses.contains(num)) {
                                             _selectedVerses.remove(num);
@@ -441,85 +478,97 @@ class _BibleScreenState extends State<BibleScreen> {
                                             _selectedVerses.add(num);
                                           }
                                         });
-                                      }
-                                    : null,
-                                onLongPress: () {
-                                  setState(() {
-                                    if (_selectedVerses.contains(num)) {
-                                      _selectedVerses.remove(num);
-                                    } else {
-                                      _selectedVerses.add(num);
-                                    }
-                                  });
-                                },
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 2,
-                                  ),
-                                  child: Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: Text(
-                                      verseText,
-                                      style: appProvider.bibleVerseTextStyle(
-                                        color: textColor,
-                                        fontWeight: isSpeech
-                                            ? FontWeight.bold
-                                            : FontWeight.normal,
+                                      },
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 2,
+                                        ),
+                                        child: Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: Text(
+                                            verseText,
+                                            style: appProvider
+                                                .bibleVerseTextStyle(
+                                              color: textColor,
+                                              fontWeight: isSpeech
+                                                  ? FontWeight.bold
+                                                  : FontWeight.normal,
+                                            ),
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                              ),
+                                );
+                              },
                             ),
-                          );
-                        },
-                      ),
-                      if (_selectedVerses.isNotEmpty)
-                        Positioned(
-                          top: 8,
-                          right: 8,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              ChromeIconButton(
-                                icon: Icons.copy_all,
-                                tooltip: 'Копировать',
-                                foregroundColor: chromeTextColor,
-                                backgroundColor: buttonBg,
-                                onPressed: () => _copySelectedVerses(
-                                  context,
-                                  appProvider,
-                                  verses,
+                            if (_selectedVerses.isNotEmpty)
+                              Positioned(
+                                top: 8,
+                                right: 8,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    ChromeIconButton(
+                                      icon: Icons.copy_all,
+                                      tooltip: 'Копировать',
+                                      foregroundColor: chromeTextColor,
+                                      backgroundColor: buttonBg,
+                                      onPressed: () => _copySelectedVerses(
+                                        context,
+                                        appProvider,
+                                        verses,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    ChromeIconButton(
+                                      icon: Icons.bookmark_add_outlined,
+                                      tooltip: 'В избранное',
+                                      foregroundColor: chromeTextColor,
+                                      backgroundColor: buttonBg,
+                                      onPressed: () =>
+                                          _addSelectedVersesToBookmarks(
+                                        context,
+                                        appProvider,
+                                        verses,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    ChromeIconButton(
+                                      icon: Icons.close,
+                                      tooltip: 'Отмена',
+                                      foregroundColor: chromeTextColor,
+                                      backgroundColor: buttonBg,
+                                      onPressed: () => setState(
+                                        () => _selectedVerses.clear(),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              const SizedBox(width: 4),
-                              ChromeIconButton(
-                                icon: Icons.bookmark_add_outlined,
-                                tooltip: 'В избранное',
-                                foregroundColor: chromeTextColor,
-                                backgroundColor: buttonBg,
-                                onPressed: () => _addSelectedVersesToBookmarks(
-                                  context,
-                                  appProvider,
-                                  verses,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              ChromeIconButton(
-                                icon: Icons.close,
-                                tooltip: 'Отмена',
-                                foregroundColor: chromeTextColor,
-                                backgroundColor: buttonBg,
-                                onPressed: () => setState(
-                                  () => _selectedVerses.clear(),
-                                ),
-                              ),
-                            ],
-                          ),
+                          ],
                         ),
-                    ],
-                  ),
+            ),
+          ),
+          if (_bottomBannerText != null)
+            Container(
+              width: double.infinity,
+              decoration: const BoxDecoration(
+                color: Color(0xE6323232),
+                border: Border(
+                  top: BorderSide(color: Color(0x44FFFFFF), width: 1),
+                ),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Text(
+                _bottomBannerText!,
+                style: const TextStyle(color: Colors.white, fontSize: 15),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+        ],
       ),
     );
   }
