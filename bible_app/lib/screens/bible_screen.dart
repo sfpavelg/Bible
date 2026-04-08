@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:bible_app/providers/app_provider.dart';
 import 'package:bible_app/services/bible_service.dart';
 import 'package:bible_app/widgets/app_chrome_overflow_menu.dart';
+import 'package:bible_app/widgets/chrome_outline.dart';
 import 'package:bible_app/widgets/chrome_toolbar_button.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -92,12 +93,22 @@ class BibleScreen extends StatefulWidget {
 }
 
 class _BibleScreenState extends State<BibleScreen> {
+  static const Color _appBarBgLight = Color(0xFFB3E5FC);
+  static const Color _buttonBgLight = Color(0xFFE1F5FE);
+  /// Согласован с нижней навигацией в тёмной теме.
+  static const Color _appBarBgDark = Color(0xFF37474F);
+  static const Color _buttonBgDark = Color(0xFF455A64);
+
   final ScrollController _scrollController = ScrollController();
+  /// Ключи строк главы по номеру стиха — для [Scrollable.ensureVisible] при переходе из поиска.
+  final Map<int, GlobalKey> _verseRowKeys = {};
   int? _highlightVerse;
   Timer? _highlightTimer;
   /// Первый стих — долгим нажатием; дальше — обычным касанием. Порядок = порядок копирования.
   final LinkedHashSet<int> _selectedVerses = LinkedHashSet<int>();
   String _navRef = '';
+  /// Сброс [GlobalKey] строк при смене главы или параметров вёрстки списка стихов.
+  String _verseListLayoutRef = '';
 
   static const String _kBibleSearchHistoryKey = 'bible_search_matched_history';
   static const String _kBibleBookmarksKey = 'bible_bookmarks_tabs';
@@ -149,6 +160,7 @@ class _BibleScreenState extends State<BibleScreen> {
     AppProvider appProvider,
     List<Map<String, dynamic>> verses,
   ) async {
+    if (!_isBibleInteractionActive) return;
     final plain = _selectedVersesPlainText(appProvider, verses);
     if (plain != null) {
       setState(() {
@@ -187,6 +199,7 @@ class _BibleScreenState extends State<BibleScreen> {
     AppProvider appProvider,
     List<Map<String, dynamic>> verses,
   ) {
+    if (!_isBibleInteractionActive) return;
     final plain = _selectedVersesPlainText(appProvider, verses);
     if (plain == null) return;
     setState(() {
@@ -217,6 +230,13 @@ class _BibleScreenState extends State<BibleScreen> {
     super.dispose();
   }
 
+  /// Пока поверх приложения открыт диалог, маршрут вкладки не «текущий» — не даём
+  /// жестам и копипасту на экране Библии срабатывать под оверлеем.
+  bool get _isBibleInteractionActive {
+    final route = ModalRoute.of(context);
+    return route?.isCurrent ?? true;
+  }
+
   void _highlightVerseTemporarily(int verse) {
     _highlightTimer?.cancel();
     setState(() => _highlightVerse = verse);
@@ -225,16 +245,62 @@ class _BibleScreenState extends State<BibleScreen> {
     });
   }
 
-  Future<void> _scrollToVerse(int verseNum, int totalVerses) async {
-    await Future<void>.delayed(const Duration(milliseconds: 100));
-    if (!_scrollController.hasClients || !mounted) return;
-    final max = _scrollController.position.maxScrollExtent;
-    final t = totalVerses <= 1 ? 0.0 : (verseNum - 1) / (totalVerses - 1);
-    await _scrollController.animateTo(
-      max * t,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOut,
-    );
+  Future<void> _scrollToVerse(int verseNum) async {
+    if (!mounted) return;
+    final app = Provider.of<AppProvider>(context, listen: false);
+    var verses = <Map<String, dynamic>>[];
+    var index = -1;
+
+    // Дождаться списка после смены главы; rough jump — иначе у строки вне экрана
+    // у GlobalKey ещё нет context (ListView.builder не построил элемент).
+    for (var wait = 0; wait < 16; wait++) {
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+      verses = app.getCurrentVerses();
+      if (verses.isEmpty) {
+        await Future<void>.delayed(const Duration(milliseconds: 24));
+        continue;
+      }
+      index = -1;
+      for (var i = 0; i < verses.length; i++) {
+        final vn = verses[i]['verse'];
+        final n = vn is int ? vn : (vn as num).toInt();
+        if (n == verseNum) {
+          index = i;
+          break;
+        }
+      }
+      if (index >= 0 && _scrollController.hasClients) break;
+      await Future<void>.delayed(const Duration(milliseconds: 24));
+    }
+
+    if (index >= 0 &&
+        verses.isNotEmpty &&
+        _scrollController.hasClients &&
+        verses.length > 1) {
+      final pos = _scrollController.position;
+      final max = pos.maxScrollExtent;
+      final t = index / (verses.length - 1);
+      pos.jumpTo((max * t).clamp(0.0, max));
+      await WidgetsBinding.instance.endOfFrame;
+    }
+
+    if (!mounted) return;
+    for (var attempt = 0; attempt < 12; attempt++) {
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+      final ctx = _verseRowKeys[verseNum]?.currentContext;
+      if (ctx != null && ctx.mounted) {
+        await Scrollable.ensureVisible(
+          ctx,
+          alignment: 0.5,
+          duration: const Duration(milliseconds: 320),
+          curve: Curves.easeOut,
+        );
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+    }
   }
 
   String? _verseText(List<Map<String, dynamic>> verses, int verseNum) {
@@ -251,6 +317,7 @@ class _BibleScreenState extends State<BibleScreen> {
     AppProvider appProvider,
     List<Map<String, dynamic>> verses,
   ) {
+    if (!_isBibleInteractionActive) return;
     if (_selectedVerses.isEmpty) return;
     final parts = <String>[];
     for (final n in _selectedVerses) {
@@ -275,14 +342,20 @@ class _BibleScreenState extends State<BibleScreen> {
     final appProvider = Provider.of<AppProvider>(context);
     final verses = appProvider.getCurrentVerses();
     final navRef = '${appProvider.currentBook}_${appProvider.currentChapter}';
+    final verseLayoutRef =
+        '${navRef}_${appProvider.verseFontPreset}_${appProvider.fontSize}_${appProvider.lineHeight}_${appProvider.verseSpacing}';
+    if (_verseListLayoutRef != verseLayoutRef) {
+      _verseListLayoutRef = verseLayoutRef;
+      _verseRowKeys.clear();
+    }
     if (_navRef != navRef) {
       _navRef = navRef;
       _selectedVerses.clear();
     }
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    const appBarBg = Color(0xFFB3E5FC);
-    const buttonBg = Color(0xFFE1F5FE);
-    const chromeTextColor = Colors.black;
+    final appBarBg = isDark ? _appBarBgDark : _appBarBgLight;
+    final buttonBg = isDark ? _buttonBgDark : _buttonBgLight;
+    final chromeTextColor = isDark ? Colors.white : Colors.black;
     final verseBg = isDark ? Colors.grey.shade900 : Colors.white;
     final verseTextColor = isDark ? Colors.white : Colors.black;
 
@@ -294,8 +367,8 @@ class _BibleScreenState extends State<BibleScreen> {
         backgroundColor: appBarBg,
         surfaceTintColor: appBarBg,
         foregroundColor: chromeTextColor,
-        iconTheme: const IconThemeData(color: Colors.black),
-        actionsIconTheme: const IconThemeData(color: Colors.black),
+        iconTheme: IconThemeData(color: chromeTextColor),
+        actionsIconTheme: IconThemeData(color: chromeTextColor),
         elevation: 0,
         scrolledUnderElevation: 0,
         toolbarHeight: toolbarH,
@@ -396,7 +469,10 @@ class _BibleScreenState extends State<BibleScreen> {
                   onPressed: () => _showSearchDialog(context),
                 ),
                 const SizedBox(width: 4),
-                const AppChromeOverflowMenu(),
+                AppChromeOverflowMenu(
+                  iconColor: chromeTextColor,
+                  backgroundColor: buttonBg,
+                ),
               ],
             );
           },
@@ -406,8 +482,11 @@ class _BibleScreenState extends State<BibleScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
-            child: GestureDetector(
+            child: IgnorePointer(
+              ignoring: !_isBibleInteractionActive,
+              child: GestureDetector(
               onHorizontalDragEnd: (details) async {
+                if (!_isBibleInteractionActive) return;
                 if (details.primaryVelocity == null) return;
                 if (details.primaryVelocity! > 0) {
                   if (appProvider.canGoPrevBible) await appProvider.goPrev();
@@ -453,47 +532,53 @@ class _BibleScreenState extends State<BibleScreen> {
                                 final gap = index < verses.length - 1
                                     ? appProvider.verseSpacing
                                     : 0.0;
-                                return Padding(
-                                  padding: EdgeInsets.only(bottom: gap),
-                                  child: Material(
-                                    color: rowBg,
-                                    child: InkWell(
-                                      onTap: multiSelect
-                                          ? () {
-                                              setState(() {
-                                                if (_selectedVerses
-                                                    .contains(num)) {
-                                                  _selectedVerses.remove(num);
-                                                } else {
-                                                  _selectedVerses.add(num);
-                                                }
-                                              });
+                                return KeyedSubtree(
+                                  key: _verseRowKeys.putIfAbsent(
+                                    num,
+                                    GlobalKey.new,
+                                  ),
+                                  child: Padding(
+                                    padding: EdgeInsets.only(bottom: gap),
+                                    child: Material(
+                                      color: rowBg,
+                                      child: InkWell(
+                                        onTap: multiSelect
+                                            ? () {
+                                                setState(() {
+                                                  if (_selectedVerses
+                                                      .contains(num)) {
+                                                    _selectedVerses.remove(num);
+                                                  } else {
+                                                    _selectedVerses.add(num);
+                                                  }
+                                                });
+                                              }
+                                            : null,
+                                        onLongPress: () {
+                                          setState(() {
+                                            if (_selectedVerses.contains(num)) {
+                                              _selectedVerses.remove(num);
+                                            } else {
+                                              _selectedVerses.add(num);
                                             }
-                                          : null,
-                                      onLongPress: () {
-                                        setState(() {
-                                          if (_selectedVerses.contains(num)) {
-                                            _selectedVerses.remove(num);
-                                          } else {
-                                            _selectedVerses.add(num);
-                                          }
-                                        });
-                                      },
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 2,
-                                        ),
-                                        child: Align(
-                                          alignment: Alignment.centerLeft,
-                                          child: Text(
-                                            verseText,
-                                            style: appProvider
-                                                .bibleVerseTextStyle(
-                                              color: textColor,
-                                              fontWeight: isSpeech
-                                                  ? FontWeight.bold
-                                                  : FontWeight.normal,
+                                          });
+                                        },
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                            vertical: 2,
+                                          ),
+                                          child: Align(
+                                            alignment: Alignment.centerLeft,
+                                            child: Text(
+                                              verseText,
+                                              style: appProvider
+                                                  .bibleVerseTextStyle(
+                                                color: textColor,
+                                                fontWeight: isSpeech
+                                                    ? FontWeight.bold
+                                                    : FontWeight.normal,
+                                              ),
                                             ),
                                           ),
                                         ),
@@ -549,6 +634,7 @@ class _BibleScreenState extends State<BibleScreen> {
                               ),
                           ],
                         ),
+              ),
             ),
           ),
           if (_bottomBannerText != null)
@@ -575,8 +661,6 @@ class _BibleScreenState extends State<BibleScreen> {
 
   Future<void> _showSearchDialog(BuildContext context) async {
     final appProvider = Provider.of<AppProvider>(context, listen: false);
-    final toolbarH =
-        (appProvider.chromeButtonSize + 10).clamp(kToolbarHeight, 78.0);
     final prefs = await SharedPreferences.getInstance();
     final history = prefs.getStringList(_kBibleSearchHistoryKey) ?? [];
     if (!mounted || !context.mounted) return;
@@ -588,40 +672,36 @@ class _BibleScreenState extends State<BibleScreen> {
       barrierColor: Colors.black38,
       transitionDuration: const Duration(milliseconds: 180),
       pageBuilder: (dialogContext, _, __) {
-        final topOffset = MediaQuery.paddingOf(dialogContext).top + toolbarH;
-        return SafeArea(
-          top: false,
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(8, topOffset + 2, 8, 8),
-            child: Align(
-              alignment: Alignment.topCenter,
+        return SizedBox.expand(
+          child: Material(
+            color: _BibleSearchDialog.panelBackgroundColor,
+            child: SafeArea(
               child: _BibleSearchDialog(
-                appProvider: appProvider,
-                initialQuery: _searchDraft,
-                initialResults: _searchResultRows
-                    .map((e) => Map<String, dynamic>.from(e))
-                    .toList(),
-                initialVz: _searchIncludeVz,
-                initialNz: _searchIncludeNz,
-                initialWholeWords: _searchWholeWords,
-                history: history,
-                historyKey: _kBibleSearchHistoryKey,
-                onClosing: (q, results, vz, nz, wholeWords) {
-                  _searchDraft = q;
-                  _searchResultRows = results;
-                  _searchIncludeVz = vz;
-                  _searchIncludeNz = nz;
-                  _searchWholeWords = wholeWords;
-                },
-                onPickResult: (book, chapter, verse) async {
-                  Navigator.pop(dialogContext);
-                  await appProvider.changeBookAndChapter(book, chapter);
-                  if (!mounted) return;
-                  final total = appProvider.getCurrentVerses().length;
-                  _highlightVerseTemporarily(verse);
-                  unawaited(_scrollToVerse(verse, total));
-                },
-              ),
+              appProvider: appProvider,
+              initialQuery: _searchDraft,
+              initialResults: _searchResultRows
+                  .map((e) => Map<String, dynamic>.from(e))
+                  .toList(),
+              initialVz: _searchIncludeVz,
+              initialNz: _searchIncludeNz,
+              initialWholeWords: _searchWholeWords,
+              history: history,
+              historyKey: _kBibleSearchHistoryKey,
+              onClosing: (q, results, vz, nz, wholeWords) {
+                _searchDraft = q;
+                _searchResultRows = results;
+                _searchIncludeVz = vz;
+                _searchIncludeNz = nz;
+                _searchWholeWords = wholeWords;
+              },
+              onPickResult: (book, chapter, verse) async {
+                Navigator.pop(dialogContext);
+                await appProvider.changeBookAndChapter(book, chapter);
+                if (!mounted) return;
+                _highlightVerseTemporarily(verse);
+                unawaited(_scrollToVerse(verse));
+              },
+            ),
             ),
           ),
         );
@@ -900,6 +980,9 @@ class _BibleSearchDialog extends StatefulWidget {
   ) onClosing;
   final Future<void> Function(String book, int chapter, int verse) onPickResult;
 
+  /// Фон полноэкранной панели поиска (как светлый AppBar Библии).
+  static const Color panelBackgroundColor = Color(0xFFB3E5FC);
+
   @override
   State<_BibleSearchDialog> createState() => _BibleSearchDialogState();
 }
@@ -915,11 +998,6 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
   bool _hasRunSearch = false;
   final LinkedHashSet<int> _selectedResultIndices = LinkedHashSet<int>();
 
-  static const _hintStyle = TextStyle(
-    color: Color(0xFFBDBDBD),
-    fontWeight: FontWeight.w400,
-  );
-  static const _appBarBg = Color(0xFFB3E5FC);
   static const _buttonBg = Color(0xFFE1F5FE);
   static const _chromeTextColor = Colors.black;
 
@@ -1081,162 +1159,168 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final w = MediaQuery.sizeOf(context).width.clamp(320, double.infinity);
-    final contentW = (w * 0.92).clamp(280.0, 640.0);
+    final mqW = MediaQuery.sizeOf(context).width;
+    final contentW = (mqW - 24).clamp(280.0, double.infinity);
+    final app = widget.appProvider;
+    final queryStyle = app.bibleVerseTextStyle(
+      color: _chromeTextColor,
+      fontWeight: FontWeight.normal,
+    );
+    final hintStyle = queryStyle.copyWith(
+      color: const Color(0xFFBDBDBD),
+      fontWeight: FontWeight.w400,
+    );
 
-    return Material(
-      color: Colors.transparent,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 740),
-        child: Container(
-          decoration: BoxDecoration(
-            color: _appBarBg,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final scale =
-                        (constraints.maxWidth / 420).clamp(0.76, 1.0);
-                    final textScale = scale;
-                    final checkboxScale =
-                        (0.9 + (scale - 0.76) * 0.25).clamp(0.86, 1.0);
-                    final chrome = widget.appProvider.chromeButtonSize;
-                    final closeIc = (chrome * 0.5).clamp(18.0, 30.0);
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Row(
-                          children: [
-                            TextButton.icon(
-                              onPressed: _runSearch,
-                              style: TextButton.styleFrom(
-                                backgroundColor: _buttonBg,
-                                foregroundColor: _chromeTextColor,
-                                minimumSize: Size(0, chrome),
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: 12 * scale,
-                                  vertical: 4,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
-                              icon: Icon(
-                                Icons.search,
-                                size: (chrome * 0.45).clamp(16.0, 24.0),
-                              ),
-                              label: Text(
-                                'Найти',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 14 * textScale,
-                                ),
-                              ),
-                            ),
-                            const Spacer(),
-                            Transform.scale(
-                              scale: checkboxScale,
-                              child: Checkbox(
-                                value: _vz,
-                                onChanged: _setVz,
-                                visualDensity: VisualDensity.compact,
-                                activeColor: _buttonBg,
-                                checkColor: _chromeTextColor,
-                                side: const BorderSide(
-                                  color: _chromeTextColor,
-                                ),
-                              ),
-                            ),
-                            Text(
-                              'ВЗ',
-                              style: TextStyle(fontSize: 14 * textScale),
-                            ),
-                            SizedBox(width: 8 * scale),
-                            Transform.scale(
-                              scale: checkboxScale,
-                              child: Checkbox(
-                                value: _nz,
-                                onChanged: _setNz,
-                                visualDensity: VisualDensity.compact,
-                                activeColor: _buttonBg,
-                                checkColor: _chromeTextColor,
-                                side: const BorderSide(
-                                  color: _chromeTextColor,
-                                ),
-                              ),
-                            ),
-                            Text(
-                              'НЗ',
-                              style: TextStyle(fontSize: 14 * textScale),
-                            ),
-                            const Spacer(),
-                            Material(
-                              color: _buttonBg,
-                              borderRadius: BorderRadius.circular(8),
-                              clipBehavior: Clip.antiAlias,
-                              child: InkWell(
-                                onTap: () => Navigator.pop(context),
-                                child: SizedBox(
-                                  width: chrome,
-                                  height: chrome,
-                                  child: Icon(
-                                    Icons.close,
-                                    color: _chromeTextColor,
-                                    size: closeIc,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 4, 10, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final scale = (constraints.maxWidth / 420).clamp(0.76, 1.0);
+              final textScale = scale;
+              final checkboxScale =
+                  (0.9 + (scale - 0.76) * 0.25).clamp(0.86, 1.0);
+              final chrome = widget.appProvider.chromeButtonSize;
+              final closeIc = (chrome * 0.5).clamp(18.0, 30.0);
+              final chromeLabel = (chrome * 0.36).clamp(12.0, 22.0);
+              final rowShape = RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+                side: ChromeOutline.side,
+              );
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      TextButton.icon(
+                        onPressed: _runSearch,
+                        style: TextButton.styleFrom(
+                          backgroundColor: _buttonBg,
+                          foregroundColor: _chromeTextColor,
+                          minimumSize: Size(0, chrome),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 12 * scale,
+                            vertical: 4,
+                          ),
+                          shape: rowShape,
                         ),
-                        SizedBox(height: 4 * scale),
-                        Row(
-                          children: [
-                            Transform.scale(
-                              scale: checkboxScale,
-                              child: Checkbox(
-                                value: _wholeWords,
-                                onChanged: (v) {
-                                  setState(() => _wholeWords = v ?? false);
-                                },
-                                visualDensity: VisualDensity.compact,
-                                activeColor: _buttonBg,
-                                checkColor: _chromeTextColor,
-                                side: const BorderSide(
-                                  color: _chromeTextColor,
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              child: Text(
-                                'Целое слово (не часть слова)',
-                                style: TextStyle(
-                                  fontSize: 13 * textScale,
-                                  color: _chromeTextColor,
-                                ),
-                              ),
-                            ),
-                          ],
+                        icon: Icon(
+                          Icons.search,
+                          size: (chrome * 0.45).clamp(16.0, 24.0),
                         ),
-                      ],
-                    );
-                  },
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  decoration: BoxDecoration(
-                    color: _buttonBg,
-                    borderRadius: BorderRadius.circular(10),
+                        label: Text(
+                          'Найти',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: chromeLabel * textScale,
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      Transform.scale(
+                        scale: checkboxScale,
+                        child: Checkbox(
+                          value: _vz,
+                          onChanged: _setVz,
+                          visualDensity: VisualDensity.compact,
+                          activeColor: _buttonBg,
+                          checkColor: _chromeTextColor,
+                          side: ChromeOutline.side,
+                        ),
+                      ),
+                      Text(
+                        'ВЗ',
+                        style: TextStyle(
+                          fontSize: chromeLabel * textScale,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(width: 8 * scale),
+                      Transform.scale(
+                        scale: checkboxScale,
+                        child: Checkbox(
+                          value: _nz,
+                          onChanged: _setNz,
+                          visualDensity: VisualDensity.compact,
+                          activeColor: _buttonBg,
+                          checkColor: _chromeTextColor,
+                          side: ChromeOutline.side,
+                        ),
+                      ),
+                      Text(
+                        'НЗ',
+                        style: TextStyle(
+                          fontSize: chromeLabel * textScale,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const Spacer(),
+                      Material(
+                        color: _buttonBg,
+                        shape: rowShape,
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          onTap: () => Navigator.pop(context),
+                          customBorder: rowShape,
+                          child: SizedBox(
+                            width: chrome,
+                            height: chrome,
+                            child: Icon(
+                              Icons.close,
+                              color: _chromeTextColor,
+                              size: closeIc,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                  child: RawAutocomplete<String>(
+                  SizedBox(height: 4 * scale),
+                  Row(
+                    children: [
+                      Transform.scale(
+                        scale: checkboxScale,
+                        child: Checkbox(
+                          value: _wholeWords,
+                          onChanged: (v) {
+                            setState(() => _wholeWords = v ?? false);
+                          },
+                          visualDensity: VisualDensity.compact,
+                          activeColor: _buttonBg,
+                          checkColor: _chromeTextColor,
+                          side: ChromeOutline.side,
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          'Целое слово',
+                          style: TextStyle(
+                            fontSize: chromeLabel * 0.92 * textScale,
+                            fontWeight: FontWeight.w600,
+                            color: _chromeTextColor,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 8),
+          Container(
+            decoration: BoxDecoration(
+              color: _buttonBg,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: ChromeOutline.color,
+                width: ChromeOutline.width,
+              ),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+            child: RawAutocomplete<String>(
                     textEditingController: _queryCtrl,
                     focusNode: _focusNode,
                     optionsBuilder: (TextEditingValue tev) {
@@ -1266,16 +1350,14 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                       return TextField(
                         controller: controller,
                         focusNode: focusNode,
-                        style: const TextStyle(
-                          color: _chromeTextColor,
-                        ),
+                        style: queryStyle,
                         cursorColor: _chromeTextColor,
                         decoration: InputDecoration(
                           hintText: 'Набери текст',
-                          hintStyle: _hintStyle,
+                          hintStyle: hintStyle,
                           isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                            vertical: 10,
+                          contentPadding: EdgeInsets.symmetric(
+                            vertical: (app.fontSize * 0.45).clamp(8.0, 16.0),
                           ),
                           border: InputBorder.none,
                           enabledBorder: InputBorder.none,
@@ -1290,7 +1372,11 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                         child: Material(
                           elevation: 6,
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(8),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            side: ChromeOutline.side,
+                          ),
+                          clipBehavior: Clip.antiAlias,
                           child: ConstrainedBox(
                             constraints: BoxConstraints(
                               maxHeight: 220,
@@ -1311,7 +1397,11 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                                     ),
                                     child: Text(
                                       o,
-                                      style: TextStyle(color: _chromeTextColor),
+                                      style: widget.appProvider
+                                          .bibleVerseTextStyle(
+                                        color: _chromeTextColor,
+                                        fontWeight: FontWeight.normal,
+                                      ),
                                     ),
                                   ),
                                 );
@@ -1323,161 +1413,176 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                     },
                   ),
                 ),
-                if (_hasRunSearch && _results.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(10),
+          const SizedBox(height: 8),
+          Expanded(
+            child: !_hasRunSearch
+                ? const SizedBox.shrink()
+                : _results.isEmpty
+                    ? Center(
+                        child: Text(
+                          'Совпадений не найдено',
+                          style: app.bibleVerseTextStyle(
+                            color: _chromeTextColor,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          textAlign: TextAlign.center,
                         ),
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxHeight: 320),
-                          child: Scrollbar(
-                            child: ListView.separated(
-                              shrinkWrap: true,
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 2),
-                              itemCount: _results.length,
-                              separatorBuilder: (_, __) =>
-                                  const Divider(height: 1),
-                              itemBuilder: (context, i) {
-                                final r = _results[i];
-                                final book = r['book'] as String;
-                                final ch = r['chapter'] as int;
-                                final v = r['verse'] as int;
-                                final text = (r['text'] as String?) ?? '';
-                                final preview = text.length > 100
-                                    ? '${text.substring(0, 100)}…'
-                                    : text;
-                                final multi =
-                                    _selectedResultIndices.isNotEmpty;
-                                final picked =
-                                    _selectedResultIndices.contains(i);
-                                return Material(
-                                  color: picked
-                                      ? Colors.amber.shade100
-                                      : Colors.transparent,
-                                  child: InkWell(
-                                    onTap: multi
-                                        ? () {
-                                            setState(() {
-                                              if (_selectedResultIndices
-                                                  .contains(i)) {
-                                                _selectedResultIndices
-                                                    .remove(i);
-                                              } else {
-                                                _selectedResultIndices.add(i);
-                                              }
-                                            });
+                      )
+                    : Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: ChromeOutline.color,
+                                width: ChromeOutline.width,
+                              ),
+                            ),
+                            child: Scrollbar(
+                              child: ListView.separated(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 2),
+                                itemCount: _results.length,
+                                separatorBuilder: (_, __) =>
+                                    const Divider(height: 1),
+                                itemBuilder: (context, i) {
+                                  final r = _results[i];
+                                  final book = r['book'] as String;
+                                  final ch = r['chapter'] as int;
+                                  final v = r['verse'] as int;
+                                  final text = (r['text'] as String?) ?? '';
+                                  final preview = text.length > 100
+                                      ? '${text.substring(0, 100)}…'
+                                      : text;
+                                  final multi =
+                                      _selectedResultIndices.isNotEmpty;
+                                  final picked =
+                                      _selectedResultIndices.contains(i);
+                                  final previewBase = widget.appProvider
+                                      .bibleVerseTextStyle(
+                                    color: Colors.grey.shade800,
+                                    fontWeight: FontWeight.normal,
+                                  );
+                                  return Material(
+                                    color: picked
+                                        ? Colors.amber.shade100
+                                        : Colors.transparent,
+                                    child: InkWell(
+                                      onTap: multi
+                                          ? () {
+                                              setState(() {
+                                                if (_selectedResultIndices
+                                                    .contains(i)) {
+                                                  _selectedResultIndices
+                                                      .remove(i);
+                                                } else {
+                                                  _selectedResultIndices
+                                                      .add(i);
+                                                }
+                                              });
+                                            }
+                                          : () => widget.onPickResult(
+                                                book,
+                                                ch,
+                                                v,
+                                              ),
+                                      onLongPress: () {
+                                        setState(() {
+                                          if (_selectedResultIndices
+                                              .contains(i)) {
+                                            _selectedResultIndices.remove(i);
+                                          } else {
+                                            _selectedResultIndices.add(i);
                                           }
-                                        : () => widget.onPickResult(
-                                              book,
-                                              ch,
-                                              v,
-                                            ),
-                                    onLongPress: () {
-                                      setState(() {
-                                        if (_selectedResultIndices
-                                            .contains(i)) {
-                                          _selectedResultIndices.remove(i);
-                                        } else {
-                                          _selectedResultIndices.add(i);
-                                        }
-                                      });
-                                    },
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 10,
-                                      ),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            '$book $ch:$v',
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w600,
-                                              color: _chromeTextColor,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          RichText(
-                                            text: TextSpan(
-                                              children: _buildHighlightedSpans(
-                                                preview,
-                                                DefaultTextStyle.of(context)
-                                                    .style
-                                                    .copyWith(
-                                                      color: Colors
-                                                          .grey.shade800,
-                                                    ),
+                                        });
+                                      },
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 10,
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              '$book $ch:$v',
+                                              style: widget.appProvider
+                                                  .bibleVerseTextStyle(
+                                                color: _chromeTextColor,
+                                                fontWeight: FontWeight.w600,
                                               ),
                                             ),
-                                          ),
-                                        ],
+                                            const SizedBox(height: 4),
+                                            RichText(
+                                              text: TextSpan(
+                                                children:
+                                                    _buildHighlightedSpans(
+                                                  preview,
+                                                  previewBase,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      ),
-                      if (_selectedResultIndices.isNotEmpty)
-                        Positioned(
-                          top: 6,
-                          right: 6,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              ChromeIconButton(
-                                icon: Icons.copy_all,
-                                tooltip: 'Копировать',
-                                foregroundColor: _chromeTextColor,
-                                backgroundColor: _buttonBg,
-                                onPressed: () {
-                                  unawaited(
-                                    _copySelectedSearchResults(context),
                                   );
                                 },
                               ),
-                              const SizedBox(width: 4),
-                              ChromeIconButton(
-                                icon: Icons.close,
-                                tooltip: 'Отмена',
-                                foregroundColor: _chromeTextColor,
-                                backgroundColor: _buttonBg,
-                                onPressed: () => setState(
-                                  () => _selectedResultIndices.clear(),
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
-                        ),
-                    ],
-                  ),
-                ],
-                if (_hasRunSearch)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      'Найдено совпадений: ${_results.length}',
-                      style: const TextStyle(
-                        color: _chromeTextColor,
-                        fontWeight: FontWeight.w600,
+                          if (_selectedResultIndices.isNotEmpty)
+                            Positioned(
+                              top: 6,
+                              right: 6,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  ChromeIconButton(
+                                    icon: Icons.copy_all,
+                                    tooltip: 'Копировать',
+                                    foregroundColor: _chromeTextColor,
+                                    backgroundColor: _buttonBg,
+                                    onPressed: () {
+                                      unawaited(
+                                        _copySelectedSearchResults(context),
+                                      );
+                                    },
+                                  ),
+                                  const SizedBox(width: 4),
+                                  ChromeIconButton(
+                                    icon: Icons.close,
+                                    tooltip: 'Отмена',
+                                    foregroundColor: _chromeTextColor,
+                                    backgroundColor: _buttonBg,
+                                    onPressed: () => setState(
+                                      () => _selectedResultIndices.clear(),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
                       ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-              ],
-            ),
           ),
-        ),
+          if (_hasRunSearch)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'Найдено совпадений: ${_results.length}',
+                style: TextStyle(
+                  color: _chromeTextColor,
+                  fontWeight: FontWeight.w600,
+                  fontSize: (widget.appProvider.chromeButtonSize * 0.36)
+                      .clamp(12.0, 22.0),
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -1580,8 +1685,7 @@ class _BibleBookmarksPanelState extends State<_BibleBookmarksPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final w = MediaQuery.sizeOf(context).width.clamp(320, double.infinity);
-    final statScale = (w / 420).clamp(0.76, 1.0);
+    final app = context.watch<AppProvider>();
     final hasSelection = _selectedEntryIndices.isNotEmpty;
 
     return Material(
@@ -1604,6 +1708,9 @@ class _BibleBookmarksPanelState extends State<_BibleBookmarksPanel> {
                     final scale =
                         (constraints.maxWidth / 420).clamp(0.76, 1.0);
                     final textScale = scale;
+                    final chrome = app.chromeButtonSize;
+                    final titleFont =
+                        (chrome * 0.44).clamp(16.0, 28.0) * textScale;
                     return Row(
                       children: [
                         Expanded(
@@ -1613,7 +1720,7 @@ class _BibleBookmarksPanelState extends State<_BibleBookmarksPanel> {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontWeight: FontWeight.w800,
-                              fontSize: 15 * textScale,
+                              fontSize: titleFont,
                               color: _chromeTextColor,
                             ),
                           ),
@@ -1788,7 +1895,8 @@ class _BibleBookmarksPanelState extends State<_BibleBookmarksPanel> {
                       style: TextStyle(
                         color: _chromeTextColor,
                         fontWeight: FontWeight.w600,
-                        fontSize: 12 * statScale,
+                        fontSize:
+                            (app.chromeButtonSize * 0.36).clamp(12.0, 22.0),
                       ),
                       textAlign: TextAlign.center,
                     ),

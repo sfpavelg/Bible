@@ -5,6 +5,7 @@ import 'package:bible_app/journal/chronological_reading_plan_data.dart';
 import 'package:bible_app/journal/parallel_reading_plan_data.dart';
 import 'package:bible_app/providers/app_provider.dart';
 import 'package:bible_app/widgets/app_chrome_overflow_menu.dart';
+import 'package:bible_app/widgets/chrome_outline.dart';
 import 'package:bible_app/widgets/chrome_toolbar_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -18,11 +19,15 @@ class _PlanScrollRail extends StatefulWidget {
   const _PlanScrollRail({
     required this.controller,
     required this.thumbSize,
+    required this.thumbColor,
+    required this.trackHintColor,
     this.onScrollAdjusted,
   });
 
   final ScrollController controller;
   final double thumbSize;
+  final Color thumbColor;
+  final Color trackHintColor;
 
   /// После перетаскивания бегунка или тапа по дорожке — сохранить offset в prefs.
   final VoidCallback? onScrollAdjusted;
@@ -135,7 +140,7 @@ class _PlanScrollRailState extends State<_PlanScrollRail> {
                     height: (h - 8).clamp(0.0, double.infinity),
                     margin: const EdgeInsets.symmetric(vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.blue.shade100.withValues(alpha: 0.65),
+                      color: widget.trackHintColor,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -158,18 +163,17 @@ class _PlanScrollRailState extends State<_PlanScrollRail> {
                   },
                   onVerticalDragEnd: (_) => widget.onScrollAdjusted?.call(),
                   child: Material(
-                    color: JournalScreen._buttonBg,
-                    borderRadius: BorderRadius.circular(8),
+                    color: widget.thumbColor,
                     elevation: 0,
-                    child: Container(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: ChromeOutline.side,
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: SizedBox(
                       width: ts,
                       height: ts,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.blue.shade200),
-                      ),
-                      alignment: Alignment.center,
-                      child: _scrollGripLines(ts),
+                      child: Center(child: _scrollGripLines(ts)),
                     ),
                   ),
                 ),
@@ -185,9 +189,12 @@ class _PlanScrollRailState extends State<_PlanScrollRail> {
 class JournalScreen extends StatefulWidget {
   const JournalScreen({super.key});
 
-  static const _appBarBg = Color(0xFFB3E5FC);
-  static const _buttonBg = Color(0xFFE1F5FE);
-  static const _chromeFg = Colors.black;
+  static const _appBarBgLight = Color(0xFFB3E5FC);
+  static const _buttonBgLight = Color(0xFFE1F5FE);
+  /// Как на экране Библии и нижней навигации.
+  static const _appBarBgDark = Color(0xFF37474F);
+  static const _buttonBgDark = Color(0xFF455A64);
+  static const _chromeFgLight = Colors.black;
 
   @override
   State<JournalScreen> createState() => _JournalScreenState();
@@ -485,9 +492,15 @@ class _JournalScreenState extends State<JournalScreen>
   Future<void> _openPlanKindPicker(double chromeHeight) async {
     HapticFeedback.lightImpact();
     if (!mounted) return;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final sheetBg = isDark ? const Color(0xFF263238) : Colors.white;
+    final titleColor =
+        isDark ? const Color(0xFF81D4FA) : Colors.blue.shade900;
+    final unselectedBtn = isDark ? JournalScreen._buttonBgDark : JournalScreen._buttonBgLight;
+    final chromeFg = isDark ? Colors.white : JournalScreen._chromeFgLight;
     await showModalBottomSheet<void>(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: sheetBg,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
       ),
@@ -505,13 +518,16 @@ class _JournalScreenState extends State<JournalScreen>
                   style: TextStyle(
                     fontWeight: FontWeight.w700,
                     fontSize: 17,
-                    color: Colors.blue.shade900,
+                    color: titleColor,
                   ),
                 ),
                 const SizedBox(height: 14),
                 Container(
                   decoration: BoxDecoration(
-                    border: Border.all(color: Colors.black87, width: 1.5),
+                    border: Border.all(
+                      color: ChromeOutline.color,
+                      width: ChromeOutline.width,
+                    ),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   padding: const EdgeInsets.all(6),
@@ -522,6 +538,9 @@ class _JournalScreenState extends State<JournalScreen>
                         label: 'Параллельный',
                         height: chromeHeight,
                         selected: _plan == _JournalPlanKind.parallel,
+                        isDark: isDark,
+                        unselectedBg: unselectedBtn,
+                        chromeFg: chromeFg,
                         onTap: () {
                           Navigator.pop(ctx);
                           if (_plan != _JournalPlanKind.parallel) {
@@ -534,6 +553,9 @@ class _JournalScreenState extends State<JournalScreen>
                         label: 'Хронология',
                         height: chromeHeight,
                         selected: _plan == _JournalPlanKind.chronological,
+                        isDark: isDark,
+                        unselectedBg: unselectedBtn,
+                        chromeFg: chromeFg,
                         onTap: () {
                           Navigator.pop(ctx);
                           if (_plan != _JournalPlanKind.chronological) {
@@ -556,16 +578,23 @@ class _JournalScreenState extends State<JournalScreen>
     required String label,
     required double height,
     required bool selected,
+    required bool isDark,
+    required Color unselectedBg,
+    required Color chromeFg,
     required VoidCallback onTap,
   }) {
-    final bg = selected ? Colors.blue : JournalScreen._buttonBg;
-    final fg = selected ? Colors.white : JournalScreen._chromeFg;
+    final bg = selected
+        ? (isDark ? const Color(0xFF81D4FA) : Colors.blue)
+        : unselectedBg;
+    final fg = selected
+        ? (isDark ? const Color(0xFF263238) : Colors.white)
+        : chromeFg;
     final fontSize = (height * 0.30).clamp(11.0, 15.0);
     return Material(
       color: bg,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
-        side: const BorderSide(color: Colors.black87, width: 1.2),
+        side: ChromeOutline.side,
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -595,7 +624,24 @@ class _JournalScreenState extends State<JournalScreen>
     );
   }
 
-  Widget _buildPlanListWithRail(double chromeSize) {
+  Widget _buildPlanListWithRail(
+    AppProvider app,
+    double chromeSize, {
+    required bool isDark,
+    required Color thumbColor,
+    required Color trackHintColor,
+  }) {
+    final lineGap = (app.verseSpacing * 0.65).clamp(0.0, 12.0);
+    final titleColor =
+        isDark ? const Color(0xFF81D4FA) : Colors.blue.shade900;
+    final bodyColor = isDark ? Colors.grey.shade200 : Colors.grey.shade900;
+    final cardDoneBg = isDark
+        ? Colors.amber.shade900.withValues(alpha: 0.42)
+        : Colors.amber.shade50;
+    final cardTodoBg = isDark ? const Color(0xFF37474F) : Colors.white;
+    final checkAccent = isDark ? const Color(0xFF81D4FA) : Colors.blue;
+    final checkOnAccent = isDark ? const Color(0xFF263238) : Colors.white;
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -620,14 +666,11 @@ class _JournalScreenState extends State<JournalScreen>
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: Material(
-                    color: done ? Colors.amber.shade50 : Colors.white,
+                    color: done ? cardDoneBg : cardTodoBg,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
-                      side: BorderSide(
-                        color: Colors.blue.shade100,
-                        width: 1,
-                      ),
+                      side: ChromeOutline.side,
                     ),
                     child: InkWell(
                       borderRadius: BorderRadius.circular(10),
@@ -641,7 +684,16 @@ class _JournalScreenState extends State<JournalScreen>
                               width: 40,
                               child: Checkbox(
                                 value: done,
-                                activeColor: Colors.blue,
+                                activeColor: checkAccent,
+                                checkColor: checkOnAccent,
+                                side: WidgetStateBorderSide.resolveWith(
+                                  (states) {
+                                    final c = isDark
+                                        ? Colors.grey.shade400
+                                        : Colors.grey.shade600;
+                                    return BorderSide(color: c);
+                                  },
+                                ),
                                 onChanged: (_) => _toggleCurrentPlanDay(index),
                               ),
                             ),
@@ -651,23 +703,25 @@ class _JournalScreenState extends State<JournalScreen>
                                 children: [
                                   Text(
                                     'День $n',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 15,
-                                      color: Colors.blue.shade900,
-                                    ),
+                                    style: app
+                                        .bibleVerseTextStyle(
+                                          color: titleColor,
+                                          fontWeight: FontWeight.w800,
+                                        )
+                                        .copyWith(
+                                          fontSize: app.fontSize * 1.06,
+                                        ),
                                   ),
-                                  const SizedBox(height: 6),
+                                  SizedBox(height: (lineGap + 2).clamp(4.0, 14.0)),
                                   ...lines.map(
                                     (line) => Padding(
                                       padding:
-                                          const EdgeInsets.only(bottom: 4),
+                                          EdgeInsets.only(bottom: lineGap),
                                       child: Text(
                                         line,
-                                        style: TextStyle(
-                                          fontSize: 14.5,
-                                          height: 1.35,
-                                          color: Colors.grey.shade900,
+                                        style: app.bibleVerseTextStyle(
+                                          color: bodyColor,
+                                          fontWeight: FontWeight.normal,
                                         ),
                                       ),
                                     ),
@@ -690,6 +744,8 @@ class _JournalScreenState extends State<JournalScreen>
           child: _PlanScrollRail(
             controller: _scrollController,
             thumbSize: chromeSize,
+            thumbColor: thumbColor,
+            trackHintColor: trackHintColor,
             onScrollAdjusted: _scheduleScrollPersist,
           ),
         ),
@@ -697,20 +753,20 @@ class _JournalScreenState extends State<JournalScreen>
     );
   }
 
-  Widget _readProgressFooter() {
+  Widget _readProgressFooter(AppProvider app, {required bool isDark}) {
+    final bg = isDark ? JournalScreen._buttonBgDark : JournalScreen._buttonBgLight;
+    final fg = isDark ? const Color(0xFF81D4FA) : Colors.blue.shade900;
     return Material(
-      color: JournalScreen._buttonBg,
+      color: bg,
       elevation: 0,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
         child: Text(
           'Прочитано: $_planDoneCount из $_planTotal',
           textAlign: TextAlign.center,
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-            color: Colors.blue.shade900,
-            fontSize: 14,
-          ),
+          style: app
+              .bibleVerseTextStyle(color: fg, fontWeight: FontWeight.w700)
+              .copyWith(fontSize: app.fontSize * 0.9),
         ),
       ),
     );
@@ -718,13 +774,23 @@ class _JournalScreenState extends State<JournalScreen>
 
   @override
   Widget build(BuildContext context) {
-    final chromeSize = context.watch<AppProvider>().chromeButtonSize;
+    final app = context.watch<AppProvider>();
+    final chromeSize = app.chromeButtonSize;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final appBarBg =
+        isDark ? JournalScreen._appBarBgDark : JournalScreen._appBarBgLight;
+    final buttonBg =
+        isDark ? JournalScreen._buttonBgDark : JournalScreen._buttonBgLight;
+    final chromeFg = isDark ? Colors.white : JournalScreen._chromeFgLight;
+    final trackHint = isDark
+        ? Colors.blueGrey.shade700.withValues(alpha: 0.9)
+        : Colors.blue.shade100.withValues(alpha: 0.65);
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: JournalScreen._appBarBg,
-        surfaceTintColor: JournalScreen._appBarBg,
-        foregroundColor: JournalScreen._chromeFg,
+        backgroundColor: appBarBg,
+        surfaceTintColor: appBarBg,
+        foregroundColor: chromeFg,
         elevation: 0,
         scrolledUnderElevation: 0,
         shape: const RoundedRectangleBorder(
@@ -736,16 +802,16 @@ class _JournalScreenState extends State<JournalScreen>
             ChromeIconButton(
               icon: Icons.vertical_align_top,
               tooltip: 'В начало списка',
-              foregroundColor: JournalScreen._chromeFg,
-              backgroundColor: JournalScreen._buttonBg,
+              foregroundColor: chromeFg,
+              backgroundColor: buttonBg,
               onPressed: _jumpScrollToStart,
             ),
             const SizedBox(width: 8),
             ChromeIconButton(
               icon: Icons.vertical_align_bottom,
               tooltip: 'В конец списка',
-              foregroundColor: JournalScreen._chromeFg,
-              backgroundColor: JournalScreen._buttonBg,
+              foregroundColor: chromeFg,
+              backgroundColor: buttonBg,
               onPressed: _jumpScrollToEnd,
             ),
             const SizedBox(width: 8),
@@ -753,10 +819,14 @@ class _JournalScreenState extends State<JournalScreen>
               child: Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: Material(
-                  color: JournalScreen._buttonBg,
-                  borderRadius: BorderRadius.circular(8),
+                  color: buttonBg,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    side: ChromeOutline.side,
+                  ),
                   clipBehavior: Clip.antiAlias,
                   child: InkWell(
+                    borderRadius: BorderRadius.circular(8),
                     onTap: () => _openPlanKindPicker(chromeSize),
                     child: SizedBox(
                       height: chromeSize,
@@ -772,7 +842,7 @@ class _JournalScreenState extends State<JournalScreen>
                                   'План Чтения',
                                   maxLines: 1,
                                   style: TextStyle(
-                                    color: JournalScreen._chromeFg,
+                                    color: chromeFg,
                                     fontWeight: FontWeight.w800,
                                     fontSize: (chromeSize * 0.24)
                                         .clamp(10.0, 13.0),
@@ -784,7 +854,7 @@ class _JournalScreenState extends State<JournalScreen>
                                       : 'Хронология',
                                   maxLines: 1,
                                   style: TextStyle(
-                                    color: JournalScreen._chromeFg
+                                    color: chromeFg
                                         .withValues(alpha: 0.88),
                                     fontWeight: FontWeight.w600,
                                     fontSize: (chromeSize * 0.20)
@@ -803,10 +873,10 @@ class _JournalScreenState extends State<JournalScreen>
             ),
           ],
         ),
-        actions: const [
+        actions: [
           AppChromeOverflowMenu(
-            iconColor: JournalScreen._chromeFg,
-            backgroundColor: JournalScreen._buttonBg,
+            iconColor: chromeFg,
+            backgroundColor: buttonBg,
           ),
         ],
       ),
@@ -815,8 +885,16 @@ class _JournalScreenState extends State<JournalScreen>
           : Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(child: _buildPlanListWithRail(chromeSize)),
-                _readProgressFooter(),
+                Expanded(
+                  child: _buildPlanListWithRail(
+                    app,
+                    chromeSize,
+                    isDark: isDark,
+                    thumbColor: buttonBg,
+                    trackHintColor: trackHint,
+                  ),
+                ),
+                _readProgressFooter(app, isDark: isDark),
               ],
             ),
     );

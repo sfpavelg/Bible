@@ -4,7 +4,9 @@ import 'package:bible_app/notebook/notebook_repository_factory.dart';
 import 'package:bible_app/screens/notebook_editor_panel.dart';
 import 'package:bible_app/providers/app_provider.dart';
 import 'package:bible_app/widgets/app_chrome_overflow_menu.dart';
+import 'package:bible_app/widgets/chrome_outline.dart';
 import 'package:bible_app/widgets/chrome_toolbar_button.dart';
+import 'package:bible_app/widgets/notebook_chrome_dialog_button.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:path/path.dart' as p;
@@ -27,9 +29,11 @@ class _NotebookScreenState extends State<NotebookScreen> {
   GlobalKey<NotebookEditorPanelState>? _editorKey;
   bool _editorDirty = false;
 
-  static const _appBarBg = Color(0xFFB3E5FC);
-  static const _buttonBg = Color(0xFFE1F5FE);
-  static const _chromeFg = Colors.black;
+  static const _appBarBgLight = Color(0xFFB3E5FC);
+  static const _buttonBgLight = Color(0xFFE1F5FE);
+  static const _appBarBgDark = Color(0xFF37474F);
+  static const _buttonBgDark = Color(0xFF455A64);
+  static const _chromeFgLight = Colors.black;
 
   @override
   void initState() {
@@ -122,13 +126,13 @@ class _NotebookScreenState extends State<NotebookScreen> {
           onSubmitted: (_) => Navigator.pop(ctx, true),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Создать'),
+          NotebookChromeDialogActions(
+            startLabel: 'Отмена',
+            onStart: () => Navigator.pop(ctx, false),
+            startStyle: NotebookDialogActionStyle.cancel,
+            endLabel: 'Создать',
+            onEnd: () => Navigator.pop(ctx, true),
+            endStyle: NotebookDialogActionStyle.confirm,
           ),
         ],
       ),
@@ -168,13 +172,13 @@ class _NotebookScreenState extends State<NotebookScreen> {
           onSubmitted: (_) => Navigator.pop(ctx, true),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Создать'),
+          NotebookChromeDialogActions(
+            startLabel: 'Отмена',
+            onStart: () => Navigator.pop(ctx, false),
+            startStyle: NotebookDialogActionStyle.cancel,
+            endLabel: 'Создать',
+            onEnd: () => Navigator.pop(ctx, true),
+            endStyle: NotebookDialogActionStyle.confirm,
           ),
         ],
       ),
@@ -236,13 +240,13 @@ class _NotebookScreenState extends State<NotebookScreen> {
           autofocus: true,
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Сохранить'),
+          NotebookChromeDialogActions(
+            startLabel: 'Отмена',
+            onStart: () => Navigator.pop(ctx, false),
+            startStyle: NotebookDialogActionStyle.cancel,
+            endLabel: 'Сохранить',
+            onEnd: () => Navigator.pop(ctx, true),
+            endStyle: NotebookDialogActionStyle.confirm,
           ),
         ],
       ),
@@ -282,13 +286,13 @@ class _NotebookScreenState extends State<NotebookScreen> {
               : 'Файл «${item.name}» будет удалён.',
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Удалить'),
+          NotebookChromeDialogActions(
+            startLabel: 'Отмена',
+            onStart: () => Navigator.pop(ctx, false),
+            startStyle: NotebookDialogActionStyle.cancel,
+            endLabel: 'Удалить',
+            onEnd: () => Navigator.pop(ctx, true),
+            endStyle: NotebookDialogActionStyle.danger,
           ),
         ],
       ),
@@ -314,6 +318,8 @@ class _NotebookScreenState extends State<NotebookScreen> {
     required IconData icon,
     required String tooltip,
     required VoidCallback onPressed,
+    required Color chromeFg,
+    required Color buttonBg,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2),
@@ -321,30 +327,43 @@ class _NotebookScreenState extends State<NotebookScreen> {
         icon: icon,
         tooltip: tooltip,
         onPressed: onPressed,
-        foregroundColor: _chromeFg,
-        backgroundColor: _buttonBg,
+        foregroundColor: chromeFg,
+        backgroundColor: buttonBg,
       ),
     );
   }
 
   PreferredSizeWidget _buildListAppBar() {
+    final chrome = context.watch<AppProvider>().chromeButtonSize;
+    final toolbarH = (chrome + 10).clamp(kToolbarHeight, 78.0);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final appBarBg = isDark ? _appBarBgDark : _appBarBgLight;
+    final buttonBg = isDark ? _buttonBgDark : _buttonBgLight;
+    final chromeFg = isDark ? Colors.white : _chromeFgLight;
     return AppBar(
-      backgroundColor: _appBarBg,
-      surfaceTintColor: _appBarBg,
-      foregroundColor: _chromeFg,
+      backgroundColor: appBarBg,
+      surfaceTintColor: appBarBg,
+      foregroundColor: chromeFg,
       elevation: 0,
       scrolledUnderElevation: 0,
+      toolbarHeight: toolbarH,
+      leadingWidth: _currentDir.isEmpty
+          ? null
+          : (chrome + 8).clamp(52.0, 90.0),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(14)),
       ),
       leading: _currentDir.isEmpty
           ? null
-          : ChromeIconButton(
-              icon: Icons.arrow_back,
-              tooltip: 'Назад',
-              onPressed: _goUp,
-              foregroundColor: _chromeFg,
-              backgroundColor: _buttonBg,
+          : Align(
+              alignment: Alignment.center,
+              child: ChromeIconButton(
+                icon: Icons.arrow_back,
+                tooltip: 'Назад',
+                onPressed: _goUp,
+                foregroundColor: chromeFg,
+                backgroundColor: buttonBg,
+              ),
             ),
       titleSpacing: 8,
       title: SingleChildScrollView(
@@ -355,24 +374,30 @@ class _NotebookScreenState extends State<NotebookScreen> {
               icon: Icons.create_new_folder_outlined,
               tooltip: 'Новая папка',
               onPressed: _createFolder,
+              chromeFg: chromeFg,
+              buttonBg: buttonBg,
             ),
             _chromeIconButton(
               icon: Icons.note_add_outlined,
               tooltip: 'Новый документ',
               onPressed: _createDocument,
+              chromeFg: chromeFg,
+              buttonBg: buttonBg,
             ),
             _chromeIconButton(
               icon: Icons.refresh,
               tooltip: 'Обновить список',
               onPressed: _refresh,
+              chromeFg: chromeFg,
+              buttonBg: buttonBg,
             ),
           ],
         ),
       ),
-      actions: const [
+      actions: [
         AppChromeOverflowMenu(
-          iconColor: _chromeFg,
-          backgroundColor: _buttonBg,
+          iconColor: chromeFg,
+          backgroundColor: buttonBg,
         ),
       ],
     );
@@ -381,70 +406,187 @@ class _NotebookScreenState extends State<NotebookScreen> {
   PreferredSizeWidget _buildEditorAppBar() {
     final name = p.basename(_editingPath!);
     final chrome = context.watch<AppProvider>().chromeButtonSize;
+    final toolbarH = (chrome + 10).clamp(kToolbarHeight, 78.0);
     final menuIcon = (chrome * 0.5).clamp(18.0, 30.0);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final appBarBg = isDark ? _appBarBgDark : _appBarBgLight;
+    final buttonBg = isDark ? _buttonBgDark : _buttonBgLight;
+    final chromeFg = isDark ? Colors.white : _chromeFgLight;
     return AppBar(
-      backgroundColor: _appBarBg,
-      surfaceTintColor: _appBarBg,
-      foregroundColor: _chromeFg,
+      backgroundColor: appBarBg,
+      surfaceTintColor: appBarBg,
+      foregroundColor: chromeFg,
       elevation: 0,
       scrolledUnderElevation: 0,
+      toolbarHeight: toolbarH,
+      leadingWidth: (chrome + 8).clamp(52.0, 90.0),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(14)),
       ),
-      leading: ChromeIconButton(
-        icon: Icons.arrow_back,
-        tooltip: 'Закрыть',
-        onPressed: _closeEditor,
-        foregroundColor: _chromeFg,
-        backgroundColor: _buttonBg,
+      leading: Align(
+        alignment: Alignment.center,
+        child: ChromeIconButton(
+          icon: Icons.arrow_back,
+          tooltip: 'Закрыть',
+          onPressed: _closeEditor,
+          foregroundColor: chromeFg,
+          backgroundColor: buttonBg,
+        ),
       ),
       title: Text(
         name,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(color: _chromeFg, fontSize: 18),
+        style: TextStyle(color: chromeFg, fontSize: 18),
       ),
       actions: [
         if (_editorDirty)
-          const Padding(
-            padding: EdgeInsets.only(right: 4, top: 12),
-            child: Text(
-              '…',
-              style: TextStyle(fontSize: 18, color: Colors.orange),
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: Center(
+              child: Text(
+                '…',
+                style: TextStyle(
+                  fontSize: (chrome * 0.42).clamp(14.0, 22.0),
+                  color: Colors.orange,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ),
+        Builder(
+          builder: (context) {
+            final uc = _editorKey?.currentState?.undoHistoryController;
+            if (uc == null) return const SizedBox.shrink();
+            return ListenableBuilder(
+              listenable: uc,
+              builder: (context, _) {
+                final v = uc.value;
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Opacity(
+                      opacity: v.canUndo ? 1 : 0.38,
+                      child: ChromeIconButton(
+                        icon: Icons.undo,
+                        tooltip: 'Шаг назад',
+                        onPressed: v.canUndo ? () => uc.undo() : null,
+                        foregroundColor: chromeFg,
+                        backgroundColor: buttonBg,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Opacity(
+                      opacity: v.canRedo ? 1 : 0.38,
+                      child: ChromeIconButton(
+                        icon: Icons.redo,
+                        tooltip: 'Шаг вперёд',
+                        onPressed: v.canRedo ? () => uc.redo() : null,
+                        foregroundColor: chromeFg,
+                        backgroundColor: buttonBg,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                  ],
+                );
+              },
+            );
+          },
+        ),
         ChromeIconButton(
           icon: Icons.save_outlined,
           tooltip: 'Сохранить',
           onPressed: () => _editorKey?.currentState?.saveNow(),
-          foregroundColor: _chromeFg,
-          backgroundColor: _buttonBg,
+          foregroundColor: chromeFg,
+          backgroundColor: buttonBg,
         ),
         SizedBox(
           width: chrome,
           height: chrome,
           child: Material(
-            color: _buttonBg,
-            borderRadius: BorderRadius.circular(8),
+            color: buttonBg,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+              side: ChromeOutline.side,
+            ),
             clipBehavior: Clip.antiAlias,
-            child: PopupMenuButton<String>(
-              padding: EdgeInsets.zero,
-              icon: Icon(Icons.more_horiz, color: _chromeFg, size: menuIcon),
-              onSelected: (v) =>
-                  _editorKey?.currentState?.runEditorMenuAction(v),
-              itemBuilder: (context) => const [
-            PopupMenuItem(value: 'share', child: Text('Поделиться…')),
-            PopupMenuItem(value: 'export', child: Text('Сохранить в файл…')),
-            PopupMenuItem(value: 'copy', child: Text('Копировать весь текст')),
-            PopupMenuItem(value: 'mail', child: Text('Отправить на почту…')),
-            PopupMenuDivider(),
-            PopupMenuItem(value: 'del', child: Text('Удалить документ')),
-              ],
+            child: Theme(
+              data: ThemeData.light(useMaterial3: true).copyWith(
+                colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+                popupMenuTheme: const PopupMenuThemeData(
+                  surfaceTintColor: Colors.transparent,
+                ),
+              ),
+              child: PopupMenuButton<String>(
+                padding: EdgeInsets.zero,
+                icon: Icon(Icons.more_horiz, color: chromeFg, size: menuIcon),
+                tooltip: 'Действия с документом',
+                position: PopupMenuPosition.under,
+                offset: const Offset(0, 8),
+                color: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 4,
+                onSelected: (v) =>
+                    _editorKey?.currentState?.runEditorMenuAction(v),
+                itemBuilder: (context) {
+                  const fg = Color(0xDD000000);
+                  return [
+                    PopupMenuItem<String>(
+                      padding: const EdgeInsets.fromLTRB(8, 8, 8, 3),
+                      value: 'share',
+                      child: chromePopupMenuChoiceTile(
+                        label: 'Поделиться…',
+                        icon: Icons.share_outlined,
+                        iconColor: fg,
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      padding: const EdgeInsets.fromLTRB(8, 3, 8, 3),
+                      value: 'export',
+                      child: chromePopupMenuChoiceTile(
+                        label: 'Сохранить в файл…',
+                        icon: Icons.save_alt_outlined,
+                        iconColor: fg,
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      padding: const EdgeInsets.fromLTRB(8, 3, 8, 3),
+                      value: 'copy',
+                      child: chromePopupMenuChoiceTile(
+                        label: 'Копировать весь текст',
+                        icon: Icons.copy_all_outlined,
+                        iconColor: fg,
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      padding: const EdgeInsets.fromLTRB(8, 3, 8, 3),
+                      value: 'mail',
+                      child: chromePopupMenuChoiceTile(
+                        label: 'Отправить на почту…',
+                        icon: Icons.mail_outline,
+                        iconColor: fg,
+                      ),
+                    ),
+                    const PopupMenuDivider(),
+                    PopupMenuItem<String>(
+                      padding: const EdgeInsets.fromLTRB(8, 3, 8, 8),
+                      value: 'del',
+                      child: chromePopupMenuChoiceTile(
+                        label: 'Удалить документ',
+                        icon: Icons.delete_outline,
+                        iconColor: fg,
+                      ),
+                    ),
+                  ];
+                },
+              ),
             ),
           ),
         ),
-        const AppChromeOverflowMenu(
-          iconColor: _chromeFg,
-          backgroundColor: _buttonBg,
+        AppChromeOverflowMenu(
+          iconColor: chromeFg,
+          backgroundColor: buttonBg,
         ),
       ],
     );
@@ -452,8 +594,6 @@ class _NotebookScreenState extends State<NotebookScreen> {
 
   @override
   Widget build(BuildContext context) {
-    context.watch<AppProvider>().chromeButtonSize;
-
     final editing = _editingPath != null && _editorKey != null && _repo != null;
 
     return Scaffold(

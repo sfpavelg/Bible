@@ -97,6 +97,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final tabOrder = _mountedTabs.toList()..sort();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       body: Stack(
         fit: StackFit.expand,
@@ -113,9 +114,12 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
         type: BottomNavigationBarType.fixed,
-        backgroundColor: Colors.lightBlue[100],
-        selectedItemColor: Colors.blue[800],
-        unselectedItemColor: Colors.grey[600],
+        backgroundColor:
+            isDark ? const Color(0xFF37474F) : Colors.lightBlue[100],
+        selectedItemColor:
+            isDark ? const Color(0xFF81D4FA) : Colors.blue[800],
+        unselectedItemColor:
+            isDark ? Colors.grey.shade500 : Colors.grey[600],
       ),
     );
   }

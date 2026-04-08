@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:bible_app/notebook/notebook_mail_history.dart';
 import 'package:bible_app/notebook/notebook_repository.dart';
+import 'package:bible_app/widgets/notebook_chrome_dialog_button.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -33,6 +34,7 @@ class NotebookEditorPanel extends StatefulWidget {
 
 class NotebookEditorPanelState extends State<NotebookEditorPanel> {
   late final TextEditingController _controller;
+  late UndoHistoryController _undoHistoryController;
   Timer? _debounce;
   bool _dirty = false;
   bool _loading = true;
@@ -40,10 +42,19 @@ class NotebookEditorPanelState extends State<NotebookEditorPanel> {
 
   bool get isDirty => _dirty;
 
+  /// Для кнопок «назад / вперёд» в шапке блокнота ([ListenableBuilder]).
+  UndoHistoryController get undoHistoryController => _undoHistoryController;
+
+  void _resetUndoHistory() {
+    _undoHistoryController.dispose();
+    _undoHistoryController = UndoHistoryController();
+  }
+
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController();
+    _undoHistoryController = UndoHistoryController();
     _load();
     _controller.addListener(_onTextChanged);
   }
@@ -53,6 +64,7 @@ class NotebookEditorPanelState extends State<NotebookEditorPanel> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.relativePath != widget.relativePath) {
       _debounce?.cancel();
+      _resetUndoHistory();
       _load();
     }
   }
@@ -234,20 +246,24 @@ class NotebookEditorPanelState extends State<NotebookEditorPanel> {
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Отмена'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                final email = emailCtrl.text.trim();
-                if (email.isEmpty) return;
-                await NotebookMailHistory.remember(email);
-                if (!context.mounted) return;
-                Navigator.pop(ctx);
-                await _openMailto(email);
+            NotebookChromeDialogActions(
+              startLabel: 'Отмена',
+              onStart: () => Navigator.pop(ctx),
+              startStyle: NotebookDialogActionStyle.cancel,
+              endLabel: 'Открыть почту',
+              onEnd: () {
+                Future<void> run() async {
+                  final email = emailCtrl.text.trim();
+                  if (email.isEmpty) return;
+                  await NotebookMailHistory.remember(email);
+                  if (!ctx.mounted) return;
+                  Navigator.pop(ctx);
+                  await _openMailto(email);
+                }
+
+                unawaited(run());
               },
-              child: const Text('Открыть почту'),
+              endStyle: NotebookDialogActionStyle.confirm,
             ),
           ],
         );
@@ -276,13 +292,13 @@ class NotebookEditorPanelState extends State<NotebookEditorPanel> {
         title: const Text('Удалить документ?'),
         content: Text('«$_title» будет удалён без восстановления.'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Удалить'),
+          NotebookChromeDialogActions(
+            startLabel: 'Отмена',
+            onStart: () => Navigator.pop(ctx, false),
+            startStyle: NotebookDialogActionStyle.cancel,
+            endLabel: 'Удалить',
+            onEnd: () => Navigator.pop(ctx, true),
+            endStyle: NotebookDialogActionStyle.danger,
           ),
         ],
       ),
@@ -316,6 +332,7 @@ class NotebookEditorPanelState extends State<NotebookEditorPanel> {
     _debounce?.cancel();
     unawaited(flushSave());
     _controller.dispose();
+    _undoHistoryController.dispose();
     _focus.dispose();
     super.dispose();
   }
@@ -330,6 +347,7 @@ class NotebookEditorPanelState extends State<NotebookEditorPanel> {
       child: TextField(
         controller: _controller,
         focusNode: _focus,
+        undoController: _undoHistoryController,
         maxLines: null,
         expands: true,
         textAlignVertical: TextAlignVertical.top,

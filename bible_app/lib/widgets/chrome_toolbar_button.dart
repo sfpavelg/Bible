@@ -1,4 +1,5 @@
 import 'package:bible_app/providers/app_provider.dart';
+import 'package:bible_app/widgets/chrome_outline.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -28,12 +29,19 @@ class ChromeIconButton extends StatelessWidget {
     final size = context.watch<AppProvider>().chromeButtonSize;
     final iconSize = (size * 0.5).clamp(18.0, 30.0);
     final radius = circular ? size / 2 : 8.0;
+    final ShapeBorder shapeBorder = circular
+        ? const CircleBorder(side: ChromeOutline.side)
+        : RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(radius),
+            side: ChromeOutline.side,
+          );
     final core = Material(
       color: backgroundColor,
-      borderRadius: BorderRadius.circular(radius),
+      shape: shapeBorder,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onPressed,
+        customBorder: shapeBorder,
         child: SizedBox(
           width: size,
           height: size,
@@ -79,17 +87,28 @@ class ChromeSliceNavButton extends StatelessWidget {
     final iconSize = (height * 0.5).clamp(16.0, 30.0);
     final rx = width / 2;
     final ry = height / 2;
-    final core = Material(
-      color: backgroundColor,
-      borderRadius: BorderRadius.all(Radius.elliptical(rx, ry)),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.all(Radius.elliptical(rx, ry)),
-        child: SizedBox(
-          width: width,
-          height: height,
-          child: Icon(icon, color: foregroundColor, size: iconSize),
+    final elliptical = BorderRadius.all(Radius.elliptical(rx, ry));
+    final core = Container(
+      decoration: BoxDecoration(
+        borderRadius: elliptical,
+        border: Border.all(
+          color: ChromeOutline.color,
+          width: ChromeOutline.width,
+        ),
+      ),
+      child: Material(
+        color: backgroundColor,
+        borderRadius: elliptical,
+        clipBehavior: Clip.antiAlias,
+        elevation: 0,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: elliptical,
+          child: SizedBox(
+            width: width,
+            height: height,
+            child: Icon(icon, color: foregroundColor, size: iconSize),
+          ),
         ),
       ),
     );
@@ -125,10 +144,14 @@ class ChromeNavTextButton extends StatelessWidget {
     final fontSize = (size * 0.34).clamp(11.0, 16.0);
     return Material(
       color: backgroundColor,
-      borderRadius: BorderRadius.circular(8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: ChromeOutline.side,
+      ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onPressed,
+        borderRadius: BorderRadius.circular(8),
         child: SizedBox(
           width: size,
           height: size,

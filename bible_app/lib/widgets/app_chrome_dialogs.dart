@@ -2,9 +2,47 @@ import 'dart:math' as math;
 
 import 'package:bible_app/journal/parallel_reading_plan_data.dart';
 import 'package:bible_app/providers/app_provider.dart';
+import 'package:bible_app/widgets/chrome_outline.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+
+/// Фон и иконки квадратных кнопок в шапках диалогов — как «книга / глава» на Библии.
+const Color _kChromePanelButtonBg = Color(0xFFE1F5FE);
+const Color _kChromePanelButtonFg = Colors.black;
+
+/// Снимает один маршрут с навигатора не более одного раза (двойной клик не уводит
+/// со стека экран под диалогом — чёрный экран).
+class _PopRouteOnce extends StatefulWidget {
+  const _PopRouteOnce({
+    required this.navigatorContext,
+    required this.builder,
+  });
+
+  final BuildContext navigatorContext;
+  final Widget Function(BuildContext context, VoidCallback popOnce) builder;
+
+  @override
+  State<_PopRouteOnce> createState() => _PopRouteOnceState();
+}
+
+class _PopRouteOnceState extends State<_PopRouteOnce> {
+  bool _used = false;
+
+  void _popOnce() {
+    if (_used) return;
+    _used = true;
+    final c = widget.navigatorContext;
+    if (c.mounted && Navigator.of(c).canPop()) {
+      Navigator.pop(c);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return widget.builder(context, _popOnce);
+  }
+}
 
 void showAppSettingsDialog(BuildContext context) {
   final appProvider = Provider.of<AppProvider>(context, listen: false);
@@ -36,6 +74,23 @@ void showAppSettingsDialog(BuildContext context) {
             ),
             child: Builder(
               builder: (panelThemeContext) {
+                const kSettingsTitleStyle =
+                    TextStyle(fontSize: 20, fontWeight: FontWeight.w600);
+                const kSettingsHeadingStyle =
+                    TextStyle(fontWeight: FontWeight.bold, fontSize: 14);
+                const kSettingsBodyStyle = TextStyle(fontSize: 15);
+                const kCloseBtn = 40.0;
+                const kCloseIcon = 20.0;
+                const kSegIcon = 18.0;
+
+                SliderThemeData sliderDecor(SliderThemeData base) =>
+                    base.copyWith(
+                  activeTrackColor: Colors.blue,
+                  inactiveTrackColor: Colors.blue.shade100,
+                  thumbColor: Colors.blue,
+                  overlayColor: Colors.blue.withOpacity(0.12),
+                );
+
                 return Material(
                   color: Colors.lightBlue[50],
                   elevation: 10,
@@ -47,34 +102,36 @@ void showAppSettingsDialog(BuildContext context) {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 10, 8, 6),
+                          padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
                           child: Row(
                             children: [
                               const Expanded(
                                 child: Text(
                                   'Настройки',
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                                  style: kSettingsTitleStyle,
                                 ),
                               ),
-                              Material(
-                                color: Colors.lightBlue.shade100,
-                                borderRadius: BorderRadius.circular(8),
-                                child: InkWell(
-                                  borderRadius: BorderRadius.circular(8),
-                                  onTap: () => Navigator.pop(modalContext),
-                                  child: Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(
-                                        color: Colors.blue,
-                                        width: 1.2,
+                              _PopRouteOnce(
+                                navigatorContext: modalContext,
+                                builder: (c, popOnce) => Material(
+                                  color: _kChromePanelButtonBg,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    side: ChromeOutline.side,
+                                  ),
+                                  clipBehavior: Clip.antiAlias,
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(8),
+                                    onTap: popOnce,
+                                    child: const SizedBox(
+                                      width: kCloseBtn,
+                                      height: kCloseBtn,
+                                      child: Icon(
+                                        Icons.close,
+                                        size: kCloseIcon,
+                                        color: _kChromePanelButtonFg,
                                       ),
                                     ),
-                                    child: const Icon(Icons.close, size: 20),
                                   ),
                                 ),
                               ),
@@ -84,116 +141,20 @@ void showAppSettingsDialog(BuildContext context) {
                         const Divider(height: 1),
                         Expanded(
                           child: SingleChildScrollView(
-                            padding: const EdgeInsets.fromLTRB(16, 6, 16, 14),
+                            padding: const EdgeInsets.fromLTRB(10, 6, 10, 14),
                             child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
                                 const Text(
-                                  'Тема',
-                                  style: TextStyle(fontWeight: FontWeight.bold),
-                                ),
-                                const SizedBox(height: 4),
-                                SegmentedButton<ThemeMode>(
-                                  segments: const <ButtonSegment<ThemeMode>>[
-                                    ButtonSegment<ThemeMode>(
-                                      value: ThemeMode.light,
-                                      label: Text('Светлая'),
-                                      icon: Icon(Icons.light_mode_outlined, size: 18),
-                                    ),
-                                    ButtonSegment<ThemeMode>(
-                                      value: ThemeMode.dark,
-                                      label: Text('Тёмная'),
-                                      icon: Icon(Icons.dark_mode_outlined, size: 18),
-                                    ),
-                                  ],
-                                  selected: <ThemeMode>{selectedTheme},
-                                  onSelectionChanged: (Set<ThemeMode> next) {
-                                    if (next.isEmpty) return;
-                                    final m = next.first;
-                                    setModalState(() => selectedTheme = m);
-                                    appProvider.setThemeMode(m);
-                                  },
-                                ),
-                                const SizedBox(height: 8),
-                                const Text(
-                                  'Размер кнопок',
-                                  style: TextStyle(fontWeight: FontWeight.bold),
-                                ),
-                                SliderTheme(
-                                  data: SliderTheme.of(panelThemeContext)
-                                      .copyWith(
-                                    activeTrackColor: Colors.blue,
-                                    inactiveTrackColor: Colors.blue.shade100,
-                                    thumbColor: Colors.blue,
-                                    overlayColor: Colors.blue.withOpacity(0.12),
-                                  ),
-                                  child: Slider(
-                                    value: chromeBtnSize.clamp(
-                                      AppProvider.chromeButtonSizeMin,
-                                      AppProvider.chromeButtonSizeMax,
-                                    ),
-                                    min: AppProvider.chromeButtonSizeMin,
-                                    max: AppProvider.chromeButtonSizeMax,
-                                    divisions: 24,
-                                    label: chromeBtnSize.round().toString(),
-                                    onChanged: (value) {
-                                      setModalState(() => chromeBtnSize = value);
-                                      appProvider.changeChromeButtonSize(value);
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                const Text(
-                                  'Шрифт текста',
-                                  style: TextStyle(fontWeight: FontWeight.bold),
-                                ),
-                                const SizedBox(height: 4),
-                                DropdownButtonFormField<String>(
-                                  isExpanded: true,
-                                  value: fontPreset,
-                                  decoration: InputDecoration(
-                                    filled: true,
-                                    fillColor: Colors.white.withOpacity(0.75),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    contentPadding:
-                                        const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 10,
-                                    ),
-                                  ),
-                                  items: AppProvider.verseFontLabels.entries
-                                      .map(
-                                        (e) => DropdownMenuItem<String>(
-                                          value: e.key,
-                                          child: Text(
-                                            e.value,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      )
-                                      .toList(),
-                                  onChanged: (value) {
-                                    if (value == null) return;
-                                    setModalState(() => fontPreset = value);
-                                    appProvider.setVerseFontPreset(value);
-                                  },
-                                ),
-                                const SizedBox(height: 8),
-                                const Text(
                                   'Размер шрифта',
-                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                  style: kSettingsHeadingStyle,
                                 ),
+                                const SizedBox(height: 4),
                                 SliderTheme(
-                                  data: SliderTheme.of(panelThemeContext)
-                                      .copyWith(
-                                    activeTrackColor: Colors.blue,
-                                    inactiveTrackColor: Colors.blue.shade100,
-                                    thumbColor: Colors.blue,
-                                    overlayColor: Colors.blue.withOpacity(0.12),
-                                  ),
+                                  data: sliderDecor(
+                                      SliderTheme.of(panelThemeContext)),
                                   child: Slider(
+                                    padding: EdgeInsets.zero,
                                     value: fontSize.clamp(12.0, 28.0),
                                     min: 12.0,
                                     max: 28.0,
@@ -208,24 +169,21 @@ void showAppSettingsDialog(BuildContext context) {
                                 const SizedBox(height: 5),
                                 const Text(
                                   'Межстрочный интервал',
-                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                  style: kSettingsHeadingStyle,
                                 ),
                                 SliderTheme(
-                                  data: SliderTheme.of(panelThemeContext)
-                                      .copyWith(
-                                    activeTrackColor: Colors.blue,
-                                    inactiveTrackColor: Colors.blue.shade100,
-                                    thumbColor: Colors.blue,
-                                    overlayColor: Colors.blue.withOpacity(0.12),
-                                  ),
+                                  data: sliderDecor(
+                                      SliderTheme.of(panelThemeContext)),
                                   child: Slider(
+                                    padding: EdgeInsets.zero,
                                     value: lineHeight.clamp(1.0, 2.2),
                                     min: 1.0,
                                     max: 2.2,
                                     divisions: 12,
                                     label: lineHeight.toStringAsFixed(2),
                                     onChanged: (value) {
-                                      setModalState(() => lineHeight = value);
+                                      setModalState(
+                                          () => lineHeight = value);
                                       appProvider.changeLineHeight(value);
                                     },
                                   ),
@@ -233,17 +191,13 @@ void showAppSettingsDialog(BuildContext context) {
                                 const SizedBox(height: 5),
                                 const Text(
                                   'Интервал между стихами',
-                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                  style: kSettingsHeadingStyle,
                                 ),
                                 SliderTheme(
-                                  data: SliderTheme.of(panelThemeContext)
-                                      .copyWith(
-                                    activeTrackColor: Colors.blue,
-                                    inactiveTrackColor: Colors.blue.shade100,
-                                    thumbColor: Colors.blue,
-                                    overlayColor: Colors.blue.withOpacity(0.12),
-                                  ),
+                                  data: sliderDecor(
+                                      SliderTheme.of(panelThemeContext)),
                                   child: Slider(
+                                    padding: EdgeInsets.zero,
                                     value: verseSpacing.clamp(0.0, 28.0),
                                     min: 0.0,
                                     max: 28.0,
@@ -255,12 +209,137 @@ void showAppSettingsDialog(BuildContext context) {
                                     },
                                   ),
                                 ),
+                                const SizedBox(height: 8),
+                                const Text(
+                                  'Шрифт текста',
+                                  style: kSettingsHeadingStyle,
+                                ),
+                                const SizedBox(height: 4),
+                                DropdownButtonFormField<String>(
+                                  isExpanded: true,
+                                  value: fontPreset,
+                                  style: kSettingsBodyStyle.copyWith(
+                                    color: Colors.black87,
+                                  ),
+                                  decoration: InputDecoration(
+                                    filled: true,
+                                    fillColor: Colors.white.withOpacity(0.75),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: ChromeOutline.side,
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: ChromeOutline.side,
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: ChromeOutline.side.copyWith(
+                                        width: ChromeOutline.width + 0.3,
+                                      ),
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 10,
+                                    ),
+                                  ),
+                                  items: AppProvider.verseFontLabels.entries
+                                      .map(
+                                        (e) => DropdownMenuItem<String>(
+                                          value: e.key,
+                                          child: Text(
+                                            e.value,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: kSettingsBodyStyle,
+                                          ),
+                                        ),
+                                      )
+                                      .toList(),
+                                  onChanged: (value) {
+                                    if (value == null) return;
+                                    setModalState(() => fontPreset = value);
+                                    appProvider.setVerseFontPreset(value);
+                                  },
+                                ),
+                                const SizedBox(height: 8),
+                                const Text(
+                                  'Размер кнопок',
+                                  style: kSettingsHeadingStyle,
+                                ),
+                                SliderTheme(
+                                  data: sliderDecor(
+                                      SliderTheme.of(panelThemeContext)),
+                                  child: Slider(
+                                    padding: EdgeInsets.zero,
+                                    value: chromeBtnSize.clamp(
+                                      AppProvider.chromeButtonSizeMin,
+                                      AppProvider.chromeButtonSizeMax,
+                                    ),
+                                    min: AppProvider.chromeButtonSizeMin,
+                                    max: AppProvider.chromeButtonSizeMax,
+                                    divisions: 24,
+                                    label: chromeBtnSize.round().toString(),
+                                    onChanged: (value) {
+                                      setModalState(() => chromeBtnSize = value);
+                                      appProvider.changeChromeButtonSize(value);
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                const Text(
+                                  'Тема',
+                                  style: kSettingsHeadingStyle,
+                                ),
+                                const SizedBox(height: 4),
+                                SegmentedButton<ThemeMode>(
+                                  segments: <ButtonSegment<ThemeMode>>[
+                                    ButtonSegment<ThemeMode>(
+                                      value: ThemeMode.light,
+                                      label: const Text(
+                                        'Светлая',
+                                        style: TextStyle(fontSize: 14),
+                                      ),
+                                      icon: const Icon(
+                                        Icons.light_mode_outlined,
+                                        size: kSegIcon,
+                                      ),
+                                    ),
+                                    ButtonSegment<ThemeMode>(
+                                      value: ThemeMode.dark,
+                                      label: const Text(
+                                        'Тёмная',
+                                        style: TextStyle(fontSize: 14),
+                                      ),
+                                      icon: const Icon(
+                                        Icons.dark_mode_outlined,
+                                        size: kSegIcon,
+                                      ),
+                                    ),
+                                  ],
+                                  style: SegmentedButton.styleFrom(
+                                    textStyle: const TextStyle(fontSize: 14),
+                                  ).copyWith(
+                                    side: const WidgetStatePropertyAll(
+                                      ChromeOutline.side,
+                                    ),
+                                  ),
+                                  selected: <ThemeMode>{selectedTheme},
+                                  onSelectionChanged: (Set<ThemeMode> next) {
+                                    if (next.isEmpty) return;
+                                    final m = next.first;
+                                    setModalState(() => selectedTheme = m);
+                                    appProvider.setThemeMode(m);
+                                  },
+                                ),
                                 const SizedBox(height: 4),
                                 SwitchListTile(
                                   dense: true,
                                   visualDensity: VisualDensity.compact,
                                   contentPadding: EdgeInsets.zero,
-                                  title: const Text('Красные буквы'),
+                                  title: const Text(
+                                    'Красные буквы',
+                                    style: kSettingsBodyStyle,
+                                  ),
                                   value: redLettersEnabled,
                                   activeColor: Colors.blue,
                                   onChanged: (value) {
@@ -274,7 +353,10 @@ void showAppSettingsDialog(BuildContext context) {
                                   dense: true,
                                   visualDensity: VisualDensity.compact,
                                   contentPadding: EdgeInsets.zero,
-                                  title: const Text('Не выключать экран'),
+                                  title: const Text(
+                                    'Не выключать экран',
+                                    style: kSettingsBodyStyle,
+                                  ),
                                   value: keepScreenOn,
                                   activeColor: Colors.blue,
                                   onChanged: (value) async {
@@ -318,11 +400,14 @@ void showAppSettingsDialog(BuildContext context) {
               width: leftReveal,
               child: FadeTransition(
                 opacity: curved,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => Navigator.of(ctx).pop(),
-                  child: ColoredBox(
-                    color: Colors.black.withOpacity(0.28),
+                child: _PopRouteOnce(
+                  navigatorContext: ctx,
+                  builder: (c, popOnce) => GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: popOnce,
+                    child: ColoredBox(
+                      color: Colors.black.withOpacity(0.28),
+                    ),
                   ),
                 ),
               ),
@@ -366,19 +451,26 @@ void showAppSupportDialog(BuildContext context) {
               title: Row(
                 children: [
                   const Expanded(child: Text('Техподдержка')),
-                  Material(
-                    color: Colors.lightBlue.shade100,
-                    borderRadius: BorderRadius.circular(8),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(8),
-                      onTap: () => Navigator.pop(routeContext),
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.blue, width: 1.2),
+                  _PopRouteOnce(
+                    navigatorContext: routeContext,
+                    builder: (c, popOnce) => Material(
+                      color: _kChromePanelButtonBg,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: ChromeOutline.side,
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: popOnce,
+                        child: const Padding(
+                          padding: EdgeInsets.all(8),
+                          child: Icon(
+                            Icons.close,
+                            size: 20,
+                            color: _kChromePanelButtonFg,
+                          ),
                         ),
-                        child: const Icon(Icons.close, size: 20),
                       ),
                     ),
                   ),
@@ -415,8 +507,12 @@ void showAppSupportDialog(BuildContext context) {
               ),
               actions: [
                 Material(
-                  color: Colors.lightBlue.shade100,
-                  borderRadius: BorderRadius.circular(8),
+                  color: _kChromePanelButtonBg,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    side: ChromeOutline.side,
+                  ),
+                  clipBehavior: Clip.antiAlias,
                   child: InkWell(
                     borderRadius: BorderRadius.circular(8),
                     onTap: () async {
@@ -430,13 +526,13 @@ void showAppSupportDialog(BuildContext context) {
                         ),
                       );
                     },
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.blue, width: 1.2),
+                    child: const Padding(
+                      padding: EdgeInsets.all(8),
+                      child: Icon(
+                        Icons.copy_all,
+                        size: 20,
+                        color: _kChromePanelButtonFg,
                       ),
-                      child: const Icon(Icons.copy_all, size: 20),
                     ),
                   ),
                 ),
@@ -474,19 +570,26 @@ void showAppHelpDialog(BuildContext context) {
               title: Row(
                 children: [
                   const Expanded(child: Text('Помощь')),
-                  Material(
-                    color: Colors.lightBlue.shade100,
-                    borderRadius: BorderRadius.circular(8),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(8),
-                      onTap: () => Navigator.pop(routeContext),
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.blue, width: 1.2),
+                  _PopRouteOnce(
+                    navigatorContext: routeContext,
+                    builder: (c, popOnce) => Material(
+                      color: _kChromePanelButtonBg,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: ChromeOutline.side,
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: popOnce,
+                        child: const Padding(
+                          padding: EdgeInsets.all(8),
+                          child: Icon(
+                            Icons.close,
+                            size: 20,
+                            color: _kChromePanelButtonFg,
+                          ),
                         ),
-                        child: const Icon(Icons.close, size: 20),
                       ),
                     ),
                   ),
@@ -511,6 +614,12 @@ void showAppHelpDialog(BuildContext context) {
                         ),
                         const Text(
                           '• Флажками ВЗ и НЗ ограничьте область поиска.',
+                        ),
+                        const Text(
+                          '• «Целое слово»: ищутся только отдельные слова целиком. '
+                          'Если опция выключена, совпадением считается и вхождение '
+                          'внутри другого слова (например, по запросу «рад» '
+                          'найдётся и «радость»).',
                         ),
                         const Text(
                           '• Нажмите на результат, чтобы перейти к стиху.',
@@ -538,10 +647,62 @@ void showAppHelpDialog(BuildContext context) {
                         ),
                         const SizedBox(height: 6),
                         const Text(
-                          '• Долгий тап по файлу или папке — переименовать или удалить.',
+                          'Список файлов и папок:',
+                          style: _helpDialogTocStyle,
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          '• «Назад» слева (в папке) — выйти на уровень вверх.',
                         ),
                         const Text(
-                          '• Можно перейти на Библию и вставить текст в открытый документ.',
+                          '• «Новая папка» — создать каталог в текущем месте.',
+                        ),
+                        const Text(
+                          '• «Новый документ» — текстовый файл .txt; после создания откроется редактор.',
+                        ),
+                        const Text(
+                          '• «Обновить список» — перечитать список с диска.',
+                        ),
+                        const Text(
+                          '• Кнопка с тремя точками справа — общее меню приложения '
+                          '(настройки, помощь, выход и т.д.).',
+                        ),
+                        const Text(
+                          '• Короткое нажатие по файлу или папке — открыть.',
+                        ),
+                        const Text(
+                          '• Долгое нажатие — переименовать или удалить.',
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Редактор документа:',
+                          style: _helpDialogTocStyle,
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          '• «Закрыть» (стрелка) — сохранить изменения и вернуться к списку.',
+                        ),
+                        const Text(
+                          '• Оранжевое троеточие «…» справа вверху показывается, '
+                          'пока есть изменения, ещё не записанные на диск: после паузы в наборе '
+                          'текст подставляется автоматически; «…» пропадает, когда всё сохранено. '
+                          'Кнопка «Сохранить» записывает немедленно.',
+                        ),
+                        const Text(
+                          '• «Шаг назад» и «Шаг вперёд» — отмена и возврат последних правок в тексте '
+                          '(на компьютере часто то же действует Ctrl+Z / Ctrl+Y).',
+                        ),
+                        const Text(
+                          '• Кнопка «⋯» горизонтальных точек — действия с документом: '
+                          'поделиться, сохранить копию в файл (если платформа позволяет), '
+                          'скопировать весь текст в буфер, отправить тему и текст по почте, удалить файл.',
+                        ),
+                        const Text(
+                          '• Вертикальные три точки — то же общее меню, что в списке блокнота.',
+                        ),
+                        const Text(
+                          '• Поле на весь экран — обычный многострочный текст; можно переключиться '
+                          'на вкладку «Библия», скопировать стихи и вставить в документ.',
                         ),
                         const SizedBox(height: 12),
                         const Text(
