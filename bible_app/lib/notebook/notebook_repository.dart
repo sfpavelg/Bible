@@ -17,6 +17,9 @@ abstract class NotebookRepository {
 
   Future<void> delete(String relativePath);
 
+  /// Удалить папку со всем содержимым (файлы и вложенные каталоги).
+  Future<void> deleteRecursive(String relativePath);
+
   Future<void> rename(String fromRelative, String toRelative);
 
   Future<String?> nativeFilePath(String relativePath);

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:bible_app/providers/app_provider.dart';
 import 'package:bible_app/utils/app_exit.dart';
 import 'package:bible_app/widgets/app_chrome_dialogs.dart';
@@ -16,6 +18,7 @@ class AppChromeOverflowMenu extends StatelessWidget {
     this.iconColor = Colors.black,
     this.backgroundColor = _kMenuTileBg,
     this.menuItemIconColor = const Color(0xDD000000),
+    this.tileWidth,
   });
 
   /// Иконка и фон **квадратной кнопки** «⋯» (как у ChromeIconButton).
@@ -25,6 +28,9 @@ class AppChromeOverflowMenu extends StatelessWidget {
   /// Текст и иконки **внутри** выпадающего меню (не зависят от тёмной темы).
   final Color menuItemIconColor;
 
+  /// Ширина кнопки «⋯»; по умолчанию [AppProvider.chromeButtonSize].
+  final double? tileWidth;
+
   @override
   Widget build(BuildContext context) {
     // Только светлая тема для «⋯» и выпадающего списка — как панель «Настройки»,
@@ -33,14 +39,16 @@ class AppChromeOverflowMenu extends StatelessWidget {
       builder: (context, app, _) {
         final s = app.chromeButtonSize
             .clamp(AppProvider.chromeButtonSizeMin, AppProvider.chromeButtonSizeMax);
-        final iconSz = (s * 0.5).clamp(18.0, 30.0);
+        final w = tileWidth ?? s;
+        final iconSz = (math.min(w, s) * 0.5).clamp(18.0, 30.0);
+        final corner = (math.min(w, s) * 0.22).clamp(4.0, 12.0);
         return Theme(
           data: ThemeData.light(useMaterial3: true).copyWith(
             colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
             iconTheme: IconThemeData(color: menuItemIconColor),
-            popupMenuTheme: PopupMenuThemeData(
+            popupMenuTheme: const PopupMenuThemeData(
               surfaceTintColor: Colors.transparent,
-              textStyle: const TextStyle(
+              textStyle: TextStyle(
                 color: Color(0xDD000000),
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
@@ -50,12 +58,12 @@ class AppChromeOverflowMenu extends StatelessWidget {
           child: Material(
             color: backgroundColor,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(corner),
               side: ChromeOutline.side,
             ),
             clipBehavior: Clip.antiAlias,
             child: SizedBox(
-              width: s,
+              width: w,
               height: s,
               child: PopupMenuButton<String>(
                 padding: EdgeInsets.zero,

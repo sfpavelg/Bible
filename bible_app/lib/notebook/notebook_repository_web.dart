@@ -207,6 +207,30 @@ class NotebookRepositoryWeb implements NotebookRepository {
   }
 
   @override
+  Future<void> deleteRecursive(String relativePath) async {
+    _assertSafe(relativePath);
+    final norm = _join(_parts(relativePath));
+    final marker = '$norm/.folder_placeholder';
+    final prefix = norm.isEmpty ? '' : '$norm/';
+
+    if (_files.containsKey(norm) && norm.toLowerCase().endsWith('.txt')) {
+      _files.remove(norm);
+      await _persist();
+      return;
+    }
+
+    final removeKeys = _files.keys
+        .where(
+          (k) => k == marker || (prefix.isNotEmpty && k.startsWith(prefix)),
+        )
+        .toList();
+    for (final k in removeKeys) {
+      _files.remove(k);
+    }
+    await _persist();
+  }
+
+  @override
   Future<void> rename(String fromRelative, String toRelative) async {
     _assertSafe(fromRelative);
     _assertSafe(toRelative);

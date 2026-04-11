@@ -44,6 +44,62 @@ class _PopRouteOnceState extends State<_PopRouteOnce> {
   }
 }
 
+/// Деления на ползунках настроек — короткие вертикальные линии вместо круглых точек.
+class _SettingsSliderVerticalTickMarkShape extends SliderTickMarkShape {
+  const _SettingsSliderVerticalTickMarkShape();
+
+  static const double _lineWidth = 1.2;
+
+  @override
+  Size getPreferredSize({
+    required SliderThemeData sliderTheme,
+    required bool isEnabled,
+  }) {
+    final th = sliderTheme.trackHeight ?? 4.0;
+    final h = (th * 2.0).clamp(6.0, 10.0);
+    return Size(_lineWidth, h);
+  }
+
+  @override
+  void paint(
+    PaintingContext context,
+    Offset center, {
+    required RenderBox parentBox,
+    required SliderThemeData sliderTheme,
+    required Animation<double> enableAnimation,
+    required TextDirection textDirection,
+    required Offset thumbCenter,
+    required bool isEnabled,
+  }) {
+    assert(sliderTheme.disabledActiveTickMarkColor != null);
+    assert(sliderTheme.disabledInactiveTickMarkColor != null);
+    assert(sliderTheme.activeTickMarkColor != null);
+    assert(sliderTheme.inactiveTickMarkColor != null);
+    final double xOffset = center.dx - thumbCenter.dx;
+    final (Color? begin, Color? end) = switch (textDirection) {
+      TextDirection.ltr when xOffset > 0 => (
+          sliderTheme.disabledInactiveTickMarkColor,
+          sliderTheme.inactiveTickMarkColor,
+        ),
+      TextDirection.rtl when xOffset < 0 => (
+          sliderTheme.disabledInactiveTickMarkColor,
+          sliderTheme.inactiveTickMarkColor,
+        ),
+      TextDirection.ltr || TextDirection.rtl => (
+          sliderTheme.disabledActiveTickMarkColor,
+          sliderTheme.activeTickMarkColor,
+        ),
+    };
+    final paint = Paint()
+      ..color = ColorTween(begin: begin, end: end).evaluate(enableAnimation)!;
+    final sz = getPreferredSize(isEnabled: isEnabled, sliderTheme: sliderTheme);
+    context.canvas.drawRect(
+      Rect.fromCenter(center: center, width: sz.width, height: sz.height),
+      paint,
+    );
+  }
+}
+
 void showAppSettingsDialog(BuildContext context) {
   final appProvider = Provider.of<AppProvider>(context, listen: false);
 
@@ -88,7 +144,12 @@ void showAppSettingsDialog(BuildContext context) {
                   activeTrackColor: Colors.blue,
                   inactiveTrackColor: Colors.blue.shade100,
                   thumbColor: Colors.blue,
-                  overlayColor: Colors.blue.withOpacity(0.12),
+                  overlayColor: Colors.blue.withValues(alpha: 0.12),
+                  tickMarkShape: const _SettingsSliderVerticalTickMarkShape(),
+                  activeTickMarkColor: Colors.blue.shade900,
+                  inactiveTickMarkColor: Colors.blue.shade600,
+                  disabledActiveTickMarkColor: Colors.grey.shade600,
+                  disabledInactiveTickMarkColor: Colors.grey.shade500,
                 );
 
                 return Material(
@@ -605,43 +666,49 @@ void showAppHelpDialog(BuildContext context) {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'Как пользоваться поиском:',
+                          'Библия:',
                           style: _helpDialogTocStyle,
                         ),
                         const SizedBox(height: 6),
                         const Text(
-                          '• Введите одно или несколько слов и нажмите "Найти".',
-                        ),
-                        const Text(
-                          '• Флажками ВЗ и НЗ ограничьте область поиска.',
-                        ),
-                        const Text(
-                          '• «Целое слово»: ищутся только отдельные слова целиком. '
-                          'Если опция выключена, совпадением считается и вхождение '
-                          'внутри другого слова (например, по запросу «рад» '
-                          'найдётся и «радость»).',
-                        ),
-                        const Text(
-                          '• Нажмите на результат, чтобы перейти к стиху.',
-                        ),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'Навигация по Библии:',
+                          'Навигация',
                           style: _helpDialogTocStyle,
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 4),
                         const Text(
-                          '• Кнопки сверху переключают книгу и главу.',
-                        ),
-                        const Text('• Свайп влево/вправо листает главы.'),
-                        const Text(
-                          '• Долгое нажатие на стих включает выбор; коротким нажатием отметьте другие стихи.',
+                          '• Книгу и главу выбирают кнопки в верхней полосе.',
                         ),
                         const Text(
-                          '• Кнопка «Избранное» в шапке добавляет выбранные стихи в избранное и открывает список.',
+                          '• Листать главу за главой можно жестом влево или вправо.',
                         ),
                         const Text(
-                          '• В диалогах выбора книги и главы в заголовке есть кнопка закрытия (крестик).',
+                          '• Долгое касание стиха включает выделение; коротким касанием отмечают ещё стихи.',
+                        ),
+                        const Text(
+                          '• «Избранное» в шапке сохраняет выбранные стихи и открывает их перечень.',
+                        ),
+                        const Text(
+                          '• В окнах выбора книги или главы закрыть подсказку можно кнопкой в углу заголовка.',
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          'Поиск',
+                          style: _helpDialogTocStyle,
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          '• Введите одно слово или несколько и нажмите «Найти».',
+                        ),
+                        const Text(
+                          '• Флажки «ВЗ» и «НЗ» ограничивают поиск Ветхим или Новым Заветом.',
+                        ),
+                        const Text(
+                          '• При включённом «Целом слове» находятся только отдельные слова целиком; '
+                          'если выключить, подойдёт и вхождение внутри слова '
+                          '(например, по «рад» откроется и «радость»).',
+                        ),
+                        const Text(
+                          '• По строке из списка результатов открывается соответствующий стих.',
                         ),
                         const SizedBox(height: 12),
                         const Text(
@@ -655,32 +722,32 @@ void showAppHelpDialog(BuildContext context) {
                         ),
                         const SizedBox(height: 4),
                         const Text(
-                          '• «Назад» слева (в папке) — выйти на уровень вверх.',
+                          '• Стрелка «Назад» слева в папке возвращает к внешнему списку.',
                         ),
                         const Text(
-                          '• «Новая папка» — создать каталог в текущем месте.',
+                          '• «Новая папка» создаёт каталог там, где вы сейчас просматриваете список.',
                         ),
                         const Text(
-                          '• «Новый документ» — текстовый файл .txt; после создания откроется редактор.',
+                          '• «Новый документ» — новая текстовая заметка; после создания откроется редактор.',
                         ),
                         const Text(
-                          '• «Обновить список» — перечитать список с диска.',
+                          '• «Обновить список» — заново загрузить перечень с устройства.',
                         ),
                         const Text(
-                          '• Кнопка с тремя точками справа — общее меню приложения '
-                          '(настройки, помощь, выход и т.д.).',
+                          '• Три точки справа в шапке открывают общее меню приложения '
+                          '(настройки, помощь, выход и другое).',
                         ),
                         const Text(
-                          '• В настройках: тема, шрифт и интервалы в Библии, красные буквы, '
-                          'размер кнопок панели, опция «Не выключать экран».',
+                          '• В настройках можно сменить тему, шрифт и интервалы в Библии, красные буквы, '
+                          'величину кнопок панели и включить «Не выключать экран».',
                         ),
                         const Text(
-                          '• Короткое нажатие по файлу или папке — открыть.',
+                          '• Короткое касание открывает файл или папку.',
                         ),
                         const Text(
-                          '• Долгое нажатие по файлу или папке — меню справа: для файла — '
-                          'поделиться, сохранить копию в файл, переименовать, удалить; '
-                          'для папки — переименовать, удалить.',
+                          '• Долгое касание файла или папки открывает меню справа: для файла — '
+                          'поделиться, сохранить копию, переименовать или удалить; '
+                          'для папки — переименовать или удалить.',
                         ),
                         const SizedBox(height: 8),
                         const Text(
@@ -696,24 +763,22 @@ void showAppHelpDialog(BuildContext context) {
                           'кнопка «Сохранить» в шапке сохраняет немедленно.',
                         ),
                         const Text(
-                          '• «Шаг назад» и «Шаг вперёд» — отмена и возврат последних правок в тексте '
-                          '(на компьютере часто то же действует Ctrl+Z / Ctrl+Y).',
+                          '• «Шаг назад» и «Шаг вперёд» отменяют или возвращают последние правки в тексте.',
                         ),
                         const Text(
-                          '• В списке, когда вы внутри папки, внизу строка «Папка:» — цепочка вложенных '
-                          'папок от корня блокнота (можно выделить и скопировать).',
+                          '• В списке при входе в папку внизу показана строка «Папка:» — путь от корня блокнота; '
+                          'текст можно выделить и скопировать.',
                         ),
                         const Text(
-                          '• В редакторе внизу строка «Документ:» — полный путь к файлу от корня блокнота '
-                          'с вложенностью папок.',
+                          '• В редакторе строка «Документ:» внизу напоминает полный путь к заметке, '
+                          'со всеми вложенными папками.',
                         ),
                         const Text(
-                          '• Вертикальные три точки в шапке — общее меню приложения '
-                          '(настройки, помощь, выход и т.д.).',
+                          '• Вертикальные три точки в шапке редактора ведут в то же общее меню приложения.',
                         ),
                         const Text(
-                          '• Поле на весь экран — обычный многострочный текст; можно переключиться '
-                          'на вкладку «Библия», скопировать стихи и вставить в документ.',
+                          '• Текст набирается во всю ширину экрана; стихи из вкладки «Библия» можно '
+                          'скопировать и вставить сюда.',
                         ),
                         const SizedBox(height: 12),
                         const Text(
@@ -722,10 +787,10 @@ void showAppHelpDialog(BuildContext context) {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          '• Сначала четыре блока кварталов (1–4); внутри квартала — список дней этого '
-                          'сегмента, как раньше был весь год. Номера дней по-прежнему сквозные по году (1…$n). '
-                          'В шапке на экране кварталов — только выбор плана и меню; внутри квартала — прокрутка и '
-                          'кнопки «в начало / в конец» списка.',
+                          '• Сначала показаны четыре квартала года; внутри каждого — подряд все дни '
+                          'этой четверти. Номера дней сквозные, на весь год (1…$n). '
+                          'На экране кварталов в шапке — выбор плана и меню; внутри квартала — прокрутка списка '
+                          'и переход к началу или концу перечня.',
                         ),
                         const SizedBox(height: 8),
                         const Text(
@@ -734,10 +799,9 @@ void showAppHelpDialog(BuildContext context) {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'Чтение Ветхого Завета, Псалтири и Нового Завета параллельно, '
-                          'по заранее заданным порядку глав на каждый день. '
-                          'Дни пронумерованы по порядку (1…$n), без привязки к календарным датам. '
-                          'Отметки «прочитано» сохраняются на устройстве.',
+                          'Ветхий Завет, Псалтирь и Новый Завет читаются рядом, по заранее выстроенному '
+                          'порядку глав на каждый день. Нумерация дней идёт подряд (1…$n), без привязки к датам '
+                          'календаря. Отметки «прочитано» хранятся на вашем устройстве.',
                         ),
                         const SizedBox(height: 12),
                         const Text(
@@ -746,10 +810,9 @@ void showAppHelpDialog(BuildContext context) {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'Чтение Библии в порядке, близком к хронологии событий и '
-                          'связанным с ними текстам. '
-                          'Дни пронумерованы по порядку (1…$n), без привязки к календарю. '
-                          'Отметки «прочитано» хранятся отдельно от параллельного плана.',
+                          'Здесь порядок глав приближён к ходу событий и к сопутствующим текстам. '
+                          'Дни снова идут подряд (1…$n), вне календарных дат. '
+                          'Отметки «прочитано» не смешиваются с параллельным планом.',
                         ),
                       ],
                     ),

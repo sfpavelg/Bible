@@ -1,9 +1,12 @@
+import 'dart:math' as math;
+
 import 'package:bible_app/providers/app_provider.dart';
 import 'package:bible_app/widgets/chrome_outline.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-/// Квадратная кнопка хрома: размер из [AppProvider.chromeButtonSize].
+/// Кнопка хрома: высота из [AppProvider.chromeButtonSize], ширина по умолчанию равна высоте.
+/// [width] задаёт общую ширину ячейки (например, в панели Библии все кнопки одной [width]).
 class ChromeIconButton extends StatelessWidget {
   const ChromeIconButton({
     super.key,
@@ -13,6 +16,7 @@ class ChromeIconButton extends StatelessWidget {
     required this.foregroundColor,
     required this.backgroundColor,
     this.circular = false,
+    this.width,
   });
 
   final IconData icon;
@@ -21,18 +25,23 @@ class ChromeIconButton extends StatelessWidget {
   final Color foregroundColor;
   final Color backgroundColor;
 
-  /// Круг как у стрелок «пред / след».
+  /// Круг только если [width] не задана или совпадает с высотой; иначе — скруглённый прямоугольник.
   final bool circular;
+
+  /// Если null — квадрат [chromeButtonSize] × [chromeButtonSize].
+  final double? width;
 
   @override
   Widget build(BuildContext context) {
-    final size = context.watch<AppProvider>().chromeButtonSize;
-    final iconSize = (size * 0.5).clamp(18.0, 30.0);
-    final radius = circular ? size / 2 : 8.0;
-    final ShapeBorder shapeBorder = circular
+    final height = context.watch<AppProvider>().chromeButtonSize;
+    final w = width ?? height;
+    final iconSize = (math.min(w, height) * 0.5).clamp(18.0, 30.0);
+    final useCircle = circular && (w - height).abs() < 0.5;
+    final corner = (math.min(w, height) * 0.22).clamp(4.0, 12.0);
+    final ShapeBorder shapeBorder = useCircle
         ? const CircleBorder(side: ChromeOutline.side)
         : RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(radius),
+            borderRadius: BorderRadius.circular(corner),
             side: ChromeOutline.side,
           );
     final core = Material(
@@ -43,8 +52,8 @@ class ChromeIconButton extends StatelessWidget {
         onTap: onPressed,
         customBorder: shapeBorder,
         child: SizedBox(
-          width: size,
-          height: size,
+          width: w,
+          height: height,
           child: Icon(icon, color: foregroundColor, size: iconSize),
         ),
       ),
@@ -60,70 +69,7 @@ class ChromeIconButton extends StatelessWidget {
   }
 }
 
-/// Стрелка «пред / след» главы: та же высота, что у остальных кнопок; при узкой [width]
-/// форма — эллипс (сжатие по горизонтали вместо масштабирования всей полосы).
-class ChromeSliceNavButton extends StatelessWidget {
-  const ChromeSliceNavButton({
-    super.key,
-    required this.width,
-    required this.height,
-    required this.icon,
-    this.onPressed,
-    this.tooltip,
-    required this.foregroundColor,
-    required this.backgroundColor,
-  });
-
-  final double width;
-  final double height;
-  final IconData icon;
-  final VoidCallback? onPressed;
-  final String? tooltip;
-  final Color foregroundColor;
-  final Color backgroundColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final iconSize = (height * 0.5).clamp(16.0, 30.0);
-    final rx = width / 2;
-    final ry = height / 2;
-    final elliptical = BorderRadius.all(Radius.elliptical(rx, ry));
-    final core = Container(
-      decoration: BoxDecoration(
-        borderRadius: elliptical,
-        border: Border.all(
-          color: ChromeOutline.color,
-          width: ChromeOutline.width,
-        ),
-      ),
-      child: Material(
-        color: backgroundColor,
-        borderRadius: elliptical,
-        clipBehavior: Clip.antiAlias,
-        elevation: 0,
-        child: InkWell(
-          onTap: onPressed,
-          borderRadius: elliptical,
-          child: SizedBox(
-            width: width,
-            height: height,
-            child: Icon(icon, color: foregroundColor, size: iconSize),
-          ),
-        ),
-      ),
-    );
-    if (tooltip != null && tooltip!.isNotEmpty) {
-      return Tooltip(
-        message: tooltip!,
-        waitDuration: const Duration(milliseconds: 400),
-        child: core,
-      );
-    }
-    return core;
-  }
-}
-
-/// Текстовая кнопка навигации (книга / глава): тот же квадрат [chromeButtonSize], что и иконки.
+/// Текстовая кнопка навигации (книга / глава): размеры задаёт родитель (как у остальных ячеек панели).
 class ChromeNavTextButton extends StatelessWidget {
   const ChromeNavTextButton({
     super.key,
@@ -131,30 +77,40 @@ class ChromeNavTextButton extends StatelessWidget {
     required this.onPressed,
     required this.foregroundColor,
     required this.backgroundColor,
+    required this.width,
+    required this.height,
   });
 
   final String label;
   final VoidCallback onPressed;
   final Color foregroundColor;
   final Color backgroundColor;
+  final double width;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
-    final size = context.watch<AppProvider>().chromeButtonSize;
-    final fontSize = (size * 0.34).clamp(11.0, 16.0);
+    final fontSize = (height * 0.34).clamp(11.0, 16.0);
+    final corner = (math.min(width, height) * 0.22).clamp(4.0, 12.0);
+    final radius = BorderRadius.circular(corner);
+    final textStyle = TextStyle(
+      color: foregroundColor,
+      fontSize: fontSize,
+      fontWeight: FontWeight.bold,
+    );
     return Material(
       color: backgroundColor,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: radius,
         side: ChromeOutline.side,
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onPressed,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: radius,
         child: SizedBox(
-          width: size,
-          height: size,
+          width: width,
+          height: height,
           child: Center(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -163,11 +119,7 @@ class ChromeNavTextButton extends StatelessWidget {
                 child: Text(
                   label,
                   maxLines: 1,
-                  style: TextStyle(
-                    color: foregroundColor,
-                    fontSize: fontSize,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: textStyle,
                 ),
               ),
             ),

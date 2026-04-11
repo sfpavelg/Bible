@@ -129,6 +129,20 @@ class NotebookRepositoryIo implements NotebookRepository {
   }
 
   @override
+  Future<void> deleteRecursive(String relativePath) async {
+    final path = _abs(relativePath);
+    final f = File(path);
+    final d = Directory(path);
+    if (await f.exists()) {
+      await f.delete();
+      return;
+    }
+    if (await d.exists()) {
+      await d.delete(recursive: true);
+    }
+  }
+
+  @override
   Future<void> rename(String fromRelative, String toRelative) async {
     final from = _abs(fromRelative);
     final to = _abs(toRelative);
