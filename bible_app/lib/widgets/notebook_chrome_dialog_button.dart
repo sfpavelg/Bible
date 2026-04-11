@@ -8,11 +8,45 @@ enum NotebookDialogActionStyle {
   /// Светлая плашка как у кнопок хрома (Отмена).
   cancel,
 
-  /// Основное действие (Создать, Сохранить, Открыть почту).
+  /// Основное действие (Создать, Сохранить).
   confirm,
 
   /// Уничтожающее действие (Удалить).
   danger,
+}
+
+/// Крестик закрытия в заголовке диалогов блокнота (как в Библии / поиске).
+class NotebookChromeDialogCloseButton extends StatelessWidget {
+  const NotebookChromeDialogCloseButton({super.key, required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  static const _bg = Color(0xFFE1F5FE);
+  static const _fg = Colors.black;
+
+  @override
+  Widget build(BuildContext context) {
+    final chrome = context.watch<AppProvider>().chromeButtonSize;
+    final ic = (chrome * 0.5).clamp(18.0, 30.0);
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(8),
+      side: ChromeOutline.side,
+    );
+    return Material(
+      color: _bg,
+      shape: shape,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onPressed,
+        customBorder: shape,
+        child: SizedBox(
+          width: chrome,
+          height: chrome,
+          child: Icon(Icons.close, color: _fg, size: ic),
+        ),
+      ),
+    );
+  }
 }
 
 /// Текстовая кнопка в диалоге блокнота: обводка [ChromeOutline], высота из [AppProvider.chromeButtonSize].
@@ -22,11 +56,15 @@ class NotebookChromeDialogButton extends StatelessWidget {
     required this.label,
     required this.onPressed,
     required this.style,
+    this.expandWidth = true,
   });
 
   final String label;
   final VoidCallback? onPressed;
   final NotebookDialogActionStyle style;
+
+  /// Если false — ширина по содержимому (одна строка, без переноса слова).
+  final bool expandWidth;
 
   static const _secondaryBg = Color(0xFFE1F5FE);
 
@@ -47,37 +85,36 @@ class NotebookChromeDialogButton extends StatelessWidget {
         bg = Colors.red.shade700;
         fg = Colors.white;
     }
-    return SizedBox(
-      width: double.infinity,
-      child: Material(
-        color: bg,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-          side: ChromeOutline.side,
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(8),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              minWidth: chrome * 2.2,
-              minHeight: chrome,
+    final core = Material(
+      color: bg,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: ChromeOutline.side,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(8),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minWidth: chrome * 2.2,
+            minHeight: chrome,
+          ),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: (chrome * 0.45).clamp(12.0, 20.0),
+              vertical: (chrome * 0.12).clamp(4.0, 8.0),
             ),
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: (chrome * 0.45).clamp(12.0, 20.0),
-                vertical: (chrome * 0.12).clamp(4.0, 8.0),
-              ),
-              child: Center(
-                child: Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: fg,
-                    fontSize: fontSize,
-                    fontWeight: FontWeight.w600,
-                  ),
+            child: Center(
+              child: Text(
+                label,
+                maxLines: 1,
+                softWrap: false,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: fg,
+                  fontSize: fontSize,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -85,6 +122,10 @@ class NotebookChromeDialogButton extends StatelessWidget {
         ),
       ),
     );
+    if (expandWidth) {
+      return SizedBox(width: double.infinity, child: core);
+    }
+    return core;
   }
 }
 

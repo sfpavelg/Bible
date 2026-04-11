@@ -72,6 +72,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   void _onItemTapped(int index) {
+    // Скрыть клавиатуру при смене вкладки: поле блокнота остаётся в дереве (Offstage)
+    // и иначе удерживает фокус. Набор текста — только там, где пользователь тапнул поле
+    // (блокнот, поиск в Библии).
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
       _selectedIndex = index;
       _mountedTabs.add(index);

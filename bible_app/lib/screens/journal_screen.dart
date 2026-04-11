@@ -14,6 +14,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 enum _JournalPlanKind { parallel, chronological }
 
+/// Разбиение года на четыре квартала (сумма = 365).
+const List<int> kJournalPlanQuarterDayCounts = [91, 91, 91, 92];
+
+int journalQuarterStartDayIndex(int quarterIndex) {
+  assert(quarterIndex >= 0 && quarterIndex < 4);
+  var start = 0;
+  for (var i = 0; i < quarterIndex; i++) {
+    start += kJournalPlanQuarterDayCounts[i];
+  }
+  return start;
+}
+
 /// Вертикальная линия с квадратным бегунком: вверху список в начале, внизу — в конце.
 class _PlanScrollRail extends StatefulWidget {
   const _PlanScrollRail({
@@ -204,8 +216,10 @@ class _JournalScreenState extends State<JournalScreen>
     with WidgetsBindingObserver {
   static const _prefsKeyParallel = 'journal_parallel_done_days_v1';
   static const _prefsKeyChronological = 'journal_chronological_done_days_v1';
-  static const _prefsScrollParallel = 'journal_plan_scroll_parallel_v1';
-  static const _prefsScrollChrono = 'journal_plan_scroll_chrono_v1';
+  static const _prefsScrollParallelQuarters =
+      'journal_plan_scroll_parallel_quarters_v1';
+  static const _prefsScrollChronoQuarters =
+      'journal_plan_scroll_chrono_quarters_v1';
   static const _prefsPlanKind = 'journal_plan_kind_v1';
 
   _JournalPlanKind _plan = _JournalPlanKind.parallel;
@@ -215,9 +229,12 @@ class _JournalScreenState extends State<JournalScreen>
   final ScrollController _scrollController = ScrollController();
   Timer? _scrollSaveDebounce;
 
-  /// Кэш позиции списка (из prefs при загрузке и при прокрутке) — восстановление без гонки async.
-  double _scrollCacheParallel = 0;
-  double _scrollCacheChrono = 0;
+  /// Позиция прокрутки списка по каждому кварталу (0…3) для параллельного и хронологического плана.
+  List<double> _scrollQuarterParallel = List<double>.filled(4, 0.0);
+  List<double> _scrollQuarterChrono = List<double>.filled(4, 0.0);
+
+  /// null — экран с четырьмя кварталами; 0…3 — открыт соответствующий квартал.
+  int? _openQuarter;
 
   @override
   void initState() {
@@ -230,6 +247,10 @@ class _JournalScreenState extends State<JournalScreen>
   void dispose() {
     _scrollSaveDebounce?.cancel();
     WidgetsBinding.instance.removeObserver(this);
+    if (_scrollController.hasClients && _openQuarter != null) {
+      _applyScrollOffsetToQuarterCache(_scrollController.offset);
+      unawaited(_persistScrollQuarterListsToDisk());
+    }
     _scrollController.dispose();
     super.dispose();
   }
@@ -237,29 +258,38 @@ class _JournalScreenState extends State<JournalScreen>
   void _scheduleScrollPersist() {
     _scrollSaveDebounce?.cancel();
     _scrollSaveDebounce = Timer(const Duration(milliseconds: 350), () {
-      if (!mounted || !_scrollController.hasClients) return;
-      _cacheAndPersistScrollForPlan(_plan, _scrollController.offset);
+      if (!mounted || !_scrollController.hasClients || _openQuarter == null) {
+        return;
+      }
+      _applyScrollOffsetToQuarterCache(_scrollController.offset);
+      unawaited(_persistScrollQuarterListsToDisk());
     });
   }
 
-  void _updateScrollCacheOnly(double offset) {
+  void _applyScrollOffsetToQuarterCache(double offset) {
+    final q = _openQuarter;
+    if (q == null) return;
     if (_plan == _JournalPlanKind.parallel) {
-      _scrollCacheParallel = offset;
+      _scrollQuarterParallel[q] = offset;
     } else {
-      _scrollCacheChrono = offset;
+      _scrollQuarterChrono[q] = offset;
     }
   }
 
-  void _cacheAndPersistScrollForPlan(_JournalPlanKind plan, double offset) {
-    if (plan == _JournalPlanKind.parallel) {
-      _scrollCacheParallel = offset;
-      SharedPreferences.getInstance()
-          .then((p) => p.setDouble(_prefsScrollParallel, offset));
-    } else {
-      _scrollCacheChrono = offset;
-      SharedPreferences.getInstance()
-          .then((p) => p.setDouble(_prefsScrollChrono, offset));
-    }
+  void _updateScrollCacheOnly(double offset) {
+    _applyScrollOffsetToQuarterCache(offset);
+  }
+
+  Future<void> _persistScrollQuarterListsToDisk() async {
+    final p = await SharedPreferences.getInstance();
+    await p.setString(
+      _prefsScrollParallelQuarters,
+      jsonEncode(_scrollQuarterParallel),
+    );
+    await p.setString(
+      _prefsScrollChronoQuarters,
+      jsonEncode(_scrollQuarterChrono),
+    );
   }
 
   @override
@@ -273,15 +303,35 @@ class _JournalScreenState extends State<JournalScreen>
 
   /// Сохранить текущий offset без ожидания (переключение вкладок / фон).
   void _persistScrollSnapshot() {
-    if (!_scrollController.hasClients) return;
-    _cacheAndPersistScrollForPlan(_plan, _scrollController.offset);
+    if (!_scrollController.hasClients || _openQuarter == null) return;
+    _applyScrollOffsetToQuarterCache(_scrollController.offset);
+    unawaited(_persistScrollQuarterListsToDisk());
   }
 
-  /// Восстановить прокрутку из кэша после того, как ListView получит ненулевой maxScrollExtent.
-  void _restoreScrollForCurrentPlan() {
+  List<double> _decodeQuarterScrollList(String? raw) {
+    if (raw == null || raw.isEmpty) {
+      return List<double>.filled(4, 0.0);
+    }
+    try {
+      final list = jsonDecode(raw) as List<dynamic>;
+      final out = List<double>.filled(4, 0.0);
+      for (var i = 0; i < 4 && i < list.length; i++) {
+        final v = list[i];
+        if (v is num) out[i] = v.toDouble();
+      }
+      return out;
+    } catch (_) {
+      return List<double>.filled(4, 0.0);
+    }
+  }
+
+  /// Восстановить прокрутку списка дней квартала из кэша.
+  void _restoreListScrollForOpenQuarter() {
+    final q = _openQuarter;
+    if (q == null) return;
     final target = _plan == _JournalPlanKind.parallel
-        ? _scrollCacheParallel
-        : _scrollCacheChrono;
+        ? _scrollQuarterParallel[q]
+        : _scrollQuarterChrono[q];
 
     void tryJump(int attempt) {
       if (!mounted || attempt > 80) {
@@ -308,6 +358,31 @@ class _JournalScreenState extends State<JournalScreen>
     }
 
     tryJump(0);
+  }
+
+  void _openQuarterScreen(int quarterIndex) {
+    HapticFeedback.lightImpact();
+    setState(() => _openQuarter = quarterIndex);
+    _restoreListScrollForOpenQuarter();
+  }
+
+  void _closeQuarterScreen() {
+    HapticFeedback.lightImpact();
+    if (_scrollController.hasClients && _openQuarter != null) {
+      _applyScrollOffsetToQuarterCache(_scrollController.offset);
+      unawaited(_persistScrollQuarterListsToDisk());
+    }
+    setState(() => _openQuarter = null);
+  }
+
+  int _doneDaysInQuarter(int quarterIndex) {
+    final start = journalQuarterStartDayIndex(quarterIndex);
+    final len = kJournalPlanQuarterDayCounts[quarterIndex];
+    final end = start + len;
+    final done = _plan == _JournalPlanKind.parallel
+        ? _parallelDone
+        : _chronologicalDone;
+    return done.where((i) => i >= start && i < end).length;
   }
 
   void _jumpScrollToStart() {
@@ -400,19 +475,20 @@ class _JournalScreenState extends State<JournalScreen>
       p.getString(_prefsKeyChronological),
       kChronologicalReadingPlan365.length,
     );
-    final savedParallel = p.getDouble(_prefsScrollParallel) ?? 0.0;
-    final savedChrono = p.getDouble(_prefsScrollChrono) ?? 0.0;
+    final scrollP =
+        _decodeQuarterScrollList(p.getString(_prefsScrollParallelQuarters));
+    final scrollC =
+        _decodeQuarterScrollList(p.getString(_prefsScrollChronoQuarters));
     final savedPlanKind = _planKindFromPrefs(p.getString(_prefsPlanKind));
     if (!mounted) return;
     setState(() {
       _parallelDone = parallel;
       _chronologicalDone = chrono;
-      _scrollCacheParallel = savedParallel;
-      _scrollCacheChrono = savedChrono;
+      _scrollQuarterParallel = scrollP;
+      _scrollQuarterChrono = scrollC;
       _plan = savedPlanKind;
       _loading = false;
     });
-    _restoreScrollForCurrentPlan();
   }
 
   Future<void> _persistParallel() async {
@@ -479,14 +555,23 @@ class _JournalScreenState extends State<JournalScreen>
       ? _parallelDone.length
       : _chronologicalDone.length;
 
+  int _dayCountInOpenQuarter() {
+    final q = _openQuarter;
+    if (q == null) return 0;
+    return kJournalPlanQuarterDayCounts[q];
+  }
+
   void _selectPlanKind(_JournalPlanKind k) {
     if (k == _plan) return;
-    if (_scrollController.hasClients) {
-      _cacheAndPersistScrollForPlan(_plan, _scrollController.offset);
+    if (_scrollController.hasClients && _openQuarter != null) {
+      _applyScrollOffsetToQuarterCache(_scrollController.offset);
+      unawaited(_persistScrollQuarterListsToDisk());
     }
     setState(() => _plan = k);
     _persistPlanKind(k);
-    _restoreScrollForCurrentPlan();
+    if (_openQuarter != null) {
+      _restoreListScrollForOpenQuarter();
+    }
   }
 
   Future<void> _openPlanKindPicker(double chromeHeight) async {
@@ -624,6 +709,68 @@ class _JournalScreenState extends State<JournalScreen>
     );
   }
 
+  Widget _buildQuarterSelectionHub(
+    AppProvider app, {
+    required bool isDark,
+    required Color cardTodoBg,
+    required Color cardMutedFg,
+    required Color titleColor,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+      child: Column(
+        children: List.generate(4, (qi) {
+          final done = _doneDaysInQuarter(qi);
+          final total = kJournalPlanQuarterDayCounts[qi];
+          return Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              child: Material(
+                color: cardTodoBg,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: ChromeOutline.side,
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => _openQuarterScreen(qi),
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '${qi + 1} квартал',
+                          textAlign: TextAlign.center,
+                          style: app
+                              .bibleVerseTextStyle(
+                                color: titleColor,
+                                fontWeight: FontWeight.w800,
+                              )
+                              .copyWith(fontSize: app.fontSize * 1.12),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Прочитано $done из $total',
+                          textAlign: TextAlign.center,
+                          style: app.bibleVerseTextStyle(
+                            color: cardMutedFg,
+                            fontWeight: FontWeight.w600,
+                          ).copyWith(fontSize: app.fontSize * 0.88),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
   Widget _buildPlanListWithRail(
     AppProvider app,
     double chromeSize, {
@@ -658,8 +805,11 @@ class _JournalScreenState extends State<JournalScreen>
               controller: _scrollController,
               primary: false,
               padding: const EdgeInsets.fromLTRB(12, 8, 6, 12),
-              itemCount: _planTotal,
-              itemBuilder: (context, index) {
+              itemCount: _dayCountInOpenQuarter(),
+              itemBuilder: (context, localIndex) {
+                final q = _openQuarter!;
+                final index =
+                    journalQuarterStartDayIndex(q) + localIndex;
                 final lines = _linesForDay(index);
                 final done = _dayDone(index);
                 final n = index + 1;
@@ -756,13 +906,22 @@ class _JournalScreenState extends State<JournalScreen>
   Widget _readProgressFooter(AppProvider app, {required bool isDark}) {
     final bg = isDark ? JournalScreen._buttonBgDark : JournalScreen._buttonBgLight;
     final fg = isDark ? const Color(0xFF81D4FA) : Colors.blue.shade900;
+    final String line;
+    final q = _openQuarter;
+    if (q == null) {
+      line = 'Прочитано: $_planDoneCount из $_planTotal';
+    } else {
+      final dq = _doneDaysInQuarter(q);
+      final tq = kJournalPlanQuarterDayCounts[q];
+      line = 'Прочитано: $dq из $tq';
+    }
     return Material(
       color: bg,
       elevation: 0,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
         child: Text(
-          'Прочитано: $_planDoneCount из $_planTotal',
+          line,
           textAlign: TextAlign.center,
           style: app
               .bibleVerseTextStyle(color: fg, fontWeight: FontWeight.w700)
@@ -785,9 +944,17 @@ class _JournalScreenState extends State<JournalScreen>
     final trackHint = isDark
         ? Colors.blueGrey.shade700.withValues(alpha: 0.9)
         : Colors.blue.shade100.withValues(alpha: 0.65);
+    final hubTitleColor =
+        isDark ? const Color(0xFF81D4FA) : Colors.blue.shade900;
+    final hubMutedFg =
+        isDark ? Colors.grey.shade400 : Colors.grey.shade700;
+    final hubCardBg = isDark ? const Color(0xFF37474F) : Colors.white;
+
+    final inQuarter = _openQuarter != null;
 
     return Scaffold(
       appBar: AppBar(
+        toolbarHeight: (chromeSize + 10).clamp(kToolbarHeight, 78.0),
         backgroundColor: appBarBg,
         surfaceTintColor: appBarBg,
         foregroundColor: chromeFg,
@@ -797,27 +964,47 @@ class _JournalScreenState extends State<JournalScreen>
           borderRadius: BorderRadius.vertical(bottom: Radius.circular(14)),
         ),
         automaticallyImplyLeading: false,
+        leading: inQuarter
+            ? Align(
+                alignment: Alignment.center,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 4),
+                  child: ChromeIconButton(
+                    icon: Icons.arrow_back,
+                    tooltip: 'К кварталам',
+                    foregroundColor: chromeFg,
+                    backgroundColor: buttonBg,
+                    onPressed: _closeQuarterScreen,
+                  ),
+                ),
+              )
+            : null,
+        leadingWidth: inQuarter
+            ? (chromeSize + 10).clamp(48.0, 88.0)
+            : null,
         title: Row(
           children: [
-            ChromeIconButton(
-              icon: Icons.vertical_align_top,
-              tooltip: 'В начало списка',
-              foregroundColor: chromeFg,
-              backgroundColor: buttonBg,
-              onPressed: _jumpScrollToStart,
-            ),
-            const SizedBox(width: 8),
-            ChromeIconButton(
-              icon: Icons.vertical_align_bottom,
-              tooltip: 'В конец списка',
-              foregroundColor: chromeFg,
-              backgroundColor: buttonBg,
-              onPressed: _jumpScrollToEnd,
-            ),
-            const SizedBox(width: 8),
+            if (inQuarter) ...[
+              ChromeIconButton(
+                icon: Icons.vertical_align_top,
+                tooltip: 'В начало списка',
+                foregroundColor: chromeFg,
+                backgroundColor: buttonBg,
+                onPressed: _jumpScrollToStart,
+              ),
+              const SizedBox(width: 8),
+              ChromeIconButton(
+                icon: Icons.vertical_align_bottom,
+                tooltip: 'В конец списка',
+                foregroundColor: chromeFg,
+                backgroundColor: buttonBg,
+                onPressed: _jumpScrollToEnd,
+              ),
+              const SizedBox(width: 8),
+            ],
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.only(right: 8),
+                padding: EdgeInsets.only(right: inQuarter ? 8 : 0),
                 child: Material(
                   color: buttonBg,
                   shape: RoundedRectangleBorder(
@@ -832,36 +1019,20 @@ class _JournalScreenState extends State<JournalScreen>
                       height: chromeSize,
                       child: Center(
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
                           child: FittedBox(
                             fit: BoxFit.scaleDown,
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  'План Чтения',
-                                  maxLines: 1,
-                                  style: TextStyle(
-                                    color: chromeFg,
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: (chromeSize * 0.24)
-                                        .clamp(10.0, 13.0),
-                                  ),
-                                ),
-                                Text(
-                                  _plan == _JournalPlanKind.parallel
-                                      ? 'Параллельный'
-                                      : 'Хронология',
-                                  maxLines: 1,
-                                  style: TextStyle(
-                                    color: chromeFg
-                                        .withValues(alpha: 0.88),
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: (chromeSize * 0.20)
-                                        .clamp(8.5, 11.0),
-                                  ),
-                                ),
-                              ],
+                            child: Text(
+                              _plan == _JournalPlanKind.parallel
+                                  ? 'План чтения: параллельный'
+                                  : 'План чтения: хронология',
+                              maxLines: 1,
+                              style: TextStyle(
+                                color: chromeFg,
+                                fontWeight: FontWeight.w800,
+                                fontSize:
+                                    (chromeSize * 0.26).clamp(10.0, 14.0),
+                              ),
                             ),
                           ),
                         ),
@@ -886,13 +1057,21 @@ class _JournalScreenState extends State<JournalScreen>
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Expanded(
-                  child: _buildPlanListWithRail(
-                    app,
-                    chromeSize,
-                    isDark: isDark,
-                    thumbColor: buttonBg,
-                    trackHintColor: trackHint,
-                  ),
+                  child: inQuarter
+                      ? _buildPlanListWithRail(
+                          app,
+                          chromeSize,
+                          isDark: isDark,
+                          thumbColor: buttonBg,
+                          trackHintColor: trackHint,
+                        )
+                      : _buildQuarterSelectionHub(
+                          app,
+                          isDark: isDark,
+                          cardTodoBg: hubCardBg,
+                          cardMutedFg: hubMutedFg,
+                          titleColor: hubTitleColor,
+                        ),
                 ),
                 _readProgressFooter(app, isDark: isDark),
               ],
