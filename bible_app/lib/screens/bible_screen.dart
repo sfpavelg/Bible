@@ -786,11 +786,38 @@ class _BibleScreenState extends State<BibleScreen> {
 
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
+        final mq = MediaQuery.of(dialogContext);
+        final h = mq.size.height;
+        final w = mq.size.width;
+        // Высота диалога — по экрану устройства (без искусственного потолка).
+        final maxDialogH =
+            (h - mq.viewPadding.vertical - 12).clamp(120.0, h);
+        const titleAndChrome = 88.0;
+        final contentMaxH =
+            (maxDialogH - titleAndChrome).clamp(60.0, maxDialogH);
         return AlertDialog(
-          title: Text('Выберите главу ($selectedBook)'),
+          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          constraints: BoxConstraints(
+            maxWidth: (w - 16).clamp(280.0, 440.0),
+            maxHeight: maxDialogH,
+          ),
+          title: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Text('Выберите главу ($selectedBook)'),
+              ),
+              _BibleDialogCloseButton(
+                onPressed: () => Navigator.pop(dialogContext),
+              ),
+            ],
+          ),
           content: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 400, maxHeight: 300),
+            constraints: BoxConstraints(
+              maxWidth: (w - 48).clamp(260.0, 400.0),
+              maxHeight: contentMaxH,
+            ),
             child: SingleChildScrollView(
               child: Wrap(
                 spacing: 4,
@@ -809,7 +836,7 @@ class _BibleScreenState extends State<BibleScreen> {
                           selectedBook,
                           chapterNumber,
                         );
-                        Navigator.pop(context);
+                        Navigator.pop(dialogContext);
                       },
                       style: ElevatedButton.styleFrom(
                         padding: EdgeInsets.zero,
@@ -846,8 +873,28 @@ class _BibleScreenState extends State<BibleScreen> {
     showDialog(
       context: context,
       builder: (dialogContext) {
+        final mq = MediaQuery.of(dialogContext);
+        final h = mq.size.height;
+        final w = mq.size.width;
+        // Почти вся высота экрана: иначе 66 кнопок в Wrap не помещаются и включается скролл.
+        final maxH = (h - mq.viewPadding.vertical - 12).clamp(360.0, 2000.0);
         return AlertDialog(
-          title: const Text('Выберите книгу'),
+          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          constraints: BoxConstraints(
+            maxWidth: (w - 16).clamp(280.0, 560.0),
+            maxHeight: maxH,
+          ),
+          title: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const Expanded(
+                child: Text('Выберите книгу'),
+              ),
+              _BibleDialogCloseButton(
+                onPressed: () => Navigator.pop(dialogContext),
+              ),
+            ],
+          ),
           content: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -896,7 +943,7 @@ class _BibleScreenState extends State<BibleScreen> {
                     );
                   }).toList(),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
                 const Text(
                   'Новый Завет:',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
@@ -945,6 +992,40 @@ class _BibleScreenState extends State<BibleScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+/// Кнопка закрытия диалога выбора книги/главы (как в панели поиска).
+class _BibleDialogCloseButton extends StatelessWidget {
+  const _BibleDialogCloseButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  static const _bg = Color(0xFFE1F5FE);
+  static const _fg = Colors.black;
+
+  @override
+  Widget build(BuildContext context) {
+    final chrome = context.watch<AppProvider>().chromeButtonSize;
+    final ic = (chrome * 0.5).clamp(18.0, 30.0);
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(8),
+      side: ChromeOutline.side,
+    );
+    return Material(
+      color: _bg,
+      shape: shape,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onPressed,
+        customBorder: shape,
+        child: SizedBox(
+          width: chrome,
+          height: chrome,
+          child: Icon(Icons.close, color: _fg, size: ic),
+        ),
+      ),
     );
   }
 }

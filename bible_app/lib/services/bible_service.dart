@@ -319,12 +319,29 @@ class BibleService {
     return results;
   }
 
+  /// Число глав по фактически загруженным данным; иначе из [BibleBook.books].
   int getChapterCount(String book) {
+    final fromData = _maxChapterInLoadedBook(book);
+    if (fromData != null && fromData > 0) {
+      return fromData;
+    }
     final bookObj = BibleBook.books.firstWhere(
       (b) => b.name == book,
       orElse: () => BibleBook.books.first,
     );
     return bookObj.chapters;
+  }
+
+  int? _maxChapterInLoadedBook(String book) {
+    final Map<String, Map<String, dynamic>>? data =
+        _oldTestament[book] ?? _newTestament[book];
+    if (data == null || data.isEmpty) return null;
+    var maxC = 0;
+    for (final k in data.keys) {
+      final n = int.tryParse(k);
+      if (n != null && n > maxC) maxC = n;
+    }
+    return maxC;
   }
 
   String getBookAbbreviation(String book) {
