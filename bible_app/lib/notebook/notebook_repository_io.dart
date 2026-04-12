@@ -142,12 +142,24 @@ class NotebookRepositoryIo implements NotebookRepository {
     }
   }
 
+  bool _sameIoPath(String a, String b) {
+    if (Platform.isWindows) return a.toLowerCase() == b.toLowerCase();
+    return a == b;
+  }
+
   @override
   Future<void> rename(String fromRelative, String toRelative) async {
     final from = _abs(fromRelative);
     final to = _abs(toRelative);
     final fromFile = File(from);
     final fromDir = Directory(from);
+    if (!_sameIoPath(from, to)) {
+      final toFile = File(to);
+      final toDir = Directory(to);
+      if (await toFile.exists() || await toDir.exists()) {
+        throw StateError('Цель уже существует');
+      }
+    }
     if (await fromFile.exists()) {
       await fromFile.rename(to);
       return;

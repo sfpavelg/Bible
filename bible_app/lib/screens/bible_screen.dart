@@ -10,6 +10,7 @@ import 'package:bible_app/services/bible_service.dart';
 import 'package:bible_app/widgets/app_chrome_overflow_menu.dart';
 import 'package:bible_app/widgets/chrome_outline.dart';
 import 'package:bible_app/widgets/chrome_toolbar_button.dart';
+import 'package:bible_app/widgets/main_chrome_tab_bar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Сообщение над нижней навигацией приложения (диалоги поиска / избранного).
@@ -27,8 +28,7 @@ void _showTransientOverlayMessage(
     return;
   }
 
-  final bottomGap =
-      MediaQuery.viewPaddingOf(context).bottom + kBottomNavigationBarHeight;
+  final bottomGap = mainChromeTabBarTotalHeight(context);
 
   late final OverlayEntry entry;
   entry = OverlayEntry(
@@ -409,7 +409,7 @@ class _BibleScreenState extends State<BibleScreen> {
     final verseTextColor = isDark ? Colors.white : Colors.black;
 
     final toolbarH =
-        (appProvider.chromeButtonSize + 10).clamp(kToolbarHeight, 78.0);
+        AppProvider.toolbarHeightForChrome(appProvider.chromeButtonSize);
 
     return Scaffold(
       appBar: AppBar(
@@ -518,80 +518,101 @@ class _BibleScreenState extends State<BibleScreen> {
                   tileWidth: w,
                 );
 
+            /// Полная ширина кнопок [s] с отступами [2*g] и пятью зазорами [g] между ними.
             final fitsWide =
-                maxW.isFinite && maxW + 0.5 >= 7 * s + 8 * g;
+                maxW.isFinite && maxW + 0.5 >= 7 * s + 7 * g;
 
             if (fitsWide) {
-              final gap = (maxW - 7 * s) / 8;
               final row = SizedBox(
                 width: maxW,
                 height: s,
-                child: Row(
-                  children: [
-                    SizedBox(width: gap),
-                    prevBtn(s),
-                    SizedBox(width: gap),
-                    bookBtn(s),
-                    SizedBox(width: gap),
-                    chapterBtn(s),
-                    SizedBox(width: gap),
-                    nextBtn(s),
-                    SizedBox(width: gap),
-                    searchBtn(s),
-                    SizedBox(width: gap),
-                    favBtn(s),
-                    SizedBox(width: gap),
-                    menuBtn(s),
-                    SizedBox(width: gap),
-                  ],
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: g),
+                  child: Row(
+                    children: [
+                      prevBtn(s),
+                      SizedBox(width: g),
+                      bookBtn(s),
+                      SizedBox(width: g),
+                      chapterBtn(s),
+                      SizedBox(width: g),
+                      nextBtn(s),
+                      const Spacer(),
+                      searchBtn(s),
+                      SizedBox(width: g),
+                      favBtn(s),
+                      SizedBox(width: g),
+                      menuBtn(s),
+                    ],
+                  ),
                 ),
               );
               return Center(child: row);
             }
 
-            var cellW = maxW.isFinite ? (maxW - 8 * g) / 7 : s;
+            final innerW = maxW.isFinite ? maxW - 2 * g : double.infinity;
+            var cellW = maxW.isFinite ? (maxW - 7 * g) / 7 : s;
             if (!cellW.isFinite || cellW < 1) cellW = 1;
             if (cellW > s) cellW = s;
-            final rowW = 7 * cellW + 8 * g;
-            final row = SizedBox(
-              width: rowW,
-              height: s,
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: g),
-                child: Row(
+            final contentW = 7 * cellW + 5 * g;
+            final needsScale =
+                maxW.isFinite && contentW > innerW + 0.5;
+
+            Widget splitRow(double w) => Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        prevBtn(cellW),
+                        prevBtn(w),
                         SizedBox(width: g),
-                        bookBtn(cellW),
+                        bookBtn(w),
                         SizedBox(width: g),
-                        chapterBtn(cellW),
+                        chapterBtn(w),
                         SizedBox(width: g),
-                        nextBtn(cellW),
+                        nextBtn(w),
                       ],
                     ),
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        searchBtn(cellW),
+                        searchBtn(w),
                         SizedBox(width: g),
-                        favBtn(cellW),
+                        favBtn(w),
                         SizedBox(width: g),
-                        menuBtn(cellW),
+                        menuBtn(w),
                       ],
                     ),
                   ],
-                ),
-              ),
+                );
+
+            final narrowPadded = Padding(
+              padding: EdgeInsets.symmetric(horizontal: g),
+              child: splitRow(cellW),
             );
+
+            if (needsScale) {
+              return Center(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.center,
+                  child: SizedBox(
+                    width: contentW + 2 * g,
+                    height: s,
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: g),
+                      child: splitRow(cellW),
+                    ),
+                  ),
+                ),
+              );
+            }
+
             return Center(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.center,
-                child: row,
+              child: SizedBox(
+                width: maxW,
+                height: s,
+                child: narrowPadded,
               ),
             );
           },
@@ -846,7 +867,7 @@ class _BibleScreenState extends State<BibleScreen> {
     if (!mounted || !context.mounted) return;
     final appProvider = Provider.of<AppProvider>(context, listen: false);
     final toolbarH =
-        (appProvider.chromeButtonSize + 10).clamp(kToolbarHeight, 78.0);
+        AppProvider.toolbarHeightForChrome(appProvider.chromeButtonSize);
     final panelSerial = ++_favoritesPanelSerial;
 
     await showGeneralDialog<void>(

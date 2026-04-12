@@ -146,6 +146,55 @@ bool _notebookIsDuplicateNameError(Object e) {
   return m == 'Файл уже существует' || m == 'Папка уже существует';
 }
 
+bool _notebookRenameCollisionError(Object e) {
+  if (e is! StateError) return false;
+  final m = e.message;
+  return m == 'Цель уже существует' || m == 'Конфликт имён';
+}
+
+bool _notebookPosixPathsEqualInsensitive(String a, String b) {
+  final na = p.posix.normalize(a);
+  final nb = p.posix.normalize(b);
+  return na.toLowerCase() == nb.toLowerCase();
+}
+
+/// Имя `toRel` уже занято другим элементом (не тем же, что `fromRel`).
+Future<bool> _notebookRenameTargetTaken(
+  NotebookRepository repo,
+  NotebookListItem item,
+  String toRel,
+) async {
+  if (_notebookPosixPathsEqualInsensitive(toRel, item.relativePath)) {
+    return false;
+  }
+  final parent = p.posix.dirname(toRel);
+  final parentDir = parent == '.' ? '' : parent;
+  final base = p.posix.basename(toRel);
+  final items = await repo.listDirectory(parentDir);
+  if (item.isFolder) {
+    for (final e in items) {
+      if (!e.isFolder) continue;
+      if (e.name != base && e.name.toLowerCase() != base.toLowerCase()) {
+        continue;
+      }
+      if (!_notebookPosixPathsEqualInsensitive(e.relativePath, item.relativePath)) {
+        return true;
+      }
+    }
+    return false;
+  }
+  for (final e in items) {
+    if (e.isFolder) continue;
+    if (e.name != base && e.name.toLowerCase() != base.toLowerCase()) {
+      continue;
+    }
+    if (!_notebookPosixPathsEqualInsensitive(e.relativePath, item.relativePath)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 String _notebookMoveDialogPathCaption(String posixDir) {
   if (posixDir.isEmpty) return '(корень)';
   final norm = p.posix.normalize(posixDir);
@@ -622,11 +671,13 @@ class _NotebookScreenState extends State<NotebookScreen> {
     final delLabel = a.isFolder
         ? 'Удалить папку'
         : (delCount > 1 ? 'Удалить ($delCount)' : 'Удалить');
+    final canRename =
+        a.isFolder || _bulkSelectedFilePaths.length <= 1;
 
     return Material(
       elevation: 8,
       borderRadius: BorderRadius.circular(12),
-      color: Colors.white,
+      color: isDark ? _appBarBgDark : Colors.white,
       clipBehavior: Clip.antiAlias,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: halfScreen),
@@ -659,15 +710,22 @@ class _NotebookScreenState extends State<NotebookScreen> {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: isDark ? Colors.black87 : Colors.black87,
+                    color: isDark ? Colors.white : Colors.black87,
                     fontWeight: FontWeight.w600,
                     fontSize: 15,
                   ),
                 ),
               ),
-              const Divider(height: 1),
+              Divider(
+                height: 1,
+                color: isDark ? Colors.white24 : null,
+              ),
             ],
-            if (!a.isFolder) const Divider(height: 1),
+            if (!a.isFolder)
+              Divider(
+                height: 1,
+                color: isDark ? Colors.white24 : null,
+              ),
             if (!a.isFolder)
               _NotebookChromePanelActionButton(
                 icon: Icons.file_copy_outlined,
@@ -680,12 +738,21 @@ class _NotebookScreenState extends State<NotebookScreen> {
                 label: 'Переместить в…',
                 onTap: () => unawaited(_runPanelMoveTo()),
               ),
-            _NotebookChromePanelActionButton(
-              icon: Icons.drive_file_rename_outline,
-              label: 'Переименовать',
-              onTap: () => unawaited(_runPanelRename()),
+            IgnorePointer(
+              ignoring: !canRename,
+              child: Opacity(
+                opacity: canRename ? 1 : 0.4,
+                child: _NotebookChromePanelActionButton(
+                  icon: Icons.drive_file_rename_outline,
+                  label: 'Переименовать',
+                  onTap: () => unawaited(_runPanelRename()),
+                ),
+              ),
             ),
-            const Divider(height: 1),
+            Divider(
+              height: 1,
+              color: isDark ? Colors.white24 : null,
+            ),
             IgnorePointer(
               ignoring: !canBulkDelete,
               child: Opacity(
@@ -780,6 +847,23 @@ class _NotebookScreenState extends State<NotebookScreen> {
     final s = _sanitizeSegment(raw);
     if (s.isEmpty) return 'заметка.txt';
     return s.toLowerCase().endsWith('.txt') ? s : '$s.txt';
+  }
+
+  /// Имя без «.txt» для поля переименования (расширение всегда .txt).
+  String _notebookTxtStemForRename(String fileName) {
+    if (fileName.toLowerCase().endsWith('.txt') && fileName.length > 4) {
+      return fileName.substring(0, fileName.length - 4);
+    }
+    return fileName;
+  }
+
+  /// Итоговое имя файла из ввода только стебла (убирает лишние «.txt» в конце).
+  String _finalTxtNameFromRenameField(String fieldText) {
+    var base = _sanitizeSegment(fieldText);
+    while (base.toLowerCase().endsWith('.txt') && base.length > 4) {
+      base = base.substring(0, base.length - 4);
+    }
+    return _ensureTxtName(base);
   }
 
   Future<void> _createDocument() async {
@@ -990,67 +1074,146 @@ class _NotebookScreenState extends State<NotebookScreen> {
   Future<bool> _renameItem(NotebookListItem item) async {
     final repo = _repo;
     if (repo == null) return false;
-    final ctrl = TextEditingController(text: item.name);
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Expanded(
-              child: Text(
-                item.isFolder ? 'Переименовать папку' : 'Переименовать файл',
+    final ctrl = TextEditingController(
+      text: item.isFolder ? item.name : _notebookTxtStemForRename(item.name),
+    );
+    try {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Text(
+                  item.isFolder ? 'Переименовать папку' : 'Переименовать файл',
+                ),
               ),
-            ),
-            NotebookChromeDialogCloseButton(
-              onPressed: () => Navigator.pop(ctx, false),
+              NotebookChromeDialogCloseButton(
+                onPressed: () => Navigator.pop(ctx, false),
+              ),
+            ],
+          ),
+          content: item.isFolder
+              ? TextField(
+                  controller: ctrl,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                  ),
+                  autofocus: true,
+                )
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: ctrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Имя файла',
+                          hintText: 'например: размышления',
+                          border: OutlineInputBorder(),
+                        ),
+                        autofocus: true,
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8, bottom: 14),
+                      child: Text(
+                        '.txt',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Theme.of(ctx).colorScheme.onSurface,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+          actions: [
+            SizedBox(
+              width: double.infinity,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: NotebookChromeDialogButton(
+                  expandWidth: false,
+                  label: 'Сохранить',
+                  onPressed: () => Navigator.pop(ctx, true),
+                  style: NotebookDialogActionStyle.confirm,
+                ),
+              ),
             ),
           ],
         ),
-        content: TextField(
-          controller: ctrl,
-          decoration: const InputDecoration(border: OutlineInputBorder()),
-          autofocus: true,
-        ),
-        actions: [
-          SizedBox(
-            width: double.infinity,
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: NotebookChromeDialogButton(
-                expandWidth: false,
-                label: 'Сохранить',
-                onPressed: () => Navigator.pop(ctx, true),
-                style: NotebookDialogActionStyle.confirm,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return false;
-    final newSeg = _sanitizeSegment(ctrl.text);
-    if (newSeg.isEmpty) return false;
-    final newName = item.isFolder ? newSeg : _ensureTxtName(newSeg);
-    final parent = p.posix.dirname(item.relativePath);
-    final toRel =
-        parent == '.' ? newName : p.posix.join(parent, newName);
-    try {
-      await repo.rename(item.relativePath, toRel);
-      if (mounted) {
-        setState(() {
-          if (_editingPath == item.relativePath) _editingPath = toRel;
-        });
+      );
+      if (ok != true) return false;
+      late final String newName;
+      if (item.isFolder) {
+        final newSeg = _sanitizeSegment(ctrl.text);
+        if (newSeg.isEmpty) return false;
+        newName = newSeg;
+      } else {
+        newName = _finalTxtNameFromRenameField(ctrl.text);
       }
-      await _refresh();
-      return true;
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Не удалось переименовать: $e')),
-        );
+      final parent = p.posix.dirname(item.relativePath);
+      final toRel =
+          parent == '.' ? newName : p.posix.join(parent, newName);
+      if (await _notebookRenameTargetTaken(repo, item, toRel)) {
+        if (mounted) {
+          if (item.isFolder) {
+            _showNotebookWarningBanner(
+              context,
+              title: 'Папка с таким именем уже есть',
+              subtitle:
+                  'Выберите другое имя или удалите существующую папку в этой директории.',
+            );
+          } else {
+            _showNotebookWarningBanner(
+              context,
+              title: 'Файл с таким именем уже есть',
+              subtitle:
+                  'Выберите другое имя или удалите существующий файл в этой папке.',
+            );
+          }
+        }
+        return false;
       }
-      return false;
+      try {
+        await repo.rename(item.relativePath, toRel);
+        if (mounted) {
+          setState(() {
+            if (_editingPath == item.relativePath) _editingPath = toRel;
+          });
+        }
+        await _refresh();
+        return true;
+      } catch (e) {
+        if (mounted) {
+          if (_notebookRenameCollisionError(e)) {
+            if (item.isFolder) {
+              _showNotebookWarningBanner(
+                context,
+                title: 'Папка с таким именем уже есть',
+                subtitle:
+                    'Выберите другое имя или удалите существующую папку в этой директории.',
+              );
+            } else {
+              _showNotebookWarningBanner(
+                context,
+                title: 'Файл с таким именем уже есть',
+                subtitle:
+                    'Выберите другое имя или удалите существующий файл в этой папке.',
+              );
+            }
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Не удалось переименовать: $e')),
+            );
+          }
+        }
+        return false;
+      }
+    } finally {
+      ctrl.dispose();
     }
   }
 
@@ -1177,7 +1340,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
 
   PreferredSizeWidget _buildListAppBar() {
     final chrome = context.watch<AppProvider>().chromeButtonSize;
-    final toolbarH = (chrome + 10).clamp(kToolbarHeight, 78.0);
+    final toolbarH = AppProvider.toolbarHeightForChrome(chrome);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final appBarBg = isDark ? _appBarBgDark : _appBarBgLight;
     final buttonBg = isDark ? _buttonBgDark : _buttonBgLight;
@@ -1226,13 +1389,6 @@ class _NotebookScreenState extends State<NotebookScreen> {
               chromeFg: chromeFg,
               buttonBg: buttonBg,
             ),
-            _chromeIconButton(
-              icon: Icons.refresh,
-              tooltip: 'Обновить список',
-              onPressed: _refresh,
-              chromeFg: chromeFg,
-              buttonBg: buttonBg,
-            ),
           ],
         ),
       ),
@@ -1247,7 +1403,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
 
   PreferredSizeWidget _buildEditorAppBar() {
     final chrome = context.watch<AppProvider>().chromeButtonSize;
-    final toolbarH = (chrome + 10).clamp(kToolbarHeight, 78.0);
+    final toolbarH = AppProvider.toolbarHeightForChrome(chrome);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final appBarBg = isDark ? _appBarBgDark : _appBarBgLight;
     final buttonBg = isDark ? _buttonBgDark : _buttonBgLight;
@@ -1411,6 +1567,17 @@ class _NotebookScreenState extends State<NotebookScreen> {
                                               : null;
 
                                           return ListTile(
+                                            dense: true,
+                                            minVerticalPadding: 0,
+                                            visualDensity: const VisualDensity(
+                                              horizontal: 0,
+                                              vertical: -4,
+                                            ),
+                                            contentPadding:
+                                                const EdgeInsets.symmetric(
+                                              horizontal: 16,
+                                              vertical: 1,
+                                            ),
                                             tileColor: tileBg,
                                             minLeadingWidth: bulk
                                                 ? listIconSize * 1.15
@@ -1457,6 +1624,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
                                               style: TextStyle(
                                                 fontSize: uiListFontSize,
                                                 fontWeight: FontWeight.w500,
+                                                height: 1.0,
                                               ),
                                             ),
                                             onTap: () {
@@ -1493,8 +1661,18 @@ class _NotebookScreenState extends State<NotebookScreen> {
                                         child: SafeArea(
                                           left: false,
                                           bottom: false,
-                                          child:
-                                              _buildNotebookFileActionsPanel(),
+                                          child: TapRegion(
+                                            onTapOutside: (_) {
+                                              // В режиме выбора нескольких .txt тап по строкам
+                                              // списка считается «снаружи» панели — не закрывать,
+                                              // иначе сброс выбора и открытие файла.
+                                              if (!_fileBulkSelectionUi) {
+                                                _closeFileActionsPanel();
+                                              }
+                                            },
+                                            child:
+                                                _buildNotebookFileActionsPanel(),
+                                          ),
                                         ),
                                       ),
                                   ],
@@ -1522,9 +1700,6 @@ class _NotebookChromePanelActionButton extends StatelessWidget {
   final VoidCallback onTap;
   final EdgeInsetsGeometry padding;
 
-  static const _rowFg = Color(0xDD000000);
-  static const _rowBg = Color(0xFFE1F5FE);
-
   @override
   Widget build(BuildContext context) {
     final chrome = context.watch<AppProvider>().chromeButtonSize;
@@ -1536,12 +1711,14 @@ class _NotebookChromePanelActionButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(8),
       side: ChromeOutline.side,
     );
+    final rowBg = NotebookChromeUi.secondaryButtonBackground(context);
+    final rowFg = NotebookChromeUi.secondaryButtonForeground(context);
     return Padding(
       padding: padding,
       child: SizedBox(
         width: double.infinity,
         child: Material(
-          color: _rowBg,
+          color: rowBg,
           shape: shape,
           clipBehavior: Clip.antiAlias,
           child: InkWell(
@@ -1553,7 +1730,7 @@ class _NotebookChromePanelActionButton extends StatelessWidget {
                 padding: EdgeInsets.symmetric(horizontal: hPad),
                 child: Row(
                   children: [
-                    Icon(icon, color: _rowFg, size: iconSz),
+                    Icon(icon, color: rowFg, size: iconSz),
                     SizedBox(width: gap),
                     Expanded(
                       child: Text(
@@ -1561,7 +1738,7 @@ class _NotebookChromePanelActionButton extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: _rowFg,
+                          color: rowFg,
                           fontWeight: FontWeight.w600,
                           fontSize: fontSize,
                           height: 1.0,
@@ -1715,7 +1892,11 @@ class _NotebookMoveFileDialogState extends State<_NotebookMoveFileDialog> {
             ),
             const SizedBox(height: 10),
             _pathStrip(context),
-            const Divider(height: 20),
+            Divider(
+              height: 10,
+              thickness: 1,
+              color: isDark ? Colors.white24 : null,
+            ),
             Expanded(
               child: _loading
                   ? const Center(child: CircularProgressIndicator())
@@ -1723,12 +1904,31 @@ class _NotebookMoveFileDialogState extends State<_NotebookMoveFileDialog> {
                       children: [
                         if (_browseDir.isNotEmpty)
                           ListTile(
+                            dense: true,
+                            minVerticalPadding: 0,
+                            visualDensity: const VisualDensity(
+                              horizontal: 0,
+                              vertical: -4,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 1,
+                            ),
                             minLeadingWidth: rowIcon + 12,
-                            leading:
-                                Icon(Icons.arrow_upward, size: rowIcon),
+                            leading: Icon(
+                              Icons.arrow_upward,
+                              size: rowIcon,
+                              color:
+                                  isDark ? Colors.white : Colors.black87,
+                            ),
                             title: Text(
                               'Вверх',
-                              style: TextStyle(fontSize: uiFs),
+                              style: TextStyle(
+                                fontSize: uiFs,
+                                height: 1.0,
+                                color:
+                                    isDark ? Colors.white : Colors.black87,
+                              ),
                             ),
                             onTap: _goUp,
                           ),
@@ -1736,7 +1936,7 @@ class _NotebookMoveFileDialogState extends State<_NotebookMoveFileDialog> {
                             _folders.isEmpty &&
                             _browseDir.isNotEmpty)
                           Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
                             child: Text(
                               'Нет вложенных папок.',
                               style: TextStyle(
@@ -1747,14 +1947,31 @@ class _NotebookMoveFileDialogState extends State<_NotebookMoveFileDialog> {
                           ),
                         for (final f in _folders)
                           ListTile(
+                            dense: true,
+                            minVerticalPadding: 0,
+                            visualDensity: const VisualDensity(
+                              horizontal: 0,
+                              vertical: -4,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 1,
+                            ),
                             minLeadingWidth: rowIcon + 12,
                             leading: Icon(
                               Icons.folder_outlined,
                               size: rowIcon,
+                              color:
+                                  isDark ? Colors.white : Colors.black87,
                             ),
                             title: Text(
                               f.name,
-                              style: TextStyle(fontSize: uiFs),
+                              style: TextStyle(
+                                fontSize: uiFs,
+                                height: 1.0,
+                                color:
+                                    isDark ? Colors.white : Colors.black87,
+                              ),
                             ),
                             onTap: () {
                               setState(() => _browseDir = f.relativePath);

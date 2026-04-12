@@ -58,7 +58,17 @@ class MyApp extends StatelessWidget {
               colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
               useMaterial3: true,
             ),
-            darkTheme: ThemeData.dark(),
+            darkTheme: ThemeData(
+              useMaterial3: true,
+              colorScheme: ColorScheme.fromSeed(
+                seedColor: Colors.blue,
+                brightness: Brightness.dark,
+              ).copyWith(
+                // Чуть светлее «чистого» чёрного, чтобы экран не выглядел плоским.
+                surface: const Color(0xFF2E323A),
+                surfaceContainerLowest: const Color(0xFF262A32),
+              ),
+            ),
             themeMode: appProvider.themeMode,
             home: appProvider.isLoading
                 ? const BootstrapSplash()

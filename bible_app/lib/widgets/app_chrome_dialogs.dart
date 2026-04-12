@@ -3,13 +3,10 @@ import 'dart:math' as math;
 import 'package:bible_app/journal/parallel_reading_plan_data.dart';
 import 'package:bible_app/providers/app_provider.dart';
 import 'package:bible_app/widgets/chrome_outline.dart';
+import 'package:bible_app/widgets/notebook_chrome_dialog_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-
-/// Фон и иконки квадратных кнопок в шапках диалогов — как «книга / глава» на Библии.
-const Color _kChromePanelButtonBg = Color(0xFFE1F5FE);
-const Color _kChromePanelButtonFg = Colors.black;
 
 /// Снимает один маршрут с навигатора не более одного раза (двойной клик не уводит
 /// со стека экран под диалогом — чёрный экран).
@@ -124,97 +121,92 @@ void showAppSettingsDialog(BuildContext context) {
 
       return StatefulBuilder(
         builder: (modalContext, setModalState) {
-          return Theme(
-            data: ThemeData.light(useMaterial3: true).copyWith(
-              colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-            ),
-            child: Builder(
-              builder: (panelThemeContext) {
-                const kSettingsTitleStyle =
-                    TextStyle(fontSize: 20, fontWeight: FontWeight.w600);
-                const kSettingsHeadingStyle =
-                    TextStyle(fontWeight: FontWeight.bold, fontSize: 14);
-                const kSettingsBodyStyle = TextStyle(fontSize: 15);
-                const kCloseBtn = 40.0;
-                const kCloseIcon = 20.0;
-                const kSegIcon = 18.0;
+          return Consumer<AppProvider>(
+            builder: (consumerContext, _, __) {
+              final theme = Theme.of(consumerContext);
+              final scheme = theme.colorScheme;
+              final isDark = theme.brightness == Brightness.dark;
 
-                SliderThemeData sliderDecor(SliderThemeData base) =>
-                    base.copyWith(
-                  activeTrackColor: Colors.blue,
-                  inactiveTrackColor: Colors.blue.shade100,
-                  thumbColor: Colors.blue,
-                  overlayColor: Colors.blue.withValues(alpha: 0.12),
-                  tickMarkShape: const _SettingsSliderVerticalTickMarkShape(),
-                  activeTickMarkColor: Colors.blue.shade900,
-                  inactiveTickMarkColor: Colors.blue.shade600,
-                  disabledActiveTickMarkColor: Colors.grey.shade600,
-                  disabledInactiveTickMarkColor: Colors.grey.shade500,
-                );
+              final kSettingsTitleStyle = TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: scheme.onSurface,
+              );
+              final kSettingsHeadingStyle = TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                color: scheme.onSurface,
+              );
+              final kSettingsBodyStyle = TextStyle(
+                fontSize: 15,
+                color: scheme.onSurface,
+              );
+              const kSegIcon = 18.0;
 
-                return Material(
-                  color: Colors.lightBlue[50],
-                  elevation: 10,
-                  shadowColor: Colors.black45,
-                  clipBehavior: Clip.antiAlias,
-                  child: SafeArea(
-                    left: false,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
-                          child: Row(
-                            children: [
-                              const Expanded(
-                                child: Text(
-                                  'Настройки',
-                                  style: kSettingsTitleStyle,
-                                ),
+              SliderThemeData sliderDecor(SliderThemeData base) =>
+                  base.copyWith(
+                activeTrackColor: scheme.primary,
+                inactiveTrackColor: isDark
+                    ? scheme.surfaceContainerHighest
+                    : Colors.blue.shade100,
+                thumbColor: scheme.primary,
+                overlayColor: scheme.primary.withValues(alpha: 0.12),
+                tickMarkShape: const _SettingsSliderVerticalTickMarkShape(),
+                activeTickMarkColor:
+                    isDark ? scheme.primary : Colors.blue.shade900,
+                inactiveTickMarkColor: isDark
+                    ? scheme.onSurface.withValues(alpha: 0.38)
+                    : Colors.blue.shade600,
+                disabledActiveTickMarkColor: Colors.grey.shade600,
+                disabledInactiveTickMarkColor: Colors.grey.shade500,
+              );
+
+              return Material(
+                color: scheme.surface,
+                elevation: 10,
+                shadowColor: Colors.black45,
+                clipBehavior: Clip.antiAlias,
+                child: SafeArea(
+                  left: false,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Настройки',
+                                style: kSettingsTitleStyle,
                               ),
-                              _PopRouteOnce(
-                                navigatorContext: modalContext,
-                                builder: (c, popOnce) => Material(
-                                  color: _kChromePanelButtonBg,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                    side: ChromeOutline.side,
-                                  ),
-                                  clipBehavior: Clip.antiAlias,
-                                  child: InkWell(
-                                    borderRadius: BorderRadius.circular(8),
-                                    onTap: popOnce,
-                                    child: const SizedBox(
-                                      width: kCloseBtn,
-                                      height: kCloseBtn,
-                                      child: Icon(
-                                        Icons.close,
-                                        size: kCloseIcon,
-                                        color: _kChromePanelButtonFg,
-                                      ),
-                                    ),
-                                  ),
-                                ),
+                            ),
+                            _PopRouteOnce(
+                              navigatorContext: modalContext,
+                              builder: (c, popOnce) =>
+                                  NotebookChromeDialogCloseButton(
+                                onPressed: popOnce,
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                        const Divider(height: 1),
-                        Expanded(
-                          child: SingleChildScrollView(
-                            padding: const EdgeInsets.fromLTRB(10, 6, 10, 14),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                const Text(
-                                  'Размер шрифта',
-                                  style: kSettingsHeadingStyle,
-                                ),
-                                const SizedBox(height: 4),
-                                SliderTheme(
-                                  data: sliderDecor(
-                                      SliderTheme.of(panelThemeContext)),
-                                  child: Slider(
+                      ),
+                      Divider(height: 1, color: scheme.outlineVariant),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(10, 6, 10, 14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                'Размер шрифта',
+                                style: kSettingsHeadingStyle,
+                              ),
+                              const SizedBox(height: 4),
+                              SliderTheme(
+                                data: sliderDecor(
+                                    SliderTheme.of(consumerContext)),
+                                child: Slider(
                                     padding: EdgeInsets.zero,
                                     value: fontSize.clamp(12.0, 28.0),
                                     min: 12.0,
@@ -228,13 +220,13 @@ void showAppSettingsDialog(BuildContext context) {
                                   ),
                                 ),
                                 const SizedBox(height: 5),
-                                const Text(
-                                  'Межстрочный интервал',
-                                  style: kSettingsHeadingStyle,
-                                ),
+                              Text(
+                                'Межстрочный интервал',
+                                style: kSettingsHeadingStyle,
+                              ),
                                 SliderTheme(
                                   data: sliderDecor(
-                                      SliderTheme.of(panelThemeContext)),
+                                      SliderTheme.of(consumerContext)),
                                   child: Slider(
                                     padding: EdgeInsets.zero,
                                     value: lineHeight.clamp(1.0, 2.2),
@@ -250,13 +242,13 @@ void showAppSettingsDialog(BuildContext context) {
                                   ),
                                 ),
                                 const SizedBox(height: 5),
-                                const Text(
-                                  'Интервал между стихами',
-                                  style: kSettingsHeadingStyle,
-                                ),
+                              Text(
+                                'Интервал между стихами',
+                                style: kSettingsHeadingStyle,
+                              ),
                                 SliderTheme(
                                   data: sliderDecor(
-                                      SliderTheme.of(panelThemeContext)),
+                                      SliderTheme.of(consumerContext)),
                                   child: Slider(
                                     padding: EdgeInsets.zero,
                                     value: verseSpacing.clamp(0.0, 28.0),
@@ -271,39 +263,38 @@ void showAppSettingsDialog(BuildContext context) {
                                   ),
                                 ),
                                 const SizedBox(height: 8),
-                                const Text(
-                                  'Шрифт текста',
-                                  style: kSettingsHeadingStyle,
-                                ),
+                              Text(
+                                'Шрифт текста',
+                                style: kSettingsHeadingStyle,
+                              ),
                                 const SizedBox(height: 4),
-                                DropdownButtonFormField<String>(
-                                  isExpanded: true,
-                                  value: fontPreset,
-                                  style: kSettingsBodyStyle.copyWith(
-                                    color: Colors.black87,
+                              DropdownButtonFormField<String>(
+                                isExpanded: true,
+                                value: fontPreset,
+                                style: kSettingsBodyStyle,
+                                decoration: InputDecoration(
+                                  filled: true,
+                                  fillColor: scheme.surfaceContainerHighest
+                                      .withValues(alpha: 0.75),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    borderSide: ChromeOutline.side,
                                   ),
-                                  decoration: InputDecoration(
-                                    filled: true,
-                                    fillColor: Colors.white.withOpacity(0.75),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                      borderSide: ChromeOutline.side,
-                                    ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                      borderSide: ChromeOutline.side,
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                      borderSide: ChromeOutline.side.copyWith(
-                                        width: ChromeOutline.width + 0.3,
-                                      ),
-                                    ),
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 10,
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    borderSide: ChromeOutline.side,
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    borderSide: ChromeOutline.side.copyWith(
+                                      width: ChromeOutline.width + 0.3,
                                     ),
                                   ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 10,
+                                  ),
+                                ),
                                   items: AppProvider.verseFontLabels.entries
                                       .map(
                                         (e) => DropdownMenuItem<String>(
@@ -322,14 +313,14 @@ void showAppSettingsDialog(BuildContext context) {
                                     appProvider.setVerseFontPreset(value);
                                   },
                                 ),
-                                const SizedBox(height: 8),
-                                const Text(
-                                  'Размер кнопок',
-                                  style: kSettingsHeadingStyle,
-                                ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Размер кнопок',
+                                style: kSettingsHeadingStyle,
+                              ),
                                 SliderTheme(
                                   data: sliderDecor(
-                                      SliderTheme.of(panelThemeContext)),
+                                      SliderTheme.of(consumerContext)),
                                   child: Slider(
                                     padding: EdgeInsets.zero,
                                     value: chromeBtnSize.clamp(
@@ -346,11 +337,11 @@ void showAppSettingsDialog(BuildContext context) {
                                     },
                                   ),
                                 ),
-                                const SizedBox(height: 8),
-                                const Text(
-                                  'Тема',
-                                  style: kSettingsHeadingStyle,
-                                ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Тема',
+                                style: kSettingsHeadingStyle,
+                              ),
                                 const SizedBox(height: 4),
                                 SegmentedButton<ThemeMode>(
                                   segments: <ButtonSegment<ThemeMode>>[
@@ -397,12 +388,12 @@ void showAppSettingsDialog(BuildContext context) {
                                   dense: true,
                                   visualDensity: VisualDensity.compact,
                                   contentPadding: EdgeInsets.zero,
-                                  title: const Text(
+                                  title: Text(
                                     'Красные буквы',
                                     style: kSettingsBodyStyle,
                                   ),
                                   value: redLettersEnabled,
-                                  activeColor: Colors.blue,
+                                  activeThumbColor: scheme.primary,
                                   onChanged: (value) {
                                     setModalState(
                                       () => redLettersEnabled = value,
@@ -414,12 +405,12 @@ void showAppSettingsDialog(BuildContext context) {
                                   dense: true,
                                   visualDensity: VisualDensity.compact,
                                   contentPadding: EdgeInsets.zero,
-                                  title: const Text(
+                                  title: Text(
                                     'Не выключать экран',
                                     style: kSettingsBodyStyle,
                                   ),
                                   value: keepScreenOn,
-                                  activeColor: Colors.blue,
+                                  activeThumbColor: scheme.primary,
                                   onChanged: (value) async {
                                     setModalState(() => keepScreenOn = value);
                                     await appProvider.setKeepScreenOn(value);
@@ -433,8 +424,7 @@ void showAppSettingsDialog(BuildContext context) {
                     ),
                   ),
                 );
-              },
-            ),
+            },
           );
         },
       );
@@ -500,107 +490,93 @@ void showAppSupportDialog(BuildContext context) {
   showDialog<void>(
     context: context,
     builder: (routeContext) {
-      return Theme(
-        data: ThemeData.light(useMaterial3: true).copyWith(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+      final theme = Theme.of(routeContext);
+      final scheme = theme.colorScheme;
+      final body = theme.textTheme.bodyMedium!
+          .copyWith(color: scheme.onSurface, height: 1.35);
+      return AlertDialog(
+        backgroundColor: scheme.surface,
+        titlePadding: const EdgeInsets.fromLTRB(20, 14, 12, 8),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Техподдержка',
+                style: theme.textTheme.titleLarge
+                    ?.copyWith(color: scheme.onSurface),
+              ),
+            ),
+            _PopRouteOnce(
+              navigatorContext: routeContext,
+              builder: (c, popOnce) =>
+                  NotebookChromeDialogCloseButton(onPressed: popOnce),
+            ),
+          ],
         ),
-        child: Builder(
-          builder: (_) {
-            return AlertDialog(
-              backgroundColor: Colors.lightBlue[50],
-              titlePadding: const EdgeInsets.fromLTRB(20, 14, 12, 8),
-              title: Row(
-                children: [
-                  const Expanded(child: Text('Техподдержка')),
-                  _PopRouteOnce(
-                    navigatorContext: routeContext,
-                    builder: (c, popOnce) => Material(
-                      color: _kChromePanelButtonBg,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        side: ChromeOutline.side,
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(8),
-                        onTap: popOnce,
-                        child: const Padding(
-                          padding: EdgeInsets.all(8),
-                          child: Icon(
-                            Icons.close,
-                            size: 20,
-                            color: _kChromePanelButtonFg,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              content: const SizedBox(
-                width: 360,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Автор проекта:'),
-                    SizedBox(height: 4),
-                    Text(
-                      'Софеин Павел Геннадьевич',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    SizedBox(height: 12),
-                    Text('Контактная почта:'),
-                    SizedBox(height: 4),
-                    Text(
-                      'sfpavelg@gmail.com',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    SizedBox(height: 12),
-                    Text('Версия проекта:'),
-                    SizedBox(height: 4),
-                    Text(
-                      'ver_28_03_2026',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                  ],
+        content: DefaultTextStyle(
+          style: body,
+          child: SizedBox(
+            width: 360,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Автор проекта:'),
+                const SizedBox(height: 4),
+                Text(
+                  'Софеин Павел Геннадьевич',
+                  style: body.copyWith(fontWeight: FontWeight.w600),
                 ),
-              ),
-              actions: [
-                Material(
-                  color: _kChromePanelButtonBg,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    side: ChromeOutline.side,
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(8),
-                    onTap: () async {
-                      await Clipboard.setData(
-                        const ClipboardData(text: supportPayload),
-                      );
-                      if (!routeContext.mounted) return;
-                      ScaffoldMessenger.of(routeContext).showSnackBar(
-                        const SnackBar(
-                          content: Text('Данные техподдержки скопированы'),
-                        ),
-                      );
-                    },
-                    child: const Padding(
-                      padding: EdgeInsets.all(8),
-                      child: Icon(
-                        Icons.copy_all,
-                        size: 20,
-                        color: _kChromePanelButtonFg,
-                      ),
-                    ),
-                  ),
+                const SizedBox(height: 12),
+                const Text('Контактная почта:'),
+                const SizedBox(height: 4),
+                Text(
+                  'sfpavelg@gmail.com',
+                  style: body.copyWith(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 12),
+                const Text('Версия проекта:'),
+                const SizedBox(height: 4),
+                Text(
+                  'ver_28_03_2026',
+                  style: body.copyWith(fontWeight: FontWeight.w600),
                 ),
               ],
-            );
-          },
+            ),
+          ),
         ),
+        actions: [
+          Material(
+            color: NotebookChromeUi.secondaryButtonBackground(routeContext),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+              side: ChromeOutline.side,
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () async {
+                await Clipboard.setData(
+                  const ClipboardData(text: supportPayload),
+                );
+                if (!routeContext.mounted) return;
+                ScaffoldMessenger.of(routeContext).showSnackBar(
+                  const SnackBar(
+                    content: Text('Данные техподдержки скопированы'),
+                  ),
+                );
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Icon(
+                  Icons.copy_all,
+                  size: 20,
+                  color: NotebookChromeUi.secondaryButtonForeground(routeContext),
+                ),
+              ),
+            ),
+          ),
+        ],
       );
     },
   );
@@ -616,174 +592,162 @@ void showAppHelpDialog(BuildContext context) {
   showDialog<void>(
     context: context,
     builder: (routeContext) {
-      return Theme(
-        data: ThemeData.light(useMaterial3: true).copyWith(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-        ),
-        child: Builder(
-          builder: (dialogContext) {
-            final n = kParallelReadingPlan365.length;
-            final helpMaxH =
-                MediaQuery.sizeOf(dialogContext).height * 0.65;
-            return AlertDialog(
-              backgroundColor: Colors.lightBlue[50],
-              titlePadding: const EdgeInsets.fromLTRB(20, 14, 12, 8),
-              title: Row(
-                children: [
-                  const Expanded(child: Text('Помощь')),
-                  _PopRouteOnce(
-                    navigatorContext: routeContext,
-                    builder: (c, popOnce) => Material(
-                      color: _kChromePanelButtonBg,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        side: ChromeOutline.side,
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(8),
-                        onTap: popOnce,
-                        child: const Padding(
-                          padding: EdgeInsets.all(8),
-                          child: Icon(
-                            Icons.close,
-                            size: 20,
-                            color: _kChromePanelButtonFg,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+      final theme = Theme.of(routeContext);
+      final scheme = theme.colorScheme;
+      final tocStyle =
+          _helpDialogTocStyle.copyWith(color: scheme.onSurface);
+      final bodyStyle = theme.textTheme.bodyMedium!.copyWith(
+        color: scheme.onSurface,
+        height: 1.35,
+      );
+      final n = kParallelReadingPlan365.length;
+      final helpMaxH = MediaQuery.sizeOf(routeContext).height * 0.65;
+      return AlertDialog(
+        backgroundColor: scheme.surface,
+        titlePadding: const EdgeInsets.fromLTRB(20, 14, 12, 8),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Помощь',
+                style: theme.textTheme.titleLarge
+                    ?.copyWith(color: scheme.onSurface),
               ),
-              content: SizedBox(
-                width: 360,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxHeight: helpMaxH),
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Библия:',
-                          style: _helpDialogTocStyle,
-                        ),
+            ),
+            _PopRouteOnce(
+              navigatorContext: routeContext,
+              builder: (c, popOnce) =>
+                  NotebookChromeDialogCloseButton(onPressed: popOnce),
+            ),
+          ],
+        ),
+        content: DefaultTextStyle(
+          style: bodyStyle,
+          child: SizedBox(
+            width: 360,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: helpMaxH),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Библия:',
+                      style: tocStyle,
+                    ),
                         const SizedBox(height: 6),
-                        const Text(
+                        Text(
                           'Навигация',
-                          style: _helpDialogTocStyle,
+                          style: tocStyle,
                         ),
                         const SizedBox(height: 4),
-                        const Text(
+                        Text(
                           '• Книгу и главу выбирают кнопки в верхней полосе.',
                         ),
-                        const Text(
+                        Text(
                           '• Листать главу за главой можно жестом влево или вправо.',
                         ),
-                        const Text(
+                        Text(
                           '• Долгое касание стиха включает выделение; коротким касанием отмечают ещё стихи.',
                         ),
-                        const Text(
+                        Text(
                           '• «Избранное» в шапке сохраняет выбранные стихи и открывает их перечень.',
                         ),
-                        const Text(
+                        Text(
                           '• В окнах выбора книги или главы закрыть подсказку можно кнопкой в углу заголовка.',
                         ),
                         const SizedBox(height: 10),
-                        const Text(
+                        Text(
                           'Поиск',
-                          style: _helpDialogTocStyle,
+                          style: tocStyle,
                         ),
                         const SizedBox(height: 4),
-                        const Text(
+                        Text(
                           '• Введите одно слово или несколько и нажмите «Найти».',
                         ),
-                        const Text(
+                        Text(
                           '• Флажки «ВЗ» и «НЗ» ограничивают поиск Ветхим или Новым Заветом.',
                         ),
-                        const Text(
+                        Text(
                           '• При включённом «Целом слове» находятся только отдельные слова целиком; '
                           'если выключить, подойдёт и вхождение внутри слова '
                           '(например, по «рад» откроется и «радость»).',
                         ),
-                        const Text(
+                        Text(
                           '• По строке из списка результатов открывается соответствующий стих.',
                         ),
                         const SizedBox(height: 12),
-                        const Text(
+                        Text(
                           'Блокнот:',
-                          style: _helpDialogTocStyle,
+                          style: tocStyle,
                         ),
                         const SizedBox(height: 6),
-                        const Text(
+                        Text(
                           'Список файлов и папок:',
-                          style: _helpDialogTocStyle,
+                          style: tocStyle,
                         ),
                         const SizedBox(height: 4),
-                        const Text(
+                        Text(
                           '• Стрелка «Назад» слева в папке возвращает к внешнему списку.',
                         ),
-                        const Text(
+                        Text(
                           '• «Новая папка» создаёт каталог там, где вы сейчас просматриваете список.',
                         ),
-                        const Text(
+                        Text(
                           '• «Новый документ» — новая текстовая заметка; после создания откроется редактор.',
                         ),
-                        const Text(
-                          '• «Обновить список» — заново загрузить перечень с устройства.',
-                        ),
-                        const Text(
+                        Text(
                           '• Три точки справа в шапке открывают общее меню приложения '
                           '(настройки, помощь, выход и другое).',
                         ),
-                        const Text(
+                        Text(
                           '• В настройках можно сменить тему, шрифт и интервалы в Библии, красные буквы, '
                           'величину кнопок панели и включить «Не выключать экран».',
                         ),
-                        const Text(
+                        Text(
                           '• Короткое касание открывает файл или папку.',
                         ),
-                        const Text(
+                        Text(
                           '• Долгое касание файла или папки открывает меню справа: для файла — '
                           'поделиться, сохранить копию, переименовать или удалить; '
                           'для папки — переименовать или удалить.',
                         ),
                         const SizedBox(height: 8),
-                        const Text(
+                        Text(
                           'Редактор документа:',
-                          style: _helpDialogTocStyle,
+                          style: tocStyle,
                         ),
                         const SizedBox(height: 4),
-                        const Text(
+                        Text(
                           '• «Закрыть» (стрелка) — сохранить изменения и вернуться к списку.',
                         ),
-                        const Text(
+                        Text(
                           '• После паузы в наборе текст автоматически записывается на диск; '
                           'кнопка «Сохранить» в шапке сохраняет немедленно.',
                         ),
-                        const Text(
+                        Text(
                           '• «Шаг назад» и «Шаг вперёд» отменяют или возвращают последние правки в тексте.',
                         ),
-                        const Text(
+                        Text(
                           '• В списке при входе в папку внизу показана строка «Папка:» — путь от корня блокнота; '
                           'текст можно выделить и скопировать.',
                         ),
-                        const Text(
+                        Text(
                           '• В редакторе строка «Документ:» внизу напоминает полный путь к заметке, '
                           'со всеми вложенными папками.',
                         ),
-                        const Text(
+                        Text(
                           '• Вертикальные три точки в шапке редактора ведут в то же общее меню приложения.',
                         ),
-                        const Text(
+                        Text(
                           '• Текст набирается во всю ширину экрана; стихи из вкладки «Библия» можно '
                           'скопировать и вставить сюда.',
                         ),
                         const SizedBox(height: 12),
-                        const Text(
+                        Text(
                           'План чтения:',
-                          style: _helpDialogTocStyle,
+                          style: tocStyle,
                         ),
                         const SizedBox(height: 6),
                         Text(
@@ -793,9 +757,9 @@ void showAppHelpDialog(BuildContext context) {
                           'и переход к началу или концу перечня.',
                         ),
                         const SizedBox(height: 8),
-                        const Text(
+                        Text(
                           'Параллельный план',
-                          style: _helpDialogTocStyle,
+                          style: tocStyle,
                         ),
                         const SizedBox(height: 6),
                         Text(
@@ -804,9 +768,9 @@ void showAppHelpDialog(BuildContext context) {
                           'календаря. Отметки «прочитано» хранятся на вашем устройстве.',
                         ),
                         const SizedBox(height: 12),
-                        const Text(
+                        Text(
                           'Хронологический план',
-                          style: _helpDialogTocStyle,
+                          style: tocStyle,
                         ),
                         const SizedBox(height: 6),
                         Text(
@@ -819,10 +783,8 @@ void showAppHelpDialog(BuildContext context) {
                   ),
                 ),
               ),
-            );
-          },
-        ),
-      );
+            ),
+          );
     },
   );
 }

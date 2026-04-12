@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:bible_app/notebook/notebook_repository.dart';
+import 'package:bible_app/providers/app_provider.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 /// Редактор заметки без собственного [Scaffold] — внутри вкладки «Блокнот».
 class NotebookEditorPanel extends StatefulWidget {
@@ -149,6 +151,10 @@ class NotebookEditorPanelState extends State<NotebookEditorPanel> {
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
+    final app = context.watch<AppProvider>();
+    final fs = app.fontSize;
+    final lh = app.lineHeight;
+    final hintColor = Theme.of(context).hintColor;
     return Padding(
       padding: const EdgeInsets.all(12),
       child: TextField(
@@ -159,11 +165,16 @@ class NotebookEditorPanelState extends State<NotebookEditorPanel> {
         expands: true,
         textAlignVertical: TextAlignVertical.top,
         keyboardType: TextInputType.multiline,
-        style: const TextStyle(fontSize: 16, height: 1.35),
-        decoration: const InputDecoration(
+        style: TextStyle(fontSize: fs, height: lh),
+        decoration: InputDecoration(
           border: InputBorder.none,
           hintText:
               'Пишите здесь. Переключайтесь на Библию и вставляйте текст.',
+          hintStyle: TextStyle(
+            fontSize: fs,
+            height: lh,
+            color: hintColor,
+          ),
         ),
       ),
     );

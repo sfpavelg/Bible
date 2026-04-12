@@ -954,7 +954,7 @@ class _JournalScreenState extends State<JournalScreen>
 
     return Scaffold(
       appBar: AppBar(
-        toolbarHeight: (chromeSize + 10).clamp(kToolbarHeight, 78.0),
+        toolbarHeight: AppProvider.toolbarHeightForChrome(chromeSize),
         backgroundColor: appBarBg,
         surfaceTintColor: appBarBg,
         foregroundColor: chromeFg,

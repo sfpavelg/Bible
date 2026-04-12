@@ -16,6 +16,12 @@ class AppProvider with ChangeNotifier {
   static const double chromeButtonSizeMin = 32.0;
   static const double chromeButtonSizeMax = 56.0;
 
+  /// Высота AppBar с кнопками хрома: [chrome] + поля по вертикали.
+  /// Нижняя граница ниже [kToolbarHeight] Material, чтобы шапка сжималась вместе
+  /// с уменьшением «Размер кнопок», как нижняя полоса вкладок.
+  static double toolbarHeightForChrome(double chrome) =>
+      (chrome + 10).clamp(chromeButtonSizeMin + 8, chromeButtonSizeMax + 22);
+
   final BibleService _bibleService = BibleService();
   final DatabaseHelper _databaseHelper = DatabaseHelper();
 

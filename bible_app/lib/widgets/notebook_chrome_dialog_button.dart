@@ -3,6 +3,22 @@ import 'package:bible_app/widgets/chrome_outline.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+/// Фон и цвет текста/иконки «вторичных» кнопок хрома — как в разделе «Библия».
+abstract final class NotebookChromeUi {
+  static const Color _buttonBgLight = Color(0xFFE1F5FE);
+  static const Color _buttonBgDark = Color(0xFF455A64);
+
+  static Color secondaryButtonBackground(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark
+          ? _buttonBgDark
+          : _buttonBgLight;
+
+  static Color secondaryButtonForeground(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark
+          ? Colors.white
+          : Colors.black87;
+}
+
 /// Стиль действия в диалогах вкладки «Блокнот».
 enum NotebookDialogActionStyle {
   /// Светлая плашка как у кнопок хрома (Отмена).
@@ -21,9 +37,6 @@ class NotebookChromeDialogCloseButton extends StatelessWidget {
 
   final VoidCallback onPressed;
 
-  static const _bg = Color(0xFFE1F5FE);
-  static const _fg = Colors.black;
-
   @override
   Widget build(BuildContext context) {
     final chrome = context.watch<AppProvider>().chromeButtonSize;
@@ -32,8 +45,10 @@ class NotebookChromeDialogCloseButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(8),
       side: ChromeOutline.side,
     );
+    final bg = NotebookChromeUi.secondaryButtonBackground(context);
+    final fg = NotebookChromeUi.secondaryButtonForeground(context);
     return Material(
-      color: _bg,
+      color: bg,
       shape: shape,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -42,7 +57,7 @@ class NotebookChromeDialogCloseButton extends StatelessWidget {
         child: SizedBox(
           width: chrome,
           height: chrome,
-          child: Icon(Icons.close, color: _fg, size: ic),
+          child: Icon(Icons.close, color: fg, size: ic),
         ),
       ),
     );
@@ -66,8 +81,6 @@ class NotebookChromeDialogButton extends StatelessWidget {
   /// Если false — ширина по содержимому (одна строка, без переноса слова).
   final bool expandWidth;
 
-  static const _secondaryBg = Color(0xFFE1F5FE);
-
   @override
   Widget build(BuildContext context) {
     final chrome = context.watch<AppProvider>().chromeButtonSize;
@@ -76,8 +89,8 @@ class NotebookChromeDialogButton extends StatelessWidget {
     final Color fg;
     switch (style) {
       case NotebookDialogActionStyle.cancel:
-        bg = _secondaryBg;
-        fg = Colors.black87;
+        bg = NotebookChromeUi.secondaryButtonBackground(context);
+        fg = NotebookChromeUi.secondaryButtonForeground(context);
       case NotebookDialogActionStyle.confirm:
         bg = Colors.blue;
         fg = Colors.white;

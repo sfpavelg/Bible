@@ -4,6 +4,7 @@ import 'package:bible_app/screens/bible_screen.dart';
 import 'package:bible_app/screens/notebook_screen.dart';
 import 'package:bible_app/screens/journal_screen.dart';
 import 'package:bible_app/providers/app_provider.dart';
+import 'package:bible_app/widgets/main_chrome_tab_bar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class MainScreen extends StatefulWidget {
@@ -18,21 +19,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
   /// Вкладки монтируем лениво: не тянуть path_provider/ФС блокнота на старте (слабые API 23).
   final Set<int> _mountedTabs = {0};
-
-  static const List<BottomNavigationBarItem> _navItems = [
-    BottomNavigationBarItem(
-      icon: Icon(Icons.menu_book),
-      label: 'Библия',
-    ),
-    BottomNavigationBarItem(
-      icon: Icon(Icons.note),
-      label: 'Блокнот',
-    ),
-    BottomNavigationBarItem(
-      icon: Icon(Icons.event_note),
-      label: 'План',
-    ),
-  ];
 
   @override
   void initState() {
@@ -60,9 +46,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   Future<void> _loadSelectedTab() async {
     final prefs = await SharedPreferences.getInstance();
     final lastIndex = prefs.getInt('last_tab_index');
-    if (lastIndex != null &&
-        lastIndex >= 0 &&
-        lastIndex < _navItems.length) {
+    if (lastIndex != null && lastIndex >= 0 && lastIndex < 3) {
       if (!mounted) return;
       setState(() {
         _selectedIndex = lastIndex;
@@ -101,7 +85,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final tabOrder = _mountedTabs.toList()..sort();
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       body: Stack(
         fit: StackFit.expand,
@@ -113,17 +96,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             ),
         ],
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        items: _navItems,
+      bottomNavigationBar: MainChromeTabBar(
         currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
-        type: BottomNavigationBarType.fixed,
-        backgroundColor:
-            isDark ? const Color(0xFF37474F) : Colors.lightBlue[100],
-        selectedItemColor:
-            isDark ? const Color(0xFF81D4FA) : Colors.blue[800],
-        unselectedItemColor:
-            isDark ? Colors.grey.shade500 : Colors.grey[600],
+        onChanged: _onItemTapped,
       ),
     );
   }
