@@ -927,209 +927,261 @@ class _BibleScreenState extends State<BibleScreen> {
     showDialog(
       context: context,
       builder: (dialogContext) {
-        final mq = MediaQuery.of(dialogContext);
-        final h = mq.size.height;
-        final w = mq.size.width;
-        // Высота диалога — по экрану устройства (без искусственного потолка).
-        final maxDialogH =
-            (h - mq.viewPadding.vertical - 12).clamp(120.0, h);
-        const titleAndChrome = 88.0;
-        final contentMaxH =
-            (maxDialogH - titleAndChrome).clamp(60.0, maxDialogH);
-        return AlertDialog(
-          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          constraints: BoxConstraints(
-            maxWidth: (w - 16).clamp(280.0, 440.0),
-            maxHeight: maxDialogH,
-          ),
-          title: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Text('Выберите главу ($selectedBook)'),
+        return Consumer<AppProvider>(
+          builder: (ctx, app, _) {
+            final uiFs = app.fontSize;
+            final titleFs = (uiFs * 1.0).clamp(15.0, 28.0);
+            final chapterNumFs = (uiFs * 0.875).clamp(12.0, 24.0);
+            final chapterCell =
+                (uiFs * 2.5).clamp(34.0, 56.0); // ~40 при шрифте 16
+            final wrapGap = (uiFs * 0.25).clamp(3.0, 10.0);
+            final mq = MediaQuery.of(dialogContext);
+            final h = mq.size.height;
+            final w = mq.size.width;
+            // Высота диалога — по экрану устройства (без искусственного потолка).
+            final maxDialogH =
+                (h - mq.viewPadding.vertical - 12).clamp(120.0, h);
+            final titleAndChrome = (uiFs * 5.5).clamp(72.0, 120.0);
+            final contentMaxH =
+                (maxDialogH - titleAndChrome).clamp(60.0, maxDialogH);
+            return AlertDialog(
+              insetPadding: EdgeInsets.symmetric(
+                horizontal: (uiFs * 0.5).clamp(6.0, 14.0),
+                vertical: (uiFs * 0.375).clamp(4.0, 12.0),
               ),
-              _BibleDialogCloseButton(
-                onPressed: () => Navigator.pop(dialogContext),
+              constraints: BoxConstraints(
+                maxWidth: (w - 16).clamp(280.0, 440.0),
+                maxHeight: maxDialogH,
               ),
-            ],
-          ),
-          content: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: (w - 48).clamp(260.0, 400.0),
-              maxHeight: contentMaxH,
-            ),
-            child: SingleChildScrollView(
-              child: Wrap(
-                spacing: 4,
-                runSpacing: 4,
-                alignment: WrapAlignment.center,
-                children: List.generate(chapterCount, (index) {
-                  final chapterNumber = index + 1;
-                  final isCurrent = selectedBook == appProvider.currentBook &&
-                      chapterNumber == appProvider.currentChapter;
-                  return SizedBox(
-                    width: 40,
-                    height: 40,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        appProvider.changeBookAndChapter(
-                          selectedBook,
-                          chapterNumber,
-                        );
-                        Navigator.pop(dialogContext);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        shape: const CircleBorder(),
-                        backgroundColor:
-                            isCurrent ? Colors.blue : Colors.lightBlue[50],
-                        foregroundColor:
-                            isCurrent ? Colors.white : Colors.black,
-                      ),
-                      child: Text(
-                        '$chapterNumber',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight:
-                              isCurrent ? FontWeight.bold : FontWeight.normal,
-                        ),
+              title: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Выберите главу ($selectedBook)',
+                      style: TextStyle(
+                        fontSize: titleFs,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                  );
-                }),
+                  ),
+                  _BibleDialogCloseButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                  ),
+                ],
               ),
-            ),
-          ),
+              content: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: (w - 48).clamp(260.0, 400.0),
+                  maxHeight: contentMaxH,
+                ),
+                child: SingleChildScrollView(
+                  child: Wrap(
+                    spacing: wrapGap,
+                    runSpacing: wrapGap,
+                    alignment: WrapAlignment.center,
+                    children: List.generate(chapterCount, (index) {
+                      final chapterNumber = index + 1;
+                      final isCurrent = selectedBook == app.currentBook &&
+                          chapterNumber == app.currentChapter;
+                      return SizedBox(
+                        width: chapterCell,
+                        height: chapterCell,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            app.changeBookAndChapter(
+                              selectedBook,
+                              chapterNumber,
+                            );
+                            Navigator.pop(dialogContext);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            padding: EdgeInsets.zero,
+                            shape: const CircleBorder(),
+                            backgroundColor: isCurrent
+                                ? Colors.blue
+                                : Colors.lightBlue[50],
+                            foregroundColor:
+                                isCurrent ? Colors.white : Colors.black,
+                          ),
+                          child: Text(
+                            '$chapterNumber',
+                            style: TextStyle(
+                              fontSize: chapterNumFs,
+                              fontWeight: isCurrent
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                ),
+              ),
+            );
+          },
         );
       },
     );
   }
 
   void _showBookSelectionDialog(BuildContext context) {
-    final appProvider = Provider.of<AppProvider>(context, listen: false);
-    final oldTestamentBooks = appProvider.getBooks('old');
-    final newTestamentBooks = appProvider.getBooks('new');
-
     showDialog(
       context: context,
       builder: (dialogContext) {
-        final mq = MediaQuery.of(dialogContext);
-        final h = mq.size.height;
-        final w = mq.size.width;
-        // Почти вся высота экрана: иначе 66 кнопок в Wrap не помещаются и включается скролл.
-        final maxH = (h - mq.viewPadding.vertical - 12).clamp(360.0, 2000.0);
-        return AlertDialog(
-          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          constraints: BoxConstraints(
-            maxWidth: (w - 16).clamp(280.0, 560.0),
-            maxHeight: maxH,
-          ),
-          title: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              const Expanded(
-                child: Text('Выберите книгу'),
+        return Consumer<AppProvider>(
+          builder: (ctx, app, _) {
+            final uiFs = app.fontSize;
+            final titleFs = (uiFs * 1.0).clamp(15.0, 28.0);
+            final sectionFs = (uiFs * 1.0).clamp(14.0, 26.0);
+            final bookAbbrFs = (uiFs * 0.75).clamp(11.0, 22.0);
+            final gapSm = (uiFs * 0.5).clamp(6.0, 14.0);
+            final gapMd = (uiFs * 0.75).clamp(8.0, 18.0);
+            final wrapH = (uiFs * 0.5).clamp(6.0, 12.0);
+            final wrapV = (uiFs * 0.25).clamp(3.0, 10.0);
+            final padH = (uiFs * 0.5).clamp(6.0, 16.0);
+            final padV = (uiFs * 0.25).clamp(3.0, 10.0);
+            final oldTestamentBooks = app.getBooks('old');
+            final newTestamentBooks = app.getBooks('new');
+            final mq = MediaQuery.of(dialogContext);
+            final h = mq.size.height;
+            final w = mq.size.width;
+            // Почти вся высота экрана: иначе 66 кнопок в Wrap не помещаются и включается скролл.
+            final maxH = (h - mq.viewPadding.vertical - 12).clamp(360.0, 2000.0);
+            return AlertDialog(
+              insetPadding: EdgeInsets.symmetric(
+                horizontal: (uiFs * 0.5).clamp(6.0, 14.0),
+                vertical: (uiFs * 0.375).clamp(4.0, 12.0),
               ),
-              _BibleDialogCloseButton(
-                onPressed: () => Navigator.pop(dialogContext),
+              constraints: BoxConstraints(
+                maxWidth: (w - 16).clamp(280.0, 560.0),
+                maxHeight: maxH,
               ),
-            ],
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Ветхий Завет:',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  children: oldTestamentBooks.map((book) {
-                    final isCurrentBook = book == appProvider.currentBook;
-                    return TextButton(
-                      onPressed: () {
-                        Navigator.pop(dialogContext);
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          if (context.mounted) {
-                            _showChapterSelectionDialog(context, forBook: book);
-                          }
-                        });
-                      },
-                      style: TextButton.styleFrom(
-                        backgroundColor: isCurrentBook
-                            ? Colors.blue
-                            : Colors.lightBlue[50],
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              title: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Выберите книгу',
+                      style: TextStyle(
+                        fontSize: titleFs,
+                        fontWeight: FontWeight.w600,
                       ),
-                      child: Text(
-                        BibleService().getBookAbbreviation(book),
-                        style: TextStyle(
-                          color: isCurrentBook ? Colors.white : Colors.black,
-                          fontSize: 12,
-                          fontWeight: isCurrentBook
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                        ),
+                    ),
+                  ),
+                  _BibleDialogCloseButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                  ),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Ветхий Завет:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: sectionFs,
                       ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Новый Завет:',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  children: newTestamentBooks.map((book) {
-                    final isCurrentBook = book == appProvider.currentBook;
-                    return TextButton(
-                      onPressed: () {
-                        Navigator.pop(dialogContext);
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          if (context.mounted) {
-                            _showChapterSelectionDialog(context, forBook: book);
-                          }
-                        });
-                      },
-                      style: TextButton.styleFrom(
-                        backgroundColor: isCurrentBook
-                            ? Colors.blue
-                            : Colors.lightBlue[50],
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    SizedBox(height: gapSm),
+                    Wrap(
+                      spacing: wrapH,
+                      runSpacing: wrapV,
+                      children: oldTestamentBooks.map((book) {
+                        final isCurrentBook = book == app.currentBook;
+                        return TextButton(
+                          onPressed: () {
+                            Navigator.pop(dialogContext);
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (context.mounted) {
+                                _showChapterSelectionDialog(context,
+                                    forBook: book);
+                              }
+                            });
+                          },
+                          style: TextButton.styleFrom(
+                            backgroundColor: isCurrentBook
+                                ? Colors.blue
+                                : Colors.lightBlue[50],
+                            padding: EdgeInsets.symmetric(
+                              horizontal: padH,
+                              vertical: padV,
+                            ),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: Text(
+                            BibleService().getBookAbbreviation(book),
+                            style: TextStyle(
+                              color:
+                                  isCurrentBook ? Colors.white : Colors.black,
+                              fontSize: bookAbbrFs,
+                              fontWeight: isCurrentBook
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    SizedBox(height: gapMd),
+                    Text(
+                      'Новый Завет:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: sectionFs,
                       ),
-                      child: Text(
-                        BibleService().getBookAbbreviation(book),
-                        style: TextStyle(
-                          color: isCurrentBook ? Colors.white : Colors.black,
-                          fontSize: 12,
-                          fontWeight: isCurrentBook
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                        ),
-                      ),
-                    );
-                  }).toList(),
+                    ),
+                    SizedBox(height: gapSm),
+                    Wrap(
+                      spacing: wrapH,
+                      runSpacing: wrapV,
+                      children: newTestamentBooks.map((book) {
+                        final isCurrentBook = book == app.currentBook;
+                        return TextButton(
+                          onPressed: () {
+                            Navigator.pop(dialogContext);
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (context.mounted) {
+                                _showChapterSelectionDialog(context,
+                                    forBook: book);
+                              }
+                            });
+                          },
+                          style: TextButton.styleFrom(
+                            backgroundColor: isCurrentBook
+                                ? Colors.blue
+                                : Colors.lightBlue[50],
+                            padding: EdgeInsets.symmetric(
+                              horizontal: padH,
+                              vertical: padV,
+                            ),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: Text(
+                            BibleService().getBookAbbreviation(book),
+                            style: TextStyle(
+                              color:
+                                  isCurrentBook ? Colors.white : Colors.black,
+                              fontSize: bookAbbrFs,
+                              fontWeight: isCurrentBook
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
@@ -1147,10 +1199,15 @@ class _BibleDialogCloseButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chrome = context.watch<AppProvider>().chromeButtonSize;
-    final ic = (chrome * 0.5).clamp(18.0, 30.0);
+    final app = context.watch<AppProvider>();
+    final chrome = app.chromeButtonSize;
+    final fs = app.fontSize;
+    // Растёт и с «размером кнопок», и с шрифтом — как остальной диалог.
+    final dim = ((chrome + fs * 2.0) / 2).clamp(40.0, 58.0);
+    final ic = (dim * 0.5).clamp(18.0, 30.0);
+    final corner = (dim * 0.2).clamp(6.0, 12.0);
     final shape = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(corner),
       side: ChromeOutline.side,
     );
     return Material(
@@ -1161,8 +1218,8 @@ class _BibleDialogCloseButton extends StatelessWidget {
         onTap: onPressed,
         customBorder: shape,
         child: SizedBox(
-          width: chrome,
-          height: chrome,
+          width: dim,
+          height: dim,
           child: Icon(Icons.close, color: _fg, size: ic),
         ),
       ),

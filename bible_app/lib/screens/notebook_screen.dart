@@ -234,6 +234,20 @@ class _NotebookScreenState extends State<NotebookScreen> {
   bool get _fileBulkSelectionUi =>
       _fileActionsAnchor != null && !_fileActionsAnchor!.isFolder;
 
+  /// Пути выбранных .txt в порядке строк списка (для пакетного переноса).
+  List<String> _orderedBulkSelectedFilePaths() {
+    if (_bulkSelectedFilePaths.isEmpty) return const [];
+    final ordered = _items
+        .where(
+          (it) => !it.isFolder && _bulkSelectedFilePaths.contains(it.relativePath),
+        )
+        .map((it) => it.relativePath)
+        .toList();
+    final inList = ordered.toSet();
+    final rest = _bulkSelectedFilePaths.difference(inList).toList()..sort();
+    return [...ordered, ...rest];
+  }
+
   static const _appBarBgLight = Color(0xFFB3E5FC);
   static const _buttonBgLight = Color(0xFFE1F5FE);
   static const _appBarBgDark = Color(0xFF37474F);
@@ -566,7 +580,9 @@ class _NotebookScreenState extends State<NotebookScreen> {
   Future<void> _runPanelMoveTo() async {
     final a = _fileActionsAnchor;
     if (a == null || a.isFolder) return;
-    if (await _showMoveToFolderDialog(a)) _closeFileActionsPanel();
+    final paths = _orderedBulkSelectedFilePaths();
+    if (paths.isEmpty) return;
+    if (await _showMoveToFolderDialog(paths)) _closeFileActionsPanel();
   }
 
   Future<void> _runPanelRename() async {
@@ -673,6 +689,9 @@ class _NotebookScreenState extends State<NotebookScreen> {
         : (delCount > 1 ? 'Удалить ($delCount)' : 'Удалить');
     final canRename =
         a.isFolder || _bulkSelectedFilePaths.length <= 1;
+    final canSaveAs = _bulkSelectedFilePaths.length <= 1;
+    final canMoveBulk =
+        _bulkSelectedFilePaths.isNotEmpty && _notebookHasFolders;
 
     return Material(
       elevation: 8,
@@ -727,16 +746,30 @@ class _NotebookScreenState extends State<NotebookScreen> {
                 color: isDark ? Colors.white24 : null,
               ),
             if (!a.isFolder)
-              _NotebookChromePanelActionButton(
-                icon: Icons.file_copy_outlined,
-                label: 'Сохранить как…',
-                onTap: () => unawaited(_runPanelSaveAs()),
+              IgnorePointer(
+                ignoring: !canSaveAs,
+                child: Opacity(
+                  opacity: canSaveAs ? 1 : 0.4,
+                  child: _NotebookChromePanelActionButton(
+                    icon: Icons.file_copy_outlined,
+                    label: 'Сохранить как…',
+                    onTap: () => unawaited(_runPanelSaveAs()),
+                  ),
+                ),
               ),
             if (!a.isFolder && _notebookHasFolders)
-              _NotebookChromePanelActionButton(
-                icon: Icons.drive_file_move_outline,
-                label: 'Переместить в…',
-                onTap: () => unawaited(_runPanelMoveTo()),
+              IgnorePointer(
+                ignoring: !canMoveBulk,
+                child: Opacity(
+                  opacity: canMoveBulk ? 1 : 0.4,
+                  child: _NotebookChromePanelActionButton(
+                    icon: Icons.drive_file_move_outline,
+                    label: _bulkSelectedFilePaths.length > 1
+                        ? 'Переместить в… (${_bulkSelectedFilePaths.length})'
+                        : 'Переместить в…',
+                    onTap: () => unawaited(_runPanelMoveTo()),
+                  ),
+                ),
               ),
             IgnorePointer(
               ignoring: !canRename,
@@ -993,6 +1026,8 @@ class _NotebookScreenState extends State<NotebookScreen> {
     String sourcePath,
     String destParentDir, {
     bool topOverlayMessages = false,
+    bool suppressSuccessSnack = false,
+    bool suppressListRefresh = false,
   }) async {
     final repo = _repo;
     if (repo == null) return false;
@@ -1036,8 +1071,8 @@ class _NotebookScreenState extends State<NotebookScreen> {
           _editorKey = GlobalKey<NotebookEditorPanelState>();
         }
       });
-      await _refresh();
-      if (mounted) {
+      if (!suppressListRefresh) await _refresh();
+      if (mounted && !suppressSuccessSnack) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Перемещено: $base')),
         );
@@ -1052,20 +1087,42 @@ class _NotebookScreenState extends State<NotebookScreen> {
     }
   }
 
-  Future<bool> _showMoveToFolderDialog(NotebookListItem item) async {
+  Future<bool> _showMoveToFolderDialog(List<String> sourcePaths) async {
     final repo = _repo;
-    if (repo == null || item.isFolder) return false;
+    if (repo == null || sourcePaths.isEmpty) return false;
+    final bulk = sourcePaths.length > 1;
+    final primaryName =
+        p.posix.basename(sourcePaths.first);
     final moved = await showDialog<bool>(
       context: context,
       builder: (ctx) => _NotebookMoveFileDialog(
         repo: repo,
-        sourcePath: item.relativePath,
-        fileName: item.name,
-        onMoveTo: (destParent) => _moveFileToFolder(
-          item.relativePath,
-          destParent,
-          topOverlayMessages: true,
-        ),
+        fileCount: sourcePaths.length,
+        primaryFileName: primaryName,
+        onMoveTo: (destParent) async {
+          var allOk = true;
+          for (final path in sourcePaths) {
+            final ok = await _moveFileToFolder(
+              path,
+              destParent,
+              topOverlayMessages: true,
+              suppressSuccessSnack: bulk,
+              suppressListRefresh: true,
+            );
+            if (!ok) allOk = false;
+          }
+          if (mounted) await _refresh();
+          if (mounted && allOk && bulk) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Перемещено файлов: ${sourcePaths.length}',
+                ),
+              ),
+            );
+          }
+          return allOk;
+        },
       ),
     );
     return moved == true;
@@ -1345,6 +1402,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
     final appBarBg = isDark ? _appBarBgDark : _appBarBgLight;
     final buttonBg = isDark ? _buttonBgDark : _buttonBgLight;
     final chromeFg = isDark ? Colors.white : _chromeFgLight;
+    final leadingSlotWidth = (chrome + 8).clamp(52.0, 90.0);
     return AppBar(
       backgroundColor: appBarBg,
       surfaceTintColor: appBarBg,
@@ -1352,24 +1410,26 @@ class _NotebookScreenState extends State<NotebookScreen> {
       elevation: 0,
       scrolledUnderElevation: 0,
       toolbarHeight: toolbarH,
-      leadingWidth: _currentDir.isEmpty
-          ? null
-          : (chrome + 8).clamp(52.0, 90.0),
+      automaticallyImplyLeading: false,
+      leadingWidth: leadingSlotWidth,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(14)),
       ),
-      leading: _currentDir.isEmpty
-          ? null
-          : Align(
-              alignment: Alignment.center,
-              child: ChromeIconButton(
+      leading: Align(
+        alignment: Alignment.center,
+        child: _currentDir.isEmpty
+            ? SizedBox(
+                width: chrome,
+                height: chrome,
+              )
+            : ChromeIconButton(
                 icon: Icons.arrow_back,
                 tooltip: 'Назад',
                 onPressed: _goUp,
                 foregroundColor: chromeFg,
                 backgroundColor: buttonBg,
               ),
-            ),
+      ),
       titleSpacing: 8,
       title: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
@@ -1759,14 +1819,14 @@ class _NotebookChromePanelActionButton extends StatelessWidget {
 class _NotebookMoveFileDialog extends StatefulWidget {
   const _NotebookMoveFileDialog({
     required this.repo,
-    required this.sourcePath,
-    required this.fileName,
+    required this.fileCount,
+    required this.primaryFileName,
     required this.onMoveTo,
   });
 
   final NotebookRepository repo;
-  final String sourcePath;
-  final String fileName;
+  final int fileCount;
+  final String primaryFileName;
   final Future<bool> Function(String destParentDir) onMoveTo;
 
   @override
@@ -1866,7 +1926,9 @@ class _NotebookMoveFileDialogState extends State<_NotebookMoveFileDialog> {
         children: [
           Expanded(
             child: Text(
-              'Переместить «${widget.fileName}»',
+              widget.fileCount > 1
+                  ? 'Переместить выбранные файлы (${widget.fileCount})'
+                  : 'Переместить «${widget.primaryFileName}»',
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),

@@ -38,11 +38,18 @@ class ChromeIconButton extends StatelessWidget {
     final iconSize = (math.min(w, height) * 0.5).clamp(18.0, 30.0);
     final useCircle = circular && (w - height).abs() < 0.5;
     final corner = (math.min(w, height) * 0.22).clamp(4.0, 12.0);
+    final disabled = onPressed == null;
+    final outlineSide = disabled
+        ? BorderSide(
+            color: ChromeOutline.color.withValues(alpha: 0.35),
+            width: ChromeOutline.width,
+          )
+        : ChromeOutline.side;
     final ShapeBorder shapeBorder = useCircle
-        ? const CircleBorder(side: ChromeOutline.side)
+        ? CircleBorder(side: outlineSide)
         : RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(corner),
-            side: ChromeOutline.side,
+            side: outlineSide,
           );
     final core = Material(
       color: backgroundColor,
