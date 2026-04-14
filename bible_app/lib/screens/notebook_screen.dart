@@ -195,14 +195,35 @@ Future<bool> _notebookRenameTargetTaken(
   return false;
 }
 
-String _notebookMoveDialogPathCaption(String posixDir) {
-  if (posixDir.isEmpty) return '(корень)';
-  final norm = p.posix.normalize(posixDir);
-  if (norm == '.' || norm.isEmpty) return '(корень)';
-  final parts =
-      p.posix.split(norm).where((e) => e.isNotEmpty && e != '.').toList();
-  if (parts.isEmpty) return '(корень)';
-  return '(корень)/${parts.join('/')}';
+/// Сегменты пути под папку перемещения (без «корня»): `a/b` → `['a','b']`.
+List<String> _notebookMoveDialogPathSegments(String browseDir) {
+  if (browseDir.isEmpty) return const [];
+  final norm = p.posix.normalize(browseDir);
+  if (norm == '.' || norm.isEmpty) return const [];
+  return p.posix.split(norm).where((e) => e.isNotEmpty && e != '.').toList();
+}
+
+/// Префикс ветки дерева для уровня 1…[deepest] (корень — уровень 0, без префикса).
+String _notebookMoveDialogTreePrefix(int treeLevel, int deepestLevel) {
+  if (treeLevel <= 0 || deepestLevel <= 0) return '';
+  final b = StringBuffer();
+  for (var l = 1; l < treeLevel; l++) {
+    b.write('│ ');
+  }
+  b.write(treeLevel == deepestLevel ? '└─ ' : '├─ ');
+  return b.toString();
+}
+
+/// Префикс для i-й вложенной папки в списке (siblingCount детей у текущей папки).
+String _notebookMoveDialogChildBranchPrefix(
+  int index,
+  int siblingCount,
+  int segmentDepth,
+) {
+  if (siblingCount <= 0) return '';
+  final trunk =
+      segmentDepth == 0 ? '' : '${'│ ' * (segmentDepth - 1)}  ';
+  return trunk + (index < siblingCount - 1 ? '├─ ' : '└─ ');
 }
 
 class NotebookScreen extends StatefulWidget {
@@ -1871,42 +1892,110 @@ class _NotebookMoveFileDialogState extends State<_NotebookMoveFileDialog> {
     if (ok && mounted) Navigator.of(context).pop(true);
   }
 
-  Widget _pathStrip(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final barBg = isDark ? const Color(0xFF455A64) : const Color(0xFFE1F5FE);
-    final labelColor = isDark ? Colors.white70 : Colors.black54;
-    final valueColor = isDark ? Colors.white : Colors.black87;
-    final fs = context.watch<AppProvider>().fontSize;
-    final labelSize = (fs * 0.88).clamp(11.0, 32.0);
-    final valueSize = fs.clamp(12.0, 40.0);
-    final shown = _notebookMoveDialogPathCaption(_browseDir);
-    return Material(
-      color: barBg,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0x44000000), width: 1),
-        ),
-        child: SelectableText.rich(
-          TextSpan(
+  void _navigateBrowseTo(String path) {
+    if (_browseDir == path) return;
+    setState(() => _browseDir = path);
+    unawaited(_reload());
+  }
+
+  Widget _moveYouAreHereChip(bool isDark, double uiFs) {
+    final fg = isDark ? const Color(0xFF90CAF9) : Colors.blue.shade800;
+    final fill = fg.withValues(alpha: isDark ? 0.16 : 0.11);
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: (uiFs * 0.34).clamp(6.0, 12.0),
+        vertical: (uiFs * 0.1).clamp(2.0, 5.0),
+      ),
+      decoration: BoxDecoration(
+        color: fill,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: fg.withValues(alpha: 0.38)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.arrow_back,
+            size: (uiFs * 0.72).clamp(12.0, 17.0),
+            color: fg,
+          ),
+          SizedBox(width: (uiFs * 0.12).clamp(3.0, 5.0)),
+          Text(
+            'Вы здесь',
             style: TextStyle(
-              color: valueColor,
-              fontWeight: FontWeight.w500,
-              fontSize: valueSize,
-              height: 1.35,
+              color: fg,
+              fontWeight: FontWeight.w600,
+              fontSize: (uiFs * 0.7).clamp(10.0, 14.5),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _movePathTreeRow({
+    required bool isDark,
+    required double uiFs,
+    required double monoFs,
+    required double rowIcon,
+    required String prefix,
+    required String label,
+    required String targetPath,
+    required bool isCurrent,
+    required bool isRoot,
+  }) {
+    final monoStyle = TextStyle(
+      fontFamily: 'monospace',
+      fontSize: monoFs,
+      height: 1.0,
+      color: isDark ? Colors.white38 : Colors.black45,
+    );
+    final nameStyle = TextStyle(
+      fontSize: uiFs,
+      height: 1.0,
+      fontWeight: FontWeight.w500,
+      color: isDark ? Colors.white : Colors.black87,
+    );
+    return Material(
+      color: isCurrent
+          ? (isDark
+              ? Colors.blueGrey.shade700.withValues(alpha: 0.42)
+              : Colors.blue.shade50.withValues(alpha: 0.92))
+          : Colors.transparent,
+      child: InkWell(
+        onTap: () => _navigateBrowseTo(targetPath),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            vertical: (uiFs * 0.05).clamp(1.0, 3.0),
+            horizontal: 4,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              TextSpan(
-                text: 'Папка: ',
-                style: TextStyle(
-                  color: labelColor,
-                  fontWeight: FontWeight.w600,
-                  fontSize: labelSize,
-                ),
+              if (prefix.isNotEmpty) Text(prefix, style: monoStyle),
+              Icon(
+                isRoot ? Icons.home_outlined : Icons.folder_outlined,
+                size: rowIcon,
+                color: isDark ? Colors.white70 : Colors.black54,
               ),
-              TextSpan(text: shown),
+              SizedBox(width: (uiFs * 0.2).clamp(5.0, 10.0)),
+              Expanded(
+                child: Text(label, style: nameStyle, maxLines: 2),
+              ),
+              if (isCurrent) ...[
+                SizedBox(width: (uiFs * 0.2).clamp(4.0, 8.0)),
+                Flexible(
+                  fit: FlexFit.loose,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: _moveYouAreHereChip(isDark, uiFs),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -1914,11 +2003,155 @@ class _NotebookMoveFileDialogState extends State<_NotebookMoveFileDialog> {
     );
   }
 
+  Widget _moveChildFolderRow({
+    required bool isDark,
+    required double uiFs,
+    required double monoFs,
+    required double rowIcon,
+    required String prefix,
+    required NotebookListItem folder,
+  }) {
+    final monoStyle = TextStyle(
+      fontFamily: 'monospace',
+      fontSize: monoFs,
+      height: 1.0,
+      color: isDark ? Colors.white38 : Colors.black45,
+    );
+    final nameStyle = TextStyle(
+      fontSize: uiFs,
+      height: 1.0,
+      color: isDark ? Colors.white : Colors.black87,
+    );
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _navigateBrowseTo(folder.relativePath),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            vertical: (uiFs * 0.05).clamp(1.0, 3.0),
+            horizontal: 4,
+          ),
+          child: Row(
+            children: [
+              if (prefix.isNotEmpty) Text(prefix, style: monoStyle),
+              Icon(
+                Icons.folder_outlined,
+                size: rowIcon,
+                color: isDark ? Colors.white70 : Colors.black54,
+              ),
+              SizedBox(width: (uiFs * 0.2).clamp(5.0, 10.0)),
+              Expanded(
+                child: Text(
+                  folder.name,
+                  style: nameStyle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _moveScrollableBody(bool isDark, double uiFs, double rowIcon) {
+    final parts = _notebookMoveDialogPathSegments(_browseDir);
+    final deep = parts.length;
+    final monoFs = (uiFs * 0.84).clamp(11.0, 17.0);
+    final children = <Widget>[
+      _movePathTreeRow(
+        isDark: isDark,
+        uiFs: uiFs,
+        monoFs: monoFs,
+        rowIcon: rowIcon,
+        prefix: '',
+        label: 'Корень',
+        targetPath: '',
+        isCurrent: deep == 0,
+        isRoot: true,
+      ),
+    ];
+    for (var i = 0; i < parts.length; i++) {
+      children.add(
+        _movePathTreeRow(
+          isDark: isDark,
+          uiFs: uiFs,
+          monoFs: monoFs,
+          rowIcon: rowIcon,
+          prefix: _notebookMoveDialogTreePrefix(i + 1, deep),
+          label: parts[i],
+          targetPath: parts.sublist(0, i + 1).join('/'),
+          isCurrent: i == parts.length - 1,
+          isRoot: false,
+        ),
+      );
+    }
+    if (_folders.isNotEmpty) {
+      children.add(SizedBox(height: (uiFs * 0.18).clamp(3.0, 6.0)));
+      children.add(
+        Divider(
+          height: 1,
+          thickness: 1,
+          color: isDark ? Colors.white24 : Colors.black12,
+        ),
+      );
+      children.add(SizedBox(height: (uiFs * 0.12).clamp(2.0, 4.0)));
+      children.add(
+        Text(
+          'Вложенные папки',
+          style: TextStyle(
+            fontSize: (uiFs * 0.78).clamp(11.0, 16.0),
+            fontWeight: FontWeight.w600,
+            color: isDark ? Colors.white54 : Colors.black45,
+          ),
+        ),
+      );
+      final n = _folders.length;
+      final depth = parts.length;
+      for (var i = 0; i < n; i++) {
+        children.add(
+          _moveChildFolderRow(
+            isDark: isDark,
+            uiFs: uiFs,
+            monoFs: monoFs,
+            rowIcon: rowIcon,
+            prefix: _notebookMoveDialogChildBranchPrefix(i, n, depth),
+            folder: _folders[i],
+          ),
+        );
+      }
+    } else if (_browseDir.isNotEmpty) {
+      children.add(SizedBox(height: (uiFs * 0.15).clamp(3.0, 6.0)));
+      children.add(
+        Text(
+          'Нет вложенных папок',
+          style: TextStyle(
+            color: isDark ? Colors.white54 : Colors.black45,
+            fontSize: (uiFs * 0.88).clamp(12.0, 20.0),
+          ),
+        ),
+      );
+    }
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(6, 4, 6, 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: children,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final uiFs = context.watch<AppProvider>().fontSize;
+    final app = context.watch<AppProvider>();
+    final uiFs = app.fontSize;
+    final chrome = app.chromeButtonSize;
     final rowIcon = (24.0 * uiFs / 16.0).clamp(20.0, 48.0);
+    final titleGap = (chrome * 0.15).clamp(4.0, 8.0);
+    final treePanelBg =
+        isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF5F5F5);
     return AlertDialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       title: Row(
@@ -1933,6 +2166,12 @@ class _NotebookMoveFileDialogState extends State<_NotebookMoveFileDialog> {
               overflow: TextOverflow.ellipsis,
             ),
           ),
+          NotebookChromeDialogToolbarIconButton(
+            icon: Icons.arrow_upward,
+            onPressed: _browseDir.isEmpty ? null : _goUp,
+            tooltip: 'Уровень выше',
+          ),
+          SizedBox(width: titleGap),
           NotebookChromeDialogCloseButton(
             onPressed: () => Navigator.of(context).pop(false),
           ),
@@ -1940,110 +2179,39 @@ class _NotebookMoveFileDialogState extends State<_NotebookMoveFileDialog> {
       ),
       content: SizedBox(
         width: double.maxFinite,
-        height: 300,
+        height: 320,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Выберите папку в списке, затем нажмите «Переместить сюда».',
+              'Вниз — по папкам в списке; вверх — кнопка «↑» или строка дерева. '
+              'Затем «Переместить сюда».',
               style: TextStyle(
-                fontSize: (uiFs * 0.88).clamp(12.0, 22.0),
-                height: 1.3,
+                fontSize: (uiFs * 0.82).clamp(11.5, 20.0),
+                height: 1.35,
                 color: isDark ? Colors.white70 : Colors.black87,
               ),
             ),
-            const SizedBox(height: 10),
-            _pathStrip(context),
-            Divider(
-              height: 10,
-              thickness: 1,
-              color: isDark ? Colors.white24 : null,
-            ),
+            SizedBox(height: (uiFs * 0.25).clamp(6.0, 10.0)),
             Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : ListView(
-                      children: [
-                        if (_browseDir.isNotEmpty)
-                          ListTile(
-                            dense: true,
-                            minVerticalPadding: 0,
-                            visualDensity: const VisualDensity(
-                              horizontal: 0,
-                              vertical: -4,
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 1,
-                            ),
-                            minLeadingWidth: rowIcon + 12,
-                            leading: Icon(
-                              Icons.arrow_upward,
-                              size: rowIcon,
-                              color:
-                                  isDark ? Colors.white : Colors.black87,
-                            ),
-                            title: Text(
-                              'Вверх',
-                              style: TextStyle(
-                                fontSize: uiFs,
-                                height: 1.0,
-                                color:
-                                    isDark ? Colors.white : Colors.black87,
-                              ),
-                            ),
-                            onTap: _goUp,
-                          ),
-                        if (!_loading &&
-                            _folders.isEmpty &&
-                            _browseDir.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-                            child: Text(
-                              'Нет вложенных папок.',
-                              style: TextStyle(
-                                color: isDark ? Colors.white54 : Colors.black45,
-                                fontSize: (uiFs * 0.92).clamp(12.0, 24.0),
-                              ),
-                            ),
-                          ),
-                        for (final f in _folders)
-                          ListTile(
-                            dense: true,
-                            minVerticalPadding: 0,
-                            visualDensity: const VisualDensity(
-                              horizontal: 0,
-                              vertical: -4,
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 1,
-                            ),
-                            minLeadingWidth: rowIcon + 12,
-                            leading: Icon(
-                              Icons.folder_outlined,
-                              size: rowIcon,
-                              color:
-                                  isDark ? Colors.white : Colors.black87,
-                            ),
-                            title: Text(
-                              f.name,
-                              style: TextStyle(
-                                fontSize: uiFs,
-                                height: 1.0,
-                                color:
-                                    isDark ? Colors.white : Colors.black87,
-                              ),
-                            ),
-                            onTap: () {
-                              setState(() => _browseDir = f.relativePath);
-                              unawaited(_reload());
-                            },
-                          ),
-                      ],
-                    ),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: treePanelBg,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: ChromeOutline.color,
+                    width: ChromeOutline.width,
+                  ),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: _loading
+                      ? const Center(child: CircularProgressIndicator())
+                      : _moveScrollableBody(isDark, uiFs, rowIcon),
+                ),
+              ),
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: (uiFs * 0.25).clamp(6.0, 10.0)),
             _NotebookChromePanelActionButton(
               icon: Icons.drive_file_move_outline,
               label: 'Переместить сюда',

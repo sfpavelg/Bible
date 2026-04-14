@@ -64,6 +64,59 @@ class NotebookChromeDialogCloseButton extends StatelessWidget {
   }
 }
 
+/// Квадратная кнопка в заголовке диалога блокнота (как [NotebookChromeDialogCloseButton]):
+/// та же высота/ширина [AppProvider.chromeButtonSize], обводка и фон хрома.
+/// [onPressed] == null — неактивна (серый значок, без нажатия), как «вверх» в корне Библии.
+class NotebookChromeDialogToolbarIconButton extends StatelessWidget {
+  const NotebookChromeDialogToolbarIconButton({
+    super.key,
+    required this.icon,
+    this.onPressed,
+    this.tooltip,
+  });
+
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final String? tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final chrome = context.watch<AppProvider>().chromeButtonSize;
+    final ic = (chrome * 0.5).clamp(18.0, 30.0);
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(8),
+      side: ChromeOutline.side,
+    );
+    final bg = NotebookChromeUi.secondaryButtonBackground(context);
+    final baseFg = NotebookChromeUi.secondaryButtonForeground(context);
+    final fg = onPressed == null
+        ? baseFg.withValues(alpha: Theme.of(context).brightness == Brightness.dark ? 0.32 : 0.38)
+        : baseFg;
+    final core = Material(
+      color: bg,
+      shape: shape,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onPressed,
+        customBorder: shape,
+        child: SizedBox(
+          width: chrome,
+          height: chrome,
+          child: Icon(icon, color: fg, size: ic),
+        ),
+      ),
+    );
+    if (tooltip != null && tooltip!.isNotEmpty) {
+      return Tooltip(
+        message: tooltip!,
+        waitDuration: const Duration(milliseconds: 400),
+        child: core,
+      );
+    }
+    return core;
+  }
+}
+
 /// Текстовая кнопка в диалоге блокнота: обводка [ChromeOutline], высота из [AppProvider.chromeButtonSize].
 class NotebookChromeDialogButton extends StatelessWidget {
   const NotebookChromeDialogButton({

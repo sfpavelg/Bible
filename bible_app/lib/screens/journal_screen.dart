@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:bible_app/journal/chronological_reading_plan_data.dart';
 import 'package:bible_app/journal/parallel_reading_plan_data.dart';
@@ -25,6 +26,11 @@ int journalQuarterStartDayIndex(int quarterIndex) {
   }
   return start;
 }
+
+/// На вебе кратко после attach к [ScrollView] у позиции ещё нет метрик —
+/// обращение к [ScrollPosition.maxScrollExtent] бросает (и даёт красный error frame в debug).
+bool _scrollPositionHasMetrics(ScrollController c) =>
+    c.hasClients && c.position.hasContentDimensions;
 
 /// Вертикальная линия с квадратным бегунком: вверху список в начале, внизу — в конце.
 class _PlanScrollRail extends StatefulWidget {
@@ -103,7 +109,7 @@ class _PlanScrollRailState extends State<_PlanScrollRail> {
 
   void _jumpToLocalY(double localY, double trackH, double ts, double travel) {
     final c = widget.controller;
-    if (!c.hasClients || travel <= 0) return;
+    if (!_scrollPositionHasMetrics(c) || travel <= 0) return;
     final maxExt = c.position.maxScrollExtent;
     if (maxExt <= 0) {
       c.jumpTo(0);
@@ -124,7 +130,7 @@ class _PlanScrollRailState extends State<_PlanScrollRail> {
         final travel = (h - ts).clamp(0.0, double.infinity);
         final c = widget.controller;
         double thumbTop = 0;
-        if (c.hasClients && travel > 0) {
+        if (_scrollPositionHasMetrics(c) && travel > 0) {
           final pos = c.position;
           final maxExt = pos.maxScrollExtent;
           if (maxExt > 0) {
@@ -164,7 +170,7 @@ class _PlanScrollRailState extends State<_PlanScrollRail> {
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onVerticalDragUpdate: (details) {
-                    if (!c.hasClients || travel <= 0) return;
+                    if (!_scrollPositionHasMetrics(c) || travel <= 0) return;
                     final pos = c.position;
                     final maxExt = pos.maxScrollExtent;
                     if (maxExt <= 0) return;
@@ -344,7 +350,12 @@ class _JournalScreenState extends State<JournalScreen>
           tryJump(attempt + 1);
           return;
         }
-        final m = _scrollController.position.maxScrollExtent;
+        final pos = _scrollController.position;
+        if (!pos.hasContentDimensions) {
+          tryJump(attempt + 1);
+          return;
+        }
+        final m = pos.maxScrollExtent;
         if (m <= 0) {
           tryJump(attempt + 1);
           return;
@@ -414,7 +425,7 @@ class _JournalScreenState extends State<JournalScreen>
   void _jumpScrollToEnd() {
     HapticFeedback.lightImpact();
     final c = _scrollController;
-    if (!c.hasClients) return;
+    if (!_scrollPositionHasMetrics(c)) return;
     final m = c.position.maxScrollExtent;
     final dist = (m - c.offset).abs();
     if (dist < 1) {
@@ -656,6 +667,63 @@ class _JournalScreenState extends State<JournalScreen>
           ),
         );
       },
+    );
+  }
+
+  /// Экран с четырьмя кварталами: одна строка, шрифт по возможности на всю кнопку.
+  Widget _planKindAppBarTitleOnHub(Color chromeFg, double chromeSize) {
+    final full = _plan == _JournalPlanKind.parallel
+        ? 'План чтения: параллельный'
+        : 'План чтения: хронология';
+    return Text(
+      full,
+      maxLines: 1,
+      textAlign: TextAlign.center,
+      softWrap: false,
+      overflow: TextOverflow.fade,
+      style: TextStyle(
+        color: chromeFg,
+        fontWeight: FontWeight.normal,
+        fontSize: (chromeSize * 0.864).clamp(14.4, 44.8),
+        height: 1.0,
+      ),
+    );
+  }
+
+  /// Открыт квартал: подпись в две строки, масштаб под размер кнопки.
+  Widget _planKindAppBarTitleInQuarter(Color chromeFg) {
+    final line2 = _plan == _JournalPlanKind.parallel
+        ? 'параллельный'
+        : 'хронология';
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          'План чтения:',
+          maxLines: 1,
+          textAlign: TextAlign.center,
+          softWrap: false,
+          style: TextStyle(
+            color: chromeFg,
+            fontWeight: FontWeight.normal,
+            fontSize: 25.6,
+            height: 1.02,
+          ),
+        ),
+        Text(
+          line2,
+          maxLines: 1,
+          textAlign: TextAlign.center,
+          softWrap: false,
+          style: TextStyle(
+            color: chromeFg,
+            fontWeight: FontWeight.normal,
+            fontSize: 25.6,
+            height: 1.02,
+          ),
+        ),
+      ],
     );
   }
 
@@ -952,6 +1020,14 @@ class _JournalScreenState extends State<JournalScreen>
 
     final inQuarter = _openQuarter != null;
 
+    /// В режиме квартала: иконки прямоугольные (ширина ограничена, высота [chromeSize]);
+    /// вторая в ряду («в конец») не шире 42 px при большом [chromeSize]; промежутки уже.
+    final quarterIconWFirst = math.min(chromeSize, 44.0);
+    final quarterIconWSecond = math.min(chromeSize, 42.0);
+    final quarterIconGap = (chromeSize * 0.07).clamp(2.0, 5.0);
+    final quarterLeadingSlot =
+        (quarterIconWFirst + 8).clamp(48.0, 56.0);
+
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: AppProvider.toolbarHeightForChrome(chromeSize),
@@ -968,20 +1044,19 @@ class _JournalScreenState extends State<JournalScreen>
             ? Align(
                 alignment: Alignment.center,
                 child: Padding(
-                  padding: const EdgeInsets.only(left: 4),
+                  padding: const EdgeInsets.only(left: 2),
                   child: ChromeIconButton(
                     icon: Icons.arrow_back,
                     tooltip: 'К кварталам',
                     foregroundColor: chromeFg,
                     backgroundColor: buttonBg,
+                    width: quarterIconWFirst,
                     onPressed: _closeQuarterScreen,
                   ),
                 ),
               )
             : null,
-        leadingWidth: inQuarter
-            ? (chromeSize + 10).clamp(48.0, 88.0)
-            : null,
+        leadingWidth: inQuarter ? quarterLeadingSlot : null,
         title: Row(
           children: [
             if (inQuarter) ...[
@@ -990,21 +1065,26 @@ class _JournalScreenState extends State<JournalScreen>
                 tooltip: 'В начало списка',
                 foregroundColor: chromeFg,
                 backgroundColor: buttonBg,
+                width: quarterIconWFirst,
                 onPressed: _jumpScrollToStart,
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: quarterIconGap),
               ChromeIconButton(
                 icon: Icons.vertical_align_bottom,
                 tooltip: 'В конец списка',
                 foregroundColor: chromeFg,
                 backgroundColor: buttonBg,
+                width: quarterIconWSecond,
                 onPressed: _jumpScrollToEnd,
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: quarterIconGap),
             ],
             Expanded(
               child: Padding(
-                padding: EdgeInsets.only(right: inQuarter ? 8 : 0),
+                padding: EdgeInsets.only(
+                  left: inQuarter ? 2 : 0,
+                  right: inQuarter ? 4 : 0,
+                ),
                 child: Material(
                   color: buttonBg,
                   shape: RoundedRectangleBorder(
@@ -1019,21 +1099,20 @@ class _JournalScreenState extends State<JournalScreen>
                       height: chromeSize,
                       child: Center(
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          padding: inQuarter
+                              ? EdgeInsets.all(
+                                  (chromeSize * 0.22).clamp(8.0, 16.0),
+                                )
+                              : EdgeInsets.symmetric(
+                                  horizontal:
+                                      (chromeSize * 0.26).clamp(10.0, 20.0),
+                                ),
                           child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text(
-                              _plan == _JournalPlanKind.parallel
-                                  ? 'План чтения: параллельный'
-                                  : 'План чтения: хронология',
-                              maxLines: 1,
-                              style: TextStyle(
-                                color: chromeFg,
-                                fontWeight: FontWeight.w800,
-                                fontSize:
-                                    (chromeSize * 0.26).clamp(10.0, 14.0),
-                              ),
-                            ),
+                            fit: BoxFit.contain,
+                            alignment: Alignment.center,
+                            child: inQuarter
+                                ? _planKindAppBarTitleInQuarter(chromeFg)
+                                : _planKindAppBarTitleOnHub(chromeFg, chromeSize),
                           ),
                         ),
                       ),
@@ -1048,6 +1127,9 @@ class _JournalScreenState extends State<JournalScreen>
           AppChromeOverflowMenu(
             iconColor: chromeFg,
             backgroundColor: buttonBg,
+            tileWidth: inQuarter
+                ? quarterIconWFirst
+                : math.min(chromeSize, 44.0),
           ),
         ],
       ),

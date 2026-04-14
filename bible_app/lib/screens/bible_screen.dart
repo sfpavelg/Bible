@@ -113,26 +113,143 @@ TextStyle _favoritesPanelTextStyle(
   );
 }
 
+/// Тело записи «Избранное»: жирная ссылка (книга, глава, стих) и текст в кавычках; по строке на стих.
+Widget _favoritesEntryBody(
+  _BookmarkTab tab, {
+  required Color fg,
+  required TextStyle baseStyle,
+}) {
+  if (tab.verses.isEmpty) {
+    return Text(tab.plainText, style: baseStyle);
+  }
+  final refStyle = baseStyle.copyWith(
+    fontWeight: FontWeight.bold,
+    color: fg,
+  );
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      for (var i = 0; i < tab.verses.length; i++) ...[
+        if (i != 0) const SizedBox(height: 6),
+        Text.rich(
+          TextSpan(
+            style: baseStyle,
+            children: [
+              TextSpan(text: tab.verses[i].reference, style: refStyle),
+              const TextSpan(text: ' '),
+              TextSpan(text: '"${tab.verses[i].body}"'),
+            ],
+          ),
+        ),
+      ],
+    ],
+  );
+}
+
+class _BookmarkVerseLine {
+  const _BookmarkVerseLine({required this.reference, required this.body});
+
+  final String reference;
+  final String body;
+
+  _BookmarkVerseLine copy() =>
+      _BookmarkVerseLine(reference: reference, body: body);
+}
+
 class _BookmarkTab {
-  _BookmarkTab({required this.text, required this.createdAt});
+  _BookmarkTab._({
+    required this.verses,
+    required this.createdAt,
+    String? legacyPlain,
+  }) : _legacyPlain = legacyPlain;
 
-  final String text;
-  final DateTime createdAt;
+  /// Новая запись: по одному блоку на стих, ссылка и текст разделены для вёрстки.
+  factory _BookmarkTab.structured({
+    required List<_BookmarkVerseLine> verses,
+    required DateTime createdAt,
+  }) {
+    return _BookmarkTab._(verses: verses, createdAt: createdAt);
+  }
 
-  Map<String, dynamic> toJson() => {
-        'text': text,
-        'at': createdAt.toIso8601String(),
-      };
-
-  static _BookmarkTab fromJson(Map<String, dynamic> j) {
-    return _BookmarkTab(
-      text: j['text'] as String? ?? '',
-      createdAt: DateTime.tryParse(j['at'] as String? ?? '') ?? DateTime.now(),
+  /// Старые сохранённые записи (один сплошной текст).
+  factory _BookmarkTab.legacy({
+    required String text,
+    required DateTime createdAt,
+  }) {
+    return _BookmarkTab._(
+      verses: const [],
+      createdAt: createdAt,
+      legacyPlain: text,
     );
   }
 
-  _BookmarkTab copy() =>
-      _BookmarkTab(text: text, createdAt: createdAt);
+  final List<_BookmarkVerseLine> verses;
+  final DateTime createdAt;
+  final String? _legacyPlain;
+
+  bool get _isStructured => verses.isNotEmpty;
+
+  /// Плоский текст для буфера и совместимости с полем `text` в JSON.
+  String get plainText {
+    if (_isStructured) {
+      return verses
+          .map((v) => '${v.reference} "${v.body}"')
+          .join('\n');
+    }
+    return _legacyPlain ?? '';
+  }
+
+  Map<String, dynamic> toJson() {
+    final at = createdAt.toIso8601String();
+    if (_isStructured) {
+      return {
+        'at': at,
+        'v': verses
+            .map((e) => <String, dynamic>{'r': e.reference, 't': e.body})
+            .toList(growable: false),
+        'text': plainText,
+      };
+    }
+    return {
+      'at': at,
+      'text': _legacyPlain ?? '',
+    };
+  }
+
+  static _BookmarkTab fromJson(Map<String, dynamic> j) {
+    final at = DateTime.tryParse(j['at'] as String? ?? '') ?? DateTime.now();
+    final rawV = j['v'];
+    if (rawV is List<dynamic> && rawV.isNotEmpty) {
+      final parsed = <_BookmarkVerseLine>[];
+      for (final row in rawV) {
+        if (row is! Map) continue;
+        final m = Map<String, dynamic>.from(row);
+        final r = m['r'] as String? ?? '';
+        final t = m['t'] as String? ?? '';
+        parsed.add(_BookmarkVerseLine(reference: r, body: t));
+      }
+      if (parsed.isNotEmpty) {
+        return _BookmarkTab.structured(verses: parsed, createdAt: at);
+      }
+    }
+    return _BookmarkTab.legacy(
+      text: j['text'] as String? ?? '',
+      createdAt: at,
+    );
+  }
+
+  _BookmarkTab copy() {
+    if (_isStructured) {
+      return _BookmarkTab.structured(
+        verses: verses.map((e) => e.copy()).toList(growable: false),
+        createdAt: createdAt,
+      );
+    }
+    return _BookmarkTab.legacy(
+      text: _legacyPlain ?? '',
+      createdAt: createdAt,
+    );
+  }
 }
 
 class BibleScreen extends StatefulWidget {
@@ -211,11 +328,14 @@ class _BibleScreenState extends State<BibleScreen> {
     List<Map<String, dynamic>> verses,
   ) async {
     if (!_isBibleInteractionActive) return;
-    final plain = _selectedVersesPlainText(appProvider, verses);
-    if (plain != null) {
+    final lines = _selectedBookmarkVerses(appProvider, verses);
+    if (lines != null) {
       setState(() {
         _bookmarks.add(
-          _BookmarkTab(text: plain, createdAt: DateTime.now()),
+          _BookmarkTab.structured(
+            verses: lines,
+            createdAt: DateTime.now(),
+          ),
         );
         _selectedVerses.clear();
       });
@@ -227,21 +347,25 @@ class _BibleScreenState extends State<BibleScreen> {
     await _showBookmarksPanel(context);
   }
 
-  String? _selectedVersesPlainText(
+  List<_BookmarkVerseLine>? _selectedBookmarkVerses(
     AppProvider appProvider,
     List<Map<String, dynamic>> verses,
   ) {
     if (_selectedVerses.isEmpty) return null;
-    final parts = <String>[];
+    final lines = <_BookmarkVerseLine>[];
     for (final n in _selectedVerses) {
       final text = _verseText(verses, n);
       if (text == null) continue;
-      parts.add(
-        '${appProvider.currentBook} ${appProvider.currentChapter}:$n $text',
+      lines.add(
+        _BookmarkVerseLine(
+          reference:
+              '${appProvider.currentBook} ${appProvider.currentChapter}:$n',
+          body: text,
+        ),
       );
     }
-    if (parts.isEmpty) return null;
-    return parts.join('\n');
+    if (lines.isEmpty) return null;
+    return lines;
   }
 
   void _addSelectedVersesToBookmarks(
@@ -250,11 +374,14 @@ class _BibleScreenState extends State<BibleScreen> {
     List<Map<String, dynamic>> verses,
   ) {
     if (!_isBibleInteractionActive) return;
-    final plain = _selectedVersesPlainText(appProvider, verses);
-    if (plain == null) return;
+    final lines = _selectedBookmarkVerses(appProvider, verses);
+    if (lines == null) return;
     setState(() {
       _bookmarks.add(
-        _BookmarkTab(text: plain, createdAt: DateTime.now()),
+        _BookmarkTab.structured(
+          verses: lines,
+          createdAt: DateTime.now(),
+        ),
       );
       _selectedVerses.clear();
     });
@@ -2047,7 +2174,7 @@ class _BibleBookmarksPanelState extends State<_BibleBookmarksPanel> {
     final parts = <String>[];
     for (final i in ordered) {
       final e = _entries[i];
-      parts.add('${_headerLine(i + 1, e.createdAt)}\n${e.text}');
+      parts.add('${_headerLine(i + 1, e.createdAt)}\n${e.plainText}');
     }
     await Clipboard.setData(ClipboardData(text: parts.join('\n\n')));
     if (!mounted) return;
@@ -2272,9 +2399,10 @@ class _BibleBookmarksPanelState extends State<_BibleBookmarksPanel> {
                                         style: headerLineStyle,
                                       ),
                                       const SizedBox(height: 4),
-                                      Text(
-                                        e.text,
-                                        style: bodyStyle,
+                                      _favoritesEntryBody(
+                                        e,
+                                        fg: fg,
+                                        baseStyle: bodyStyle,
                                       ),
                                     ],
                                   ),
