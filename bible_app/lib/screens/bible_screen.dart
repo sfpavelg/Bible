@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:bible_app/models/bible_model.dart';
 import 'package:bible_app/providers/app_provider.dart';
 import 'package:bible_app/services/bible_service.dart';
 import 'package:bible_app/widgets/app_chrome_overflow_menu.dart';
@@ -958,7 +959,7 @@ class _BibleScreenState extends State<BibleScreen> {
                 children: [
                   Expanded(
                     child: Text(
-                      'Выберите главу ($selectedBook)',
+                      'Выберите главу (${BibleBook.liturgicalDisplayName(selectedBook)})',
                       style: TextStyle(
                         fontSize: titleFs,
                         fontWeight: FontWeight.w600,
@@ -1391,45 +1392,147 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
         .toList();
   }
 
-  List<TextSpan> _buildHighlightedSpans(
-    BuildContext context,
-    String text,
-    TextStyle baseStyle,
-  ) {
+  /// Диапазон [start, end) в полном тексте стиха для превью в списке поиска.
+  ({int start, int end}) _searchPreviewRange(String fullText) {
+    const padBefore = 52;
+    const padAfter = 88;
+    const maxWindow = 560;
+    const fallbackLen = 150;
+
+    if (fullText.isEmpty) return (start: 0, end: 0);
+
     final segments = _querySegments();
-    if (text.isEmpty || segments.isEmpty) {
-      return [TextSpan(text: text, style: baseStyle)];
+    if (segments.isEmpty) {
+      final end = fullText.length < fallbackLen ? fullText.length : fallbackLen;
+      return (start: 0, end: end);
     }
 
     final merged = bibleMergedQueryMatches(
-      text,
+      fullText,
       segments,
       wholeWordsOnly: _wholeWords,
     );
     if (merged.isEmpty) {
-      return [TextSpan(text: text, style: baseStyle)];
+      final end = fullText.length < fallbackLen ? fullText.length : fallbackLen;
+      return (start: 0, end: end);
     }
 
-    final hi = _bibleScreenSearchMatchHighlight(context);
-    final spans = <TextSpan>[];
-    var cursor = 0;
+    var start = merged.first.start - padBefore;
+    var end = merged.last.end + padAfter;
     for (final m in merged) {
+      final a = m.start - padBefore;
+      final b = m.end + padAfter;
+      if (a < start) start = a;
+      if (b > end) end = b;
+    }
+    if (start < 0) start = 0;
+    if (end > fullText.length) end = fullText.length;
+    if (end <= start) {
+      final endSafe = fullText.length < fallbackLen ? fullText.length : fallbackLen;
+      return (start: 0, end: endSafe);
+    }
+
+    if (end - start > maxWindow) {
+      final m = merged.first;
+      start = m.start - padBefore;
+      end = m.end + padAfter;
+      if (start < 0) start = 0;
+      if (end > fullText.length) end = fullText.length;
+      if (end - start > maxWindow) {
+        end = start + maxWindow;
+        if (end > fullText.length) {
+          end = fullText.length;
+          start = end > maxWindow ? end - maxWindow : 0;
+          if (start < 0) start = 0;
+        }
+      }
+    }
+    return (start: start, end: end);
+  }
+
+  List<({int start, int end})> _mergeMatchIntervals(
+    List<({int start, int end})> raw,
+  ) {
+    if (raw.isEmpty) return raw;
+    final sorted = [...raw]..sort((a, b) => a.start.compareTo(b.start));
+    final out = <({int start, int end})>[];
+    var cur = sorted.first;
+    for (var i = 1; i < sorted.length; i++) {
+      final n = sorted[i];
+      if (n.start > cur.end) {
+        out.add(cur);
+        cur = n;
+      } else {
+        final ne = n.end > cur.end ? n.end : cur.end;
+        cur = (start: cur.start, end: ne);
+      }
+    }
+    out.add(cur);
+    return out;
+  }
+
+  /// Превью стиха вокруг совпадений; высота строки растёт с длиной фрагмента.
+  List<InlineSpan> _buildSearchPreviewSpans(
+    BuildContext context,
+    String fullText,
+    TextStyle baseStyle,
+  ) {
+    final range = _searchPreviewRange(fullText);
+    final leadEllipsis = range.start > 0;
+    final trailEllipsis = range.end < fullText.length;
+
+    if (range.start >= range.end) {
+      return [TextSpan(text: '', style: baseStyle)];
+    }
+    final slice = fullText.substring(range.start, range.end);
+
+    final segments = _querySegments();
+    final hiBg = _bibleScreenSearchMatchHighlight(context);
+    final hiStyle = baseStyle.copyWith(
+      backgroundColor: hiBg,
+      fontWeight: FontWeight.w700,
+    );
+
+    final mergedFull = segments.isEmpty
+        ? <({int start, int end})>[]
+        : bibleMergedQueryMatches(
+            fullText,
+            segments,
+            wholeWordsOnly: _wholeWords,
+          );
+
+    final rel = <({int start, int end})>[];
+    for (final m in mergedFull) {
+      final lo = m.start < range.start ? range.start : m.start;
+      final clipEnd = m.end > range.end ? range.end : m.end;
+      if (lo < clipEnd) {
+        rel.add((start: lo - range.start, end: clipEnd - range.start));
+      }
+    }
+    final mergedRel = _mergeMatchIntervals(rel);
+
+    final spans = <InlineSpan>[];
+    if (leadEllipsis) {
+      spans.add(TextSpan(text: '…', style: baseStyle));
+    }
+
+    var cursor = 0;
+    for (final m in mergedRel) {
       if (m.start > cursor) {
-        spans.add(TextSpan(text: text.substring(cursor, m.start), style: baseStyle));
+        spans.add(
+          TextSpan(text: slice.substring(cursor, m.start), style: baseStyle),
+        );
       }
       spans.add(
-        TextSpan(
-          text: text.substring(m.start, m.end),
-          style: baseStyle.copyWith(
-            backgroundColor: hi,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
+        TextSpan(text: slice.substring(m.start, m.end), style: hiStyle),
       );
       cursor = m.end;
     }
-    if (cursor < text.length) {
-      spans.add(TextSpan(text: text.substring(cursor), style: baseStyle));
+    if (cursor < slice.length) {
+      spans.add(TextSpan(text: slice.substring(cursor), style: baseStyle));
+    }
+    if (trailEllipsis) {
+      spans.add(TextSpan(text: '…', style: baseStyle));
     }
     return spans;
   }
@@ -1744,9 +1847,6 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                                   final ch = r['chapter'] as int;
                                   final v = r['verse'] as int;
                                   final text = (r['text'] as String?) ?? '';
-                                  final preview = text.length > 100
-                                      ? '${text.substring(0, 100)}…'
-                                      : text;
                                   final multi =
                                       _selectedResultIndices.isNotEmpty;
                                   final picked =
@@ -1807,12 +1907,12 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                                               ),
                                             ),
                                             const SizedBox(height: 4),
-                                            RichText(
-                                              text: TextSpan(
+                                            Text.rich(
+                                              TextSpan(
                                                 children:
-                                                    _buildHighlightedSpans(
+                                                    _buildSearchPreviewSpans(
                                                   context,
-                                                  preview,
+                                                  text,
                                                   previewBase,
                                                 ),
                                               ),
