@@ -145,21 +145,21 @@ void showAppSettingsDialog(BuildContext context) {
 
               SliderThemeData sliderDecor(SliderThemeData base) =>
                   base.copyWith(
-                activeTrackColor: scheme.primary,
-                inactiveTrackColor: isDark
-                    ? scheme.surfaceContainerHighest
-                    : Colors.blue.shade100,
-                thumbColor: scheme.primary,
-                overlayColor: scheme.primary.withValues(alpha: 0.12),
-                tickMarkShape: const _SettingsSliderVerticalTickMarkShape(),
-                activeTickMarkColor:
-                    isDark ? scheme.primary : Colors.blue.shade900,
-                inactiveTickMarkColor: isDark
-                    ? scheme.onSurface.withValues(alpha: 0.38)
-                    : Colors.blue.shade600,
-                disabledActiveTickMarkColor: Colors.grey.shade600,
-                disabledInactiveTickMarkColor: Colors.grey.shade500,
-              );
+                    activeTrackColor: scheme.primary,
+                    inactiveTrackColor: isDark
+                        ? scheme.surfaceContainerHighest
+                        : Colors.blue.shade100,
+                    thumbColor: scheme.primary,
+                    overlayColor: scheme.primary.withValues(alpha: 0.12),
+                    tickMarkShape: const _SettingsSliderVerticalTickMarkShape(),
+                    activeTickMarkColor:
+                        isDark ? scheme.primary : Colors.blue.shade900,
+                    inactiveTickMarkColor: isDark
+                        ? scheme.onSurface.withValues(alpha: 0.38)
+                        : Colors.blue.shade600,
+                    disabledActiveTickMarkColor: Colors.grey.shade600,
+                    disabledInactiveTickMarkColor: Colors.grey.shade500,
+                  );
 
               return Material(
                 color: scheme.surface,
@@ -207,67 +207,66 @@ void showAppSettingsDialog(BuildContext context) {
                                 data: sliderDecor(
                                     SliderTheme.of(consumerContext)),
                                 child: Slider(
-                                    padding: EdgeInsets.zero,
-                                    value: fontSize.clamp(12.0, 28.0),
-                                    min: 12.0,
-                                    max: 28.0,
-                                    divisions: 16,
-                                    label: fontSize.toStringAsFixed(0),
-                                    onChanged: (value) {
-                                      setModalState(() => fontSize = value);
-                                      appProvider.changeFontSize(value);
-                                    },
-                                  ),
+                                  padding: EdgeInsets.zero,
+                                  value: fontSize.clamp(12.0, 28.0),
+                                  min: 12.0,
+                                  max: 28.0,
+                                  divisions: 16,
+                                  label: fontSize.toStringAsFixed(0),
+                                  onChanged: (value) {
+                                    setModalState(() => fontSize = value);
+                                    appProvider.changeFontSize(value);
+                                  },
                                 ),
-                                const SizedBox(height: 5),
+                              ),
+                              const SizedBox(height: 5),
                               Text(
                                 'Межстрочный интервал',
                                 style: kSettingsHeadingStyle,
                               ),
-                                SliderTheme(
-                                  data: sliderDecor(
-                                      SliderTheme.of(consumerContext)),
-                                  child: Slider(
-                                    padding: EdgeInsets.zero,
-                                    value: lineHeight.clamp(1.0, 2.2),
-                                    min: 1.0,
-                                    max: 2.2,
-                                    divisions: 12,
-                                    label: lineHeight.toStringAsFixed(2),
-                                    onChanged: (value) {
-                                      setModalState(
-                                          () => lineHeight = value);
-                                      appProvider.changeLineHeight(value);
-                                    },
-                                  ),
+                              SliderTheme(
+                                data: sliderDecor(
+                                    SliderTheme.of(consumerContext)),
+                                child: Slider(
+                                  padding: EdgeInsets.zero,
+                                  value: lineHeight.clamp(1.0, 2.2),
+                                  min: 1.0,
+                                  max: 2.2,
+                                  divisions: 12,
+                                  label: lineHeight.toStringAsFixed(2),
+                                  onChanged: (value) {
+                                    setModalState(() => lineHeight = value);
+                                    appProvider.changeLineHeight(value);
+                                  },
                                 ),
-                                const SizedBox(height: 5),
+                              ),
+                              const SizedBox(height: 5),
                               Text(
                                 'Интервал между стихами',
                                 style: kSettingsHeadingStyle,
                               ),
-                                SliderTheme(
-                                  data: sliderDecor(
-                                      SliderTheme.of(consumerContext)),
-                                  child: Slider(
-                                    padding: EdgeInsets.zero,
-                                    value: verseSpacing.clamp(0.0, 28.0),
-                                    min: 0.0,
-                                    max: 28.0,
-                                    divisions: 28,
-                                    label: verseSpacing.toStringAsFixed(0),
-                                    onChanged: (value) {
-                                      setModalState(() => verseSpacing = value);
-                                      appProvider.changeVerseSpacing(value);
-                                    },
-                                  ),
+                              SliderTheme(
+                                data: sliderDecor(
+                                    SliderTheme.of(consumerContext)),
+                                child: Slider(
+                                  padding: EdgeInsets.zero,
+                                  value: verseSpacing.clamp(0.0, 28.0),
+                                  min: 0.0,
+                                  max: 28.0,
+                                  divisions: 28,
+                                  label: verseSpacing.toStringAsFixed(0),
+                                  onChanged: (value) {
+                                    setModalState(() => verseSpacing = value);
+                                    appProvider.changeVerseSpacing(value);
+                                  },
                                 ),
-                                const SizedBox(height: 8),
+                              ),
+                              const SizedBox(height: 8),
                               Text(
                                 'Шрифт текста',
                                 style: kSettingsHeadingStyle,
                               ),
-                                const SizedBox(height: 4),
+                              const SizedBox(height: 4),
                               DropdownButtonFormField<String>(
                                 isExpanded: true,
                                 value: fontPreset,
@@ -295,135 +294,135 @@ void showAppSettingsDialog(BuildContext context) {
                                     vertical: 10,
                                   ),
                                 ),
-                                  items: AppProvider.verseFontLabels.entries
-                                      .map(
-                                        (e) => DropdownMenuItem<String>(
-                                          value: e.key,
-                                          child: Text(
-                                            e.value,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: kSettingsBodyStyle,
-                                          ),
+                                items: AppProvider.verseFontLabels.entries
+                                    .map(
+                                      (e) => DropdownMenuItem<String>(
+                                        value: e.key,
+                                        child: Text(
+                                          e.value,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: kSettingsBodyStyle,
                                         ),
-                                      )
-                                      .toList(),
-                                  onChanged: (value) {
-                                    if (value == null) return;
-                                    setModalState(() => fontPreset = value);
-                                    appProvider.setVerseFontPreset(value);
-                                  },
-                                ),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: (value) {
+                                  if (value == null) return;
+                                  setModalState(() => fontPreset = value);
+                                  appProvider.setVerseFontPreset(value);
+                                },
+                              ),
                               const SizedBox(height: 8),
                               Text(
                                 'Размер кнопок',
                                 style: kSettingsHeadingStyle,
                               ),
-                                SliderTheme(
-                                  data: sliderDecor(
-                                      SliderTheme.of(consumerContext)),
-                                  child: Slider(
-                                    padding: EdgeInsets.zero,
-                                    value: chromeBtnSize.clamp(
-                                      AppProvider.chromeButtonSizeMin,
-                                      AppProvider.chromeButtonSizeMax,
-                                    ),
-                                    min: AppProvider.chromeButtonSizeMin,
-                                    max: AppProvider.chromeButtonSizeMax,
-                                    divisions: 24,
-                                    label: chromeBtnSize.round().toString(),
-                                    onChanged: (value) {
-                                      setModalState(() => chromeBtnSize = value);
-                                      appProvider.changeChromeButtonSize(value);
-                                    },
+                              SliderTheme(
+                                data: sliderDecor(
+                                    SliderTheme.of(consumerContext)),
+                                child: Slider(
+                                  padding: EdgeInsets.zero,
+                                  value: chromeBtnSize.clamp(
+                                    AppProvider.chromeButtonSizeMin,
+                                    AppProvider.chromeButtonSizeMax,
                                   ),
+                                  min: AppProvider.chromeButtonSizeMin,
+                                  max: AppProvider.chromeButtonSizeMax,
+                                  divisions: 24,
+                                  label: chromeBtnSize.round().toString(),
+                                  onChanged: (value) {
+                                    setModalState(() => chromeBtnSize = value);
+                                    appProvider.changeChromeButtonSize(value);
+                                  },
                                 ),
+                              ),
                               const SizedBox(height: 8),
                               Text(
                                 'Тема',
                                 style: kSettingsHeadingStyle,
                               ),
-                                const SizedBox(height: 4),
-                                SegmentedButton<ThemeMode>(
-                                  segments: <ButtonSegment<ThemeMode>>[
-                                    ButtonSegment<ThemeMode>(
-                                      value: ThemeMode.light,
-                                      label: const Text(
-                                        'Светлая',
-                                        style: TextStyle(fontSize: 14),
-                                      ),
-                                      icon: const Icon(
-                                        Icons.light_mode_outlined,
-                                        size: kSegIcon,
-                                      ),
+                              const SizedBox(height: 4),
+                              SegmentedButton<ThemeMode>(
+                                segments: <ButtonSegment<ThemeMode>>[
+                                  ButtonSegment<ThemeMode>(
+                                    value: ThemeMode.light,
+                                    label: const Text(
+                                      'Светлая',
+                                      style: TextStyle(fontSize: 14),
                                     ),
-                                    ButtonSegment<ThemeMode>(
-                                      value: ThemeMode.dark,
-                                      label: const Text(
-                                        'Тёмная',
-                                        style: TextStyle(fontSize: 14),
-                                      ),
-                                      icon: const Icon(
-                                        Icons.dark_mode_outlined,
-                                        size: kSegIcon,
-                                      ),
-                                    ),
-                                  ],
-                                  style: SegmentedButton.styleFrom(
-                                    textStyle: const TextStyle(fontSize: 14),
-                                  ).copyWith(
-                                    side: const WidgetStatePropertyAll(
-                                      ChromeOutline.side,
+                                    icon: const Icon(
+                                      Icons.light_mode_outlined,
+                                      size: kSegIcon,
                                     ),
                                   ),
-                                  selected: <ThemeMode>{selectedTheme},
-                                  onSelectionChanged: (Set<ThemeMode> next) {
-                                    if (next.isEmpty) return;
-                                    final m = next.first;
-                                    setModalState(() => selectedTheme = m);
-                                    appProvider.setThemeMode(m);
-                                  },
-                                ),
-                                const SizedBox(height: 4),
-                                SwitchListTile(
-                                  dense: true,
-                                  visualDensity: VisualDensity.compact,
-                                  contentPadding: EdgeInsets.zero,
-                                  title: Text(
-                                    'Красные буквы',
-                                    style: kSettingsBodyStyle,
+                                  ButtonSegment<ThemeMode>(
+                                    value: ThemeMode.dark,
+                                    label: const Text(
+                                      'Тёмная',
+                                      style: TextStyle(fontSize: 14),
+                                    ),
+                                    icon: const Icon(
+                                      Icons.dark_mode_outlined,
+                                      size: kSegIcon,
+                                    ),
                                   ),
-                                  value: redLettersEnabled,
-                                  activeThumbColor: scheme.primary,
-                                  onChanged: (value) {
-                                    setModalState(
-                                      () => redLettersEnabled = value,
-                                    );
-                                    appProvider.setRedLettersEnabled(value);
-                                  },
-                                ),
-                                SwitchListTile(
-                                  dense: true,
-                                  visualDensity: VisualDensity.compact,
-                                  contentPadding: EdgeInsets.zero,
-                                  title: Text(
-                                    'Не выключать экран',
-                                    style: kSettingsBodyStyle,
+                                ],
+                                style: SegmentedButton.styleFrom(
+                                  textStyle: const TextStyle(fontSize: 14),
+                                ).copyWith(
+                                  side: const WidgetStatePropertyAll(
+                                    ChromeOutline.side,
                                   ),
-                                  value: keepScreenOn,
-                                  activeThumbColor: scheme.primary,
-                                  onChanged: (value) async {
-                                    setModalState(() => keepScreenOn = value);
-                                    await appProvider.setKeepScreenOn(value);
-                                  },
                                 ),
-                              ],
-                            ),
+                                selected: <ThemeMode>{selectedTheme},
+                                onSelectionChanged: (Set<ThemeMode> next) {
+                                  if (next.isEmpty) return;
+                                  final m = next.first;
+                                  setModalState(() => selectedTheme = m);
+                                  appProvider.setThemeMode(m);
+                                },
+                              ),
+                              const SizedBox(height: 4),
+                              SwitchListTile(
+                                dense: true,
+                                visualDensity: VisualDensity.compact,
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(
+                                  'Красные буквы',
+                                  style: kSettingsBodyStyle,
+                                ),
+                                value: redLettersEnabled,
+                                activeThumbColor: scheme.primary,
+                                onChanged: (value) {
+                                  setModalState(
+                                    () => redLettersEnabled = value,
+                                  );
+                                  appProvider.setRedLettersEnabled(value);
+                                },
+                              ),
+                              SwitchListTile(
+                                dense: true,
+                                visualDensity: VisualDensity.compact,
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(
+                                  'Не выключать экран',
+                                  style: kSettingsBodyStyle,
+                                ),
+                                value: keepScreenOn,
+                                activeThumbColor: scheme.primary,
+                                onChanged: (value) async {
+                                  setModalState(() => keepScreenOn = value);
+                                  await appProvider.setKeepScreenOn(value);
+                                },
+                              ),
+                            ],
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                );
+                ),
+              );
             },
           );
         },
@@ -432,8 +431,7 @@ void showAppSettingsDialog(BuildContext context) {
     transitionBuilder: (ctx, animation, secondaryAnimation, child) {
       final size = MediaQuery.sizeOf(ctx);
       final w = size.width;
-      final leftReveal =
-          math.min(w * 0.42, math.max(64.0, w * 0.28));
+      final leftReveal = math.min(w * 0.42, math.max(64.0, w * 0.28));
       final panelWidth = size.width - leftReveal;
       final curved = CurvedAnimation(
         parent: animation,
@@ -482,8 +480,7 @@ void showAppSettingsDialog(BuildContext context) {
 }
 
 void showAppSupportDialog(BuildContext context) {
-  const supportPayload =
-      'Автор проекта: Софеин Павел Геннадьевич\n'
+  const supportPayload = 'Автор проекта: Софеин Павел Геннадьевич\n'
       'Контактная почта: sfpavelg@gmail.com\n'
       'Версия проекта: ver_28_03_2026';
 
@@ -571,7 +568,8 @@ void showAppSupportDialog(BuildContext context) {
                 child: Icon(
                   Icons.copy_all,
                   size: 20,
-                  color: NotebookChromeUi.secondaryButtonForeground(routeContext),
+                  color:
+                      NotebookChromeUi.secondaryButtonForeground(routeContext),
                 ),
               ),
             ),
@@ -594,8 +592,7 @@ void showAppHelpDialog(BuildContext context) {
     builder: (routeContext) {
       final theme = Theme.of(routeContext);
       final scheme = theme.colorScheme;
-      final tocStyle =
-          _helpDialogTocStyle.copyWith(color: scheme.onSurface);
+      final tocStyle = _helpDialogTocStyle.copyWith(color: scheme.onSurface);
       final bodyStyle = theme.textTheme.bodyMedium!.copyWith(
         color: scheme.onSurface,
         height: 1.35,
@@ -636,155 +633,161 @@ void showAppHelpDialog(BuildContext context) {
                       'Библия:',
                       style: tocStyle,
                     ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Навигация',
-                          style: tocStyle,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '• Книгу и главу выбирают кнопки в верхней полосе.',
-                        ),
-                        Text(
-                          '• Листать главу за главой можно жестом влево или вправо.',
-                        ),
-                        Text(
-                          '• Долгое касание стиха включает выделение; коротким касанием отмечают ещё стихи.',
-                        ),
-                        Text(
-                          '• «Избранное» в шапке сохраняет выбранные стихи и открывает их перечень.',
-                        ),
-                        Text(
-                          '• В окнах выбора книги или главы закрыть подсказку можно кнопкой в углу заголовка.',
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          'Поиск',
-                          style: tocStyle,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '• Введите одно слово или несколько и нажмите «Найти».',
-                        ),
-                        Text(
-                          '• Флажки «ВЗ» и «НЗ» ограничивают поиск Ветхим или Новым Заветом.',
-                        ),
-                        Text(
-                          '• При включённом «Целом слове» находятся только отдельные слова целиком; '
-                          'если выключить, подойдёт и вхождение внутри слова '
-                          '(например, по «рад» откроется и «радость»).',
-                        ),
-                        Text(
-                          '• По строке из списка результатов открывается соответствующий стих.',
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'Блокнот:',
-                          style: tocStyle,
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Список файлов и папок:',
-                          style: tocStyle,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '• Стрелка «Назад» слева в папке возвращает к внешнему списку.',
-                        ),
-                        Text(
-                          '• «Новая папка» создаёт каталог там, где вы сейчас просматриваете список.',
-                        ),
-                        Text(
-                          '• «Новый документ» — новая текстовая заметка; после создания откроется редактор.',
-                        ),
-                        Text(
-                          '• Три точки справа в шапке открывают общее меню приложения '
-                          '(настройки, помощь, выход и другое).',
-                        ),
-                        Text(
-                          '• В настройках можно сменить тему, шрифт и интервалы в Библии, красные буквы, '
-                          'величину кнопок панели и включить «Не выключать экран».',
-                        ),
-                        Text(
-                          '• Короткое касание открывает файл или папку.',
-                        ),
-                        Text(
-                          '• Долгое касание файла или папки открывает меню справа: для файла — '
-                          'поделиться, сохранить копию, переименовать или удалить; '
-                          'для папки — переименовать или удалить.',
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Редактор документа:',
-                          style: tocStyle,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '• «Закрыть» (стрелка) — сохранить изменения и вернуться к списку.',
-                        ),
-                        Text(
-                          '• После паузы в наборе текст автоматически записывается на диск; '
-                          'кнопка «Сохранить» в шапке сохраняет немедленно.',
-                        ),
-                        Text(
-                          '• «Шаг назад» и «Шаг вперёд» отменяют или возвращают последние правки в тексте.',
-                        ),
-                        Text(
-                          '• В списке при входе в папку внизу показана строка «Папка:» — путь от корня блокнота; '
-                          'текст можно выделить и скопировать.',
-                        ),
-                        Text(
-                          '• В редакторе строка «Документ:» внизу напоминает полный путь к заметке, '
-                          'со всеми вложенными папками.',
-                        ),
-                        Text(
-                          '• Вертикальные три точки в шапке редактора ведут в то же общее меню приложения.',
-                        ),
-                        Text(
-                          '• Текст набирается во всю ширину экрана; стихи из вкладки «Библия» можно '
-                          'скопировать и вставить сюда.',
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'План чтения:',
-                          style: tocStyle,
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          '• Сначала показаны четыре квартала года; внутри каждого — подряд все дни '
-                          'этой четверти. Номера дней сквозные, на весь год (1…$n). '
-                          'На экране кварталов в шапке — выбор плана и меню; внутри квартала — прокрутка списка '
-                          'и переход к началу или концу перечня.',
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Параллельный план',
-                          style: tocStyle,
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Ветхий Завет, Псалтирь и Новый Завет читаются рядом, по заранее выстроенному '
-                          'порядку глав на каждый день. Нумерация дней идёт подряд (1…$n), без привязки к датам '
-                          'календаря. Отметки «прочитано» хранятся на вашем устройстве.',
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'Хронологический план',
-                          style: tocStyle,
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Здесь порядок глав приближён к ходу событий и к сопутствующим текстам. '
-                          'Дни снова идут подряд (1…$n), вне календарных дат. '
-                          'Отметки «прочитано» не смешиваются с параллельным планом.',
-                        ),
-                      ],
+                    const SizedBox(height: 6),
+                    Text(
+                      'Навигация',
+                      style: tocStyle,
                     ),
-                  ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '• Книгу и главу выбирают кнопки в верхней полосе.',
+                    ),
+                    Text(
+                      '• Листать главу за главой можно жестом влево или вправо.',
+                    ),
+                    Text(
+                      '• Долгое касание стиха включает выделение; коротким касанием отмечают ещё стихи.',
+                    ),
+                    Text(
+                      '• «Избранное» в шапке сохраняет выбранные стихи и открывает их перечень.',
+                    ),
+                    Text(
+                      '• В окнах выбора книги или главы закрыть подсказку можно кнопкой в углу заголовка.',
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Поиск',
+                      style: tocStyle,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '• Введите одно слово или несколько и нажмите «Найти».',
+                    ),
+                    Text(
+                      '• Флажки «ВЗ» и «НЗ» ограничивают поиск Ветхим или Новым Заветом.',
+                    ),
+                    Text(
+                      '• При включённом «Целом слове» находятся только отдельные слова целиком; '
+                      'если выключить, подойдёт и вхождение внутри слова '
+                      '(например, по «рад» откроется и «радость»).',
+                    ),
+                    Text(
+                      '• По строке из списка результатов открывается соответствующий стих.',
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Блокнот:',
+                      style: tocStyle,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Список файлов и папок:',
+                      style: tocStyle,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '• Стрелка «Назад» слева в папке возвращает к внешнему списку.',
+                    ),
+                    Text(
+                      '• «Новая папка» создаёт каталог там, где вы сейчас просматриваете список.',
+                    ),
+                    Text(
+                      '• «Новый документ» — новая текстовая заметка; после создания откроется редактор.',
+                    ),
+                    Text(
+                      '• Три точки справа в шапке открывают общее меню приложения '
+                      '(настройки, помощь, выход и другое).',
+                    ),
+                    Text(
+                      '• В настройках можно сменить тему, шрифт и интервалы в Библии, красные буквы, '
+                      'величину кнопок панели и включить «Не выключать экран».',
+                    ),
+                    Text(
+                      '• Короткое касание открывает файл или папку.',
+                    ),
+                    Text(
+                      '• Долгое касание файла или папки открывает меню справа: для файла — '
+                      'поделиться, сохранить копию, переименовать или удалить; '
+                      'для папки — переименовать или удалить.',
+                    ),
+                    Text(
+                      '• Перемещение файла: долгим касанием откройте меню файла, выберите '
+                      '«Переместить в…», затем перейдите в нужную папку в дереве и нажмите '
+                      '«Переместить сюда». Исходная папка отмечена серым цветом.',
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Редактор документа:',
+                      style: tocStyle,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '• «Закрыть» (стрелка) — сохранить изменения и вернуться к списку.',
+                    ),
+                    Text(
+                      '• После паузы в наборе текст автоматически записывается на диск; '
+                      'кнопка «Сохранить» в шапке сохраняет немедленно.',
+                    ),
+                    Text(
+                      '• «Шаг назад» и «Шаг вперёд» отменяют или возвращают последние правки в тексте.',
+                    ),
+                    Text(
+                      '• В списке при входе в папку внизу показана строка «Папка:» — путь от корня блокнота; '
+                          'по сегментам пути можно нажимать и быстро переходить в выбранную папку '
+                          '(с возвратом на нужный уровень).',
+                    ),
+                    Text(
+                      '• В редакторе строка «Документ:» внизу напоминает полный путь к заметке, '
+                      'со всеми вложенными папками.',
+                    ),
+                    Text(
+                      '• Вертикальные три точки в шапке редактора ведут в то же общее меню приложения.',
+                    ),
+                    Text(
+                      '• Текст набирается во всю ширину экрана; стихи из вкладки «Библия» можно '
+                      'скопировать и вставить сюда.',
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'План чтения:',
+                      style: tocStyle,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '• Сначала показаны четыре квартала года; внутри каждого — подряд все дни '
+                      'этой четверти. Номера дней сквозные, на весь год (1…$n). '
+                      'На экране кварталов в шапке — выбор плана и меню; внутри квартала — прокрутка списка '
+                      'и переход к началу или концу перечня.',
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Параллельный план',
+                      style: tocStyle,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Ветхий Завет, Псалтирь и Новый Завет читаются рядом, по заранее выстроенному '
+                      'порядку глав на каждый день. Нумерация дней идёт подряд (1…$n), без привязки к датам '
+                      'календаря. Отметки «прочитано» хранятся на вашем устройстве.',
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Хронологический план',
+                      style: tocStyle,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Здесь порядок глав приближён к ходу событий и к сопутствующим текстам. '
+                      'Дни снова идут подряд (1…$n), вне календарных дат. '
+                      'Отметки «прочитано» не смешиваются с параллельным планом.',
+                    ),
+                  ],
                 ),
               ),
             ),
-          );
+          ),
+        ),
+      );
     },
   );
 }

@@ -29,8 +29,8 @@ class AppChromeOverflowMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<AppProvider>(
       builder: (context, app, _) {
-        final s = app.chromeButtonSize
-            .clamp(AppProvider.chromeButtonSizeMin, AppProvider.chromeButtonSizeMax);
+        final s = app.chromeButtonSize.clamp(
+            AppProvider.chromeButtonSizeMin, AppProvider.chromeButtonSizeMax);
         final w = tileWidth ?? s;
         final iconSz = (math.min(w, s) * 0.5).clamp(18.0, 30.0);
         final corner = (math.min(w, s) * 0.22).clamp(4.0, 12.0);
@@ -123,6 +123,12 @@ Widget chromePopupMenuChoiceTile({
   required String label,
   required IconData icon,
 }) {
+  final chrome = context.watch<AppProvider>().chromeButtonSize;
+  final iconSize = (chrome * 0.48).clamp(18.0, 30.0);
+  final fontSize = (chrome * 0.34).clamp(12.0, 16.0);
+  final hPad = (chrome * 0.30).clamp(10.0, 16.0);
+  final vPad = (chrome * 0.18).clamp(7.0, 11.0);
+  final minHeight = (chrome * 0.96).clamp(42.0, 62.0);
   final inner = NotebookChromeUi.secondaryButtonBackground(context);
   final fg = NotebookChromeUi.secondaryButtonForeground(context);
   return Material(
@@ -139,20 +145,26 @@ Widget chromePopupMenuChoiceTile({
             width: ChromeOutline.width,
           ),
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontWeight: FontWeight.w500,
-                  color: fg.withValues(alpha: 0.92),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: minHeight),
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: hPad, vertical: vPad),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: fontSize,
+                      color: fg.withValues(alpha: 0.92),
+                    ),
+                  ),
                 ),
-              ),
+                Icon(icon, color: fg, size: iconSize),
+              ],
             ),
-            Icon(icon, color: fg, size: 22),
-          ],
+          ),
         ),
       ),
     ),

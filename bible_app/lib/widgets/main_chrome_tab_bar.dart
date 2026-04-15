@@ -4,22 +4,19 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 /// Горизонтальный зазор между кнопками хрома — как в шапке Библии (`s * 0.12`).
-double _chromeToolbarGap(double chrome) =>
-    (chrome * 0.12).clamp(4.0, 10.0);
+double _chromeToolbarGap(double chrome) => (chrome * 0.12).clamp(4.0, 10.0);
 
 /// Иконка вкладки — тот же масштаб, что у [ChromeIconButton].
-double _mainTabIconSize(double chrome) =>
-    (chrome * 0.5).clamp(18.0, 30.0);
+double _mainTabIconSize(double chrome) => (chrome * 0.5).clamp(18.0, 30.0);
 
 /// Подпись под иконкой (в широкой плашке можно чуть крупнее).
-double _mainTabLabelFont(double chrome) =>
-    (chrome * 0.30).clamp(10.0, 14.0);
+double _mainTabLabelFont(double chrome) => (chrome * 0.30).clamp(10.0, 14.0);
 
 /// Высота содержимого полосы вкладок (без [SafeArea] снизу).
 double mainChromeTabBarInteriorHeight(double chrome) {
-  const outerVertical = 8.0;
-  const innerVertical = 4.0;
-  const iconLabelGap = 2.0;
+  final outerVertical = (chrome * 0.16).clamp(6.0, 12.0);
+  final innerVertical = (chrome * 0.08).clamp(3.0, 7.0);
+  final iconLabelGap = (chrome * 0.05).clamp(2.0, 5.0);
   final iconH = _mainTabIconSize(chrome);
   final labelFont = _mainTabLabelFont(chrome);
   final labelLine = labelFont * 1.1;
@@ -28,7 +25,8 @@ double mainChromeTabBarInteriorHeight(double chrome) {
 
 /// Расстояние от низа экрана до зоны над вкладками.
 double mainChromeTabBarTotalHeight(BuildContext context) {
-  final chrome = Provider.of<AppProvider>(context, listen: false).chromeButtonSize;
+  final chrome =
+      Provider.of<AppProvider>(context, listen: false).chromeButtonSize;
   return MediaQuery.viewPaddingOf(context).bottom +
       mainChromeTabBarInteriorHeight(chrome);
 }
@@ -64,19 +62,27 @@ class MainChromeTabBar extends StatelessWidget {
     final barBg = isDark ? _appBarBgDark : _appBarBgLight;
     final buttonBg = isDark ? _buttonBgDark : _buttonBgLight;
     final fgSelected = isDark ? const Color(0xFF81D4FA) : Colors.blue.shade800;
-    final fgUnselected =
-        isDark ? Colors.grey.shade500 : Colors.grey.shade600;
+    final fgUnselected = isDark ? Colors.grey.shade500 : Colors.grey.shade600;
     final corner = (chrome * 0.22).clamp(4.0, 12.0);
     final iconSize = _mainTabIconSize(chrome);
     final labelSize = _mainTabLabelFont(chrome);
     final gap = _chromeToolbarGap(chrome);
+    final barVerticalInset = (chrome * 0.08).clamp(3.0, 7.0);
+    final tileVerticalPad = (chrome * 0.06).clamp(2.0, 6.0);
+    final tileHorizontalPad = (chrome * 0.10).clamp(4.0, 9.0);
+    final iconLabelGap = (chrome * 0.05).clamp(2.0, 5.0);
 
     return Material(
       color: barBg,
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: EdgeInsets.fromLTRB(gap, 4, gap, 4),
+          padding: EdgeInsets.fromLTRB(
+            gap,
+            barVerticalInset,
+            gap,
+            barVerticalInset,
+          ),
           child: Row(
             children: [
               for (var i = 0; i < 3; i++) ...[
@@ -98,9 +104,9 @@ class MainChromeTabBar extends StatelessWidget {
                           borderRadius: BorderRadius.circular(corner),
                         ),
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 2,
-                            horizontal: 4,
+                          padding: EdgeInsets.symmetric(
+                            vertical: tileVerticalPad,
+                            horizontal: tileHorizontalPad,
                           ),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
@@ -118,7 +124,7 @@ class MainChromeTabBar extends StatelessWidget {
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 2),
+                              SizedBox(height: iconLabelGap),
                               Text(
                                 _labels[i],
                                 maxLines: 1,

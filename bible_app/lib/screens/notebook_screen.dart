@@ -11,6 +11,7 @@ import 'package:bible_app/widgets/chrome_outline.dart';
 import 'package:bible_app/widgets/chrome_toolbar_button.dart';
 import 'package:bible_app/widgets/notebook_chrome_dialog_button.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:share_plus/share_plus.dart';
@@ -152,6 +153,40 @@ bool _notebookRenameCollisionError(Object e) {
   return m == 'Цель уже существует' || m == 'Конфликт имён';
 }
 
+const int _notebookMaxNameLength = 15;
+
+class _NotebookNameLengthFormatter extends TextInputFormatter {
+  _NotebookNameLengthFormatter({
+    required this.isFolder,
+    required this.onLimitReached,
+  });
+
+  final bool isFolder;
+  final VoidCallback onLimitReached;
+
+  int _effectiveLength(String text) {
+    final trimmed = text.trim();
+    if (isFolder) return trimmed.length;
+    var stem = trimmed;
+    while (stem.toLowerCase().endsWith('.txt') && stem.length > 4) {
+      stem = stem.substring(0, stem.length - 4);
+    }
+    return stem.length;
+  }
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (_effectiveLength(newValue.text) <= _notebookMaxNameLength) {
+      return newValue;
+    }
+    onLimitReached();
+    return oldValue;
+  }
+}
+
 bool _notebookPosixPathsEqualInsensitive(String a, String b) {
   final na = p.posix.normalize(a);
   final nb = p.posix.normalize(b);
@@ -177,7 +212,8 @@ Future<bool> _notebookRenameTargetTaken(
       if (e.name != base && e.name.toLowerCase() != base.toLowerCase()) {
         continue;
       }
-      if (!_notebookPosixPathsEqualInsensitive(e.relativePath, item.relativePath)) {
+      if (!_notebookPosixPathsEqualInsensitive(
+          e.relativePath, item.relativePath)) {
         return true;
       }
     }
@@ -188,7 +224,8 @@ Future<bool> _notebookRenameTargetTaken(
     if (e.name != base && e.name.toLowerCase() != base.toLowerCase()) {
       continue;
     }
-    if (!_notebookPosixPathsEqualInsensitive(e.relativePath, item.relativePath)) {
+    if (!_notebookPosixPathsEqualInsensitive(
+        e.relativePath, item.relativePath)) {
       return true;
     }
   }
@@ -206,12 +243,8 @@ List<String> _notebookMoveDialogPathSegments(String browseDir) {
 /// Префикс ветки дерева для уровня 1…[deepest] (корень — уровень 0, без префикса).
 String _notebookMoveDialogTreePrefix(int treeLevel, int deepestLevel) {
   if (treeLevel <= 0 || deepestLevel <= 0) return '';
-  final b = StringBuffer();
-  for (var l = 1; l < treeLevel; l++) {
-    b.write('│ ');
-  }
-  b.write(treeLevel == deepestLevel ? '└─ ' : '├─ ');
-  return b.toString();
+  final indent = '  ' * (treeLevel - 1);
+  return '$indent↳';
 }
 
 /// Префикс для i-й вложенной папки в списке (siblingCount детей у текущей папки).
@@ -221,9 +254,8 @@ String _notebookMoveDialogChildBranchPrefix(
   int segmentDepth,
 ) {
   if (siblingCount <= 0) return '';
-  final trunk =
-      segmentDepth == 0 ? '' : '${'│ ' * (segmentDepth - 1)}  ';
-  return trunk + (index < siblingCount - 1 ? '├─ ' : '└─ ');
+  final indent = '  ' * segmentDepth;
+  return '$indent↳';
 }
 
 class NotebookScreen extends StatefulWidget {
@@ -251,6 +283,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
 
   /// Выбранные в текущей папке .txt (режим после долгого нажатия на файл).
   final Set<String> _bulkSelectedFilePaths = <String>{};
+  DateTime? _lastNameLimitWarningAt;
 
   bool get _fileBulkSelectionUi =>
       _fileActionsAnchor != null && !_fileActionsAnchor!.isFolder;
@@ -260,7 +293,8 @@ class _NotebookScreenState extends State<NotebookScreen> {
     if (_bulkSelectedFilePaths.isEmpty) return const [];
     final ordered = _items
         .where(
-          (it) => !it.isFolder && _bulkSelectedFilePaths.contains(it.relativePath),
+          (it) =>
+              !it.isFolder && _bulkSelectedFilePaths.contains(it.relativePath),
         )
         .map((it) => it.relativePath)
         .toList();
@@ -425,6 +459,13 @@ class _NotebookScreenState extends State<NotebookScreen> {
               hintText: 'например: размышления.txt',
               border: OutlineInputBorder(),
             ),
+            inputFormatters: [
+              _NotebookNameLengthFormatter(
+                isFolder: false,
+                onLimitReached: () =>
+                    _showTypingNameLimitWarning(isFolder: false),
+              ),
+            ],
             autofocus: true,
             onSubmitted: (_) => Navigator.pop(ctx, true),
           ),
@@ -519,9 +560,12 @@ class _NotebookScreenState extends State<NotebookScreen> {
     );
     if (raw == null) return false;
     final destName = _ensureTxtName(raw);
+    if (_isFileStemTooLong(destName)) {
+      _showNameTooLongWarning(isFolder: false);
+      return false;
+    }
     final parent = p.posix.dirname(item.relativePath);
-    final destRel =
-        parent == '.' ? destName : p.posix.join(parent, destName);
+    final destRel = parent == '.' ? destName : p.posix.join(parent, destName);
     final srcNorm = p.posix.normalize(item.relativePath);
     final dstNorm = p.posix.normalize(destRel);
     if (dstNorm == srcNorm) {
@@ -708,8 +752,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
     final delLabel = a.isFolder
         ? 'Удалить папку'
         : (delCount > 1 ? 'Удалить ($delCount)' : 'Удалить');
-    final canRename =
-        a.isFolder || _bulkSelectedFilePaths.length <= 1;
+    final canRename = a.isFolder || _bulkSelectedFilePaths.length <= 1;
     final canSaveAs = _bulkSelectedFilePaths.length <= 1;
     final canMoveBulk =
         _bulkSelectedFilePaths.isNotEmpty && _notebookHasFolders;
@@ -827,6 +870,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
   Widget _buildNotebookPathStrip({
     required String label,
     required String pathValue,
+    Widget? pathWidget,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final barBg = isDark ? const Color(0xFF455A64) : const Color(0xFFE1F5FE);
@@ -858,16 +902,110 @@ class _NotebookScreenState extends State<NotebookScreen> {
                 ),
               ),
               const SizedBox(height: 4),
-              SelectableText(
-                pathValue,
-                style: TextStyle(
-                  color: valueColor,
-                  fontWeight: FontWeight.w500,
-                  fontSize: valueSize,
-                  height: 1.3,
-                ),
-              ),
+              pathWidget ??
+                  SelectableText(
+                    pathValue,
+                    style: TextStyle(
+                      color: valueColor,
+                      fontWeight: FontWeight.w500,
+                      fontSize: valueSize,
+                      height: 1.3,
+                    ),
+                  ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFolderPathBreadcrumb() {
+    final fs = context.watch<AppProvider>().fontSize;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final segs = _notebookMoveDialogPathSegments(_currentDir);
+    final crumbFs = fs.clamp(12.0, 40.0);
+    final activeColor = isDark ? Colors.white : Colors.black87;
+    final inactiveColor = isDark ? Colors.white70 : Colors.black54;
+
+    final chips = <Widget>[
+      InkWell(
+        onTap: () {
+          if (_currentDir.isEmpty) return;
+          setState(() => _currentDir = '');
+          unawaited(_refresh());
+          _closeFileActionsPanel();
+        },
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+          child: Text(
+            'Корень',
+            style: TextStyle(
+              color: _currentDir.isEmpty ? activeColor : inactiveColor,
+              fontWeight: FontWeight.w600,
+              fontSize: crumbFs,
+              height: 1.2,
+            ),
+          ),
+        ),
+      ),
+    ];
+
+    for (var i = 0; i < segs.length; i++) {
+      final path = segs.sublist(0, i + 1).join('/');
+      final isActive = path == _currentDir;
+      chips.add(
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          child: Text(
+            '/',
+            style: TextStyle(
+              color: inactiveColor,
+              fontWeight: FontWeight.w600,
+              fontSize: crumbFs,
+              height: 1.2,
+            ),
+          ),
+        ),
+      );
+      chips.add(
+        InkWell(
+          onTap: isActive
+              ? null
+              : () {
+                  setState(() => _currentDir = path);
+                  unawaited(_refresh());
+                  _closeFileActionsPanel();
+                },
+          borderRadius: BorderRadius.circular(6),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+            child: Text(
+              segs[i],
+              style: TextStyle(
+                color: isActive ? activeColor : inactiveColor,
+                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                fontSize: crumbFs,
+                height: 1.2,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final rowHeight = crumbFs * 1.2;
+    final maxPathHeight = rowHeight * 2;
+
+    return SizedBox(
+      height: maxPathHeight,
+      child: Scrollbar(
+        thumbVisibility: true,
+        interactive: true,
+        child: SingleChildScrollView(
+          child: Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: chips,
           ),
         ),
       ),
@@ -884,7 +1022,8 @@ class _NotebookScreenState extends State<NotebookScreen> {
   Widget _buildListFolderFooter() {
     return _buildNotebookPathStrip(
       label: 'Папка:',
-      pathValue: _notebookPathForDisplay(_currentDir),
+      pathValue: '',
+      pathWidget: _buildFolderPathBreadcrumb(),
     );
   }
 
@@ -901,6 +1040,37 @@ class _NotebookScreenState extends State<NotebookScreen> {
     final s = _sanitizeSegment(raw);
     if (s.isEmpty) return 'заметка.txt';
     return s.toLowerCase().endsWith('.txt') ? s : '$s.txt';
+  }
+
+  bool _isFolderNameTooLong(String folderName) {
+    return folderName.length > _notebookMaxNameLength;
+  }
+
+  bool _isFileStemTooLong(String fileName) {
+    final stem = _notebookTxtStemForRename(fileName);
+    return stem.length > _notebookMaxNameLength;
+  }
+
+  bool _showNameTooLongWarning({required bool isFolder}) {
+    if (!mounted) return false;
+    final target = isFolder ? 'папки' : 'файла';
+    _showNotebookWarningBanner(
+      context,
+      title: 'Слишком длинное имя $target',
+      subtitle: 'Максимум: $_notebookMaxNameLength символов.',
+    );
+    return true;
+  }
+
+  void _showTypingNameLimitWarning({required bool isFolder}) {
+    final now = DateTime.now();
+    final last = _lastNameLimitWarningAt;
+    if (last != null &&
+        now.difference(last) < const Duration(milliseconds: 800)) {
+      return;
+    }
+    _lastNameLimitWarningAt = now;
+    _showNameTooLongWarning(isFolder: isFolder);
   }
 
   /// Имя без «.txt» для поля переименования (расширение всегда .txt).
@@ -930,6 +1100,10 @@ class _NotebookScreenState extends State<NotebookScreen> {
     );
     if (raw == null) return;
     final name = _ensureTxtName(raw);
+    if (_isFileStemTooLong(name)) {
+      _showNameTooLongWarning(isFolder: false);
+      return;
+    }
     final rel = _currentDir.isEmpty ? name : p.posix.join(_currentDir, name);
     try {
       await repo.createFile(rel);
@@ -973,6 +1147,12 @@ class _NotebookScreenState extends State<NotebookScreen> {
             labelText: 'Имя папки',
             border: OutlineInputBorder(),
           ),
+          inputFormatters: [
+            _NotebookNameLengthFormatter(
+              isFolder: true,
+              onLimitReached: () => _showTypingNameLimitWarning(isFolder: true),
+            ),
+          ],
           autofocus: true,
           onSubmitted: (_) => Navigator.pop(ctx, true),
         ),
@@ -1000,6 +1180,10 @@ class _NotebookScreenState extends State<NotebookScreen> {
           const SnackBar(content: Text('Введите имя папки')),
         );
       }
+      return;
+    }
+    if (_isFolderNameTooLong(seg)) {
+      _showNameTooLongWarning(isFolder: true);
       return;
     }
     final rel = _currentDir.isEmpty ? seg : p.posix.join(_currentDir, seg);
@@ -1036,6 +1220,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
 
   void _goUp() {
     if (_currentDir.isEmpty) return;
+    _closeFileActionsPanel();
     final parent = p.posix.dirname(_currentDir);
     setState(() {
       _currentDir = parent == '.' ? '' : parent;
@@ -1053,9 +1238,8 @@ class _NotebookScreenState extends State<NotebookScreen> {
     final repo = _repo;
     if (repo == null) return false;
     final base = p.posix.basename(sourcePath);
-    final destRel = destParentDir.isEmpty
-        ? base
-        : p.posix.join(destParentDir, base);
+    final destRel =
+        destParentDir.isEmpty ? base : p.posix.join(destParentDir, base);
     final srcNorm = p.posix.normalize(sourcePath);
     final dstNorm = p.posix.normalize(destRel);
     void feedback(String text, {bool preferOverlay = false}) {
@@ -1063,7 +1247,8 @@ class _NotebookScreenState extends State<NotebookScreen> {
       if (preferOverlay && topOverlayMessages) {
         _showNotebookTopOverlayMessage(context, text);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(text)));
       }
     }
 
@@ -1112,12 +1297,12 @@ class _NotebookScreenState extends State<NotebookScreen> {
     final repo = _repo;
     if (repo == null || sourcePaths.isEmpty) return false;
     final bulk = sourcePaths.length > 1;
-    final primaryName =
-        p.posix.basename(sourcePaths.first);
+    final primaryName = p.posix.basename(sourcePaths.first);
     final moved = await showDialog<bool>(
       context: context,
       builder: (ctx) => _NotebookMoveFileDialog(
         repo: repo,
+        sourcePaths: sourcePaths,
         fileCount: sourcePaths.length,
         primaryFileName: primaryName,
         onMoveTo: (destParent) async {
@@ -1178,6 +1363,13 @@ class _NotebookScreenState extends State<NotebookScreen> {
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
                   ),
+                  inputFormatters: [
+                    _NotebookNameLengthFormatter(
+                      isFolder: true,
+                      onLimitReached: () =>
+                          _showTypingNameLimitWarning(isFolder: true),
+                    ),
+                  ],
                   autofocus: true,
                 )
               : Row(
@@ -1191,6 +1383,13 @@ class _NotebookScreenState extends State<NotebookScreen> {
                           hintText: 'например: размышления',
                           border: OutlineInputBorder(),
                         ),
+                        inputFormatters: [
+                          _NotebookNameLengthFormatter(
+                            isFolder: false,
+                            onLimitReached: () =>
+                                _showTypingNameLimitWarning(isFolder: false),
+                          ),
+                        ],
                         autofocus: true,
                       ),
                     ),
@@ -1228,13 +1427,20 @@ class _NotebookScreenState extends State<NotebookScreen> {
       if (item.isFolder) {
         final newSeg = _sanitizeSegment(ctrl.text);
         if (newSeg.isEmpty) return false;
+        if (_isFolderNameTooLong(newSeg)) {
+          _showNameTooLongWarning(isFolder: true);
+          return false;
+        }
         newName = newSeg;
       } else {
         newName = _finalTxtNameFromRenameField(ctrl.text);
+        if (_isFileStemTooLong(newName)) {
+          _showNameTooLongWarning(isFolder: false);
+          return false;
+        }
       }
       final parent = p.posix.dirname(item.relativePath);
-      final toRel =
-          parent == '.' ? newName : p.posix.join(parent, newName);
+      final toRel = parent == '.' ? newName : p.posix.join(parent, newName);
       if (await _notebookRenameTargetTaken(repo, item, toRel)) {
         if (mounted) {
           if (item.isFolder) {
@@ -1419,6 +1625,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
   PreferredSizeWidget _buildListAppBar() {
     final chrome = context.watch<AppProvider>().chromeButtonSize;
     final toolbarH = AppProvider.toolbarHeightForChrome(chrome);
+    final rightInset = (chrome * 0.12).clamp(4.0, 10.0);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final appBarBg = isDark ? _appBarBgDark : _appBarBgLight;
     final buttonBg = isDark ? _buttonBgDark : _buttonBgLight;
@@ -1474,9 +1681,12 @@ class _NotebookScreenState extends State<NotebookScreen> {
         ),
       ),
       actions: [
-        AppChromeOverflowMenu(
-          iconColor: chromeFg,
-          backgroundColor: buttonBg,
+        Padding(
+          padding: EdgeInsets.only(right: rightInset),
+          child: AppChromeOverflowMenu(
+            iconColor: chromeFg,
+            backgroundColor: buttonBg,
+          ),
         ),
       ],
     );
@@ -1485,6 +1695,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
   PreferredSizeWidget _buildEditorAppBar() {
     final chrome = context.watch<AppProvider>().chromeButtonSize;
     final toolbarH = AppProvider.toolbarHeightForChrome(chrome);
+    final rightInset = (chrome * 0.12).clamp(4.0, 10.0);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final appBarBg = isDark ? _appBarBgDark : _appBarBgLight;
     final buttonBg = isDark ? _buttonBgDark : _buttonBgLight;
@@ -1558,10 +1769,12 @@ class _NotebookScreenState extends State<NotebookScreen> {
           foregroundColor: chromeFg,
           backgroundColor: buttonBg,
         ),
+        const SizedBox(width: 4),
         AppChromeOverflowMenu(
           iconColor: chromeFg,
           backgroundColor: buttonBg,
         ),
+        SizedBox(width: rightInset),
       ],
     );
   }
@@ -1569,9 +1782,14 @@ class _NotebookScreenState extends State<NotebookScreen> {
   @override
   Widget build(BuildContext context) {
     final editing = _editingPath != null && _editorKey != null && _repo != null;
-    final uiListFontSize = context.watch<AppProvider>().fontSize;
+    final app = context.watch<AppProvider>();
+    final uiListFontSize = app.fontSize;
+    final uiLineHeight = app.lineHeight;
+    final chromeBtnSize = app.chromeButtonSize;
     final listIconSize = (24.0 * uiListFontSize / 16.0).clamp(20.0, 48.0);
-    const listCbBox = 48.0;
+    final listCheckVisualSize = (uiListFontSize * 0.72).clamp(9.0, 20.0);
+    final listCheckScale = (listCheckVisualSize / 18.0).clamp(0.5, 1.15);
+    final listCbBox = (listCheckVisualSize * 2.4).clamp(30.0, 56.0);
 
     return Scaffold(
       appBar: editing ? _buildEditorAppBar() : _buildListAppBar(),
@@ -1632,14 +1850,13 @@ class _NotebookScreenState extends State<NotebookScreen> {
                                         itemCount: _items.length,
                                         itemBuilder: (listContext, i) {
                                           final item = _items[i];
-                                          final bulk =
-                                              _fileBulkSelectionUi &&
-                                                  !item.isFolder;
+                                          final bulk = _fileBulkSelectionUi &&
+                                              !item.isFolder;
                                           final sel = _bulkSelectedFilePaths
                                               .contains(item.relativePath);
-                                          final isDark = Theme.of(context)
-                                                  .brightness ==
-                                              Brightness.dark;
+                                          final isDark =
+                                              Theme.of(context).brightness ==
+                                                  Brightness.dark;
                                           final tileBg = bulk && sel
                                               ? (isDark
                                                   ? Colors.blueGrey.shade700
@@ -1649,6 +1866,8 @@ class _NotebookScreenState extends State<NotebookScreen> {
 
                                           return ListTile(
                                             dense: true,
+                                            titleAlignment:
+                                                ListTileTitleAlignment.center,
                                             minVerticalPadding: 0,
                                             visualDensity: const VisualDensity(
                                               horizontal: 0,
@@ -1659,20 +1878,21 @@ class _NotebookScreenState extends State<NotebookScreen> {
                                               horizontal: 16,
                                               vertical: 1,
                                             ),
+                                            horizontalTitleGap: 0,
                                             tileColor: tileBg,
                                             minLeadingWidth: bulk
-                                                ? listIconSize * 1.15
-                                                : listIconSize + 12,
+                                                ? listCbBox * 0.98
+                                                : listIconSize,
                                             leading: bulk
                                                 ? SizedBox(
-                                                    width: listIconSize * 1.2,
-                                                    height: listIconSize * 1.2,
+                                                    width: listCbBox,
+                                                    height: listCbBox,
                                                     child: Center(
-                                                      child: FittedBox(
-                                                        fit: BoxFit.contain,
-                                                        child: SizedBox(
-                                                          width: listCbBox,
-                                                          height: listCbBox,
+                                                      child: SizedBox(
+                                                        width: listCbBox,
+                                                        height: listCbBox,
+                                                        child: Transform.scale(
+                                                          scale: listCheckScale,
                                                           child: Checkbox(
                                                             value: sel,
                                                             onChanged: (v) {
@@ -1705,7 +1925,8 @@ class _NotebookScreenState extends State<NotebookScreen> {
                                               style: TextStyle(
                                                 fontSize: uiListFontSize,
                                                 fontWeight: FontWeight.w500,
-                                                height: 1.0,
+                                                height: uiLineHeight.clamp(
+                                                    1.15, 1.45),
                                               ),
                                             ),
                                             onTap: () {
@@ -1713,17 +1934,16 @@ class _NotebookScreenState extends State<NotebookScreen> {
                                                 setState(() {
                                                   if (sel) {
                                                     _bulkSelectedFilePaths
-                                                        .remove(item
-                                                            .relativePath);
+                                                        .remove(
+                                                            item.relativePath);
                                                   } else {
-                                                    _bulkSelectedFilePaths.add(
-                                                        item.relativePath);
+                                                    _bulkSelectedFilePaths
+                                                        .add(item.relativePath);
                                                   }
                                                 });
                                                 return;
                                               }
-                                              if (_fileActionsAnchor !=
-                                                      null &&
+                                              if (_fileActionsAnchor != null &&
                                                   item.isFolder) {
                                                 _closeFileActionsPanel();
                                               }
@@ -1840,24 +2060,43 @@ class _NotebookChromePanelActionButton extends StatelessWidget {
 class _NotebookMoveFileDialog extends StatefulWidget {
   const _NotebookMoveFileDialog({
     required this.repo,
+    required this.sourcePaths,
     required this.fileCount,
     required this.primaryFileName,
     required this.onMoveTo,
   });
 
   final NotebookRepository repo;
+  final List<String> sourcePaths;
   final int fileCount;
   final String primaryFileName;
   final Future<bool> Function(String destParentDir) onMoveTo;
 
   @override
-  State<_NotebookMoveFileDialog> createState() => _NotebookMoveFileDialogState();
+  State<_NotebookMoveFileDialog> createState() =>
+      _NotebookMoveFileDialogState();
 }
 
 class _NotebookMoveFileDialogState extends State<_NotebookMoveFileDialog> {
-  String _browseDir = '';
+  late String _browseDir;
   List<NotebookListItem> _folders = [];
   bool _loading = true;
+
+  Set<String> get _sourceParentDirs {
+    final dirs = <String>{};
+    for (final src in widget.sourcePaths) {
+      final par = p.posix.dirname(src);
+      dirs.add(par == '.' ? '' : par);
+    }
+    return dirs;
+  }
+
+  String _initialBrowseDir() {
+    if (widget.sourcePaths.isEmpty) return '';
+    final first = widget.sourcePaths.first;
+    final parent = p.posix.dirname(first);
+    return parent == '.' ? '' : parent;
+  }
 
   Future<void> _reload() async {
     setState(() => _loading = true);
@@ -1877,14 +2116,8 @@ class _NotebookMoveFileDialogState extends State<_NotebookMoveFileDialog> {
   @override
   void initState() {
     super.initState();
+    _browseDir = _initialBrowseDir();
     _reload();
-  }
-
-  void _goUp() {
-    if (_browseDir.isEmpty) return;
-    final par = p.posix.dirname(_browseDir);
-    setState(() => _browseDir = par == '.' ? '' : par);
-    unawaited(_reload());
   }
 
   Future<void> _moveHere() async {
@@ -1956,12 +2189,20 @@ class _NotebookMoveFileDialogState extends State<_NotebookMoveFileDialog> {
       fontWeight: FontWeight.w500,
       color: isDark ? Colors.white : Colors.black87,
     );
+    final isSourceParent = _sourceParentDirs.contains(targetPath);
+    final rowIconData = isRoot
+        ? Icons.home_outlined
+        : (isSourceParent ? Icons.folder : Icons.folder_outlined);
     return Material(
-      color: isCurrent
+      color: isSourceParent
           ? (isDark
-              ? Colors.blueGrey.shade700.withValues(alpha: 0.42)
-              : Colors.blue.shade50.withValues(alpha: 0.92))
-          : Colors.transparent,
+              ? Colors.grey.shade700.withValues(alpha: 0.5)
+              : Colors.grey.shade300.withValues(alpha: 0.72))
+          : isCurrent
+              ? (isDark
+                  ? Colors.blueGrey.shade700.withValues(alpha: 0.42)
+                  : Colors.blue.shade50.withValues(alpha: 0.92))
+              : Colors.transparent,
       child: InkWell(
         onTap: () => _navigateBrowseTo(targetPath),
         child: Padding(
@@ -1974,11 +2215,10 @@ class _NotebookMoveFileDialogState extends State<_NotebookMoveFileDialog> {
             children: [
               if (prefix.isNotEmpty) Text(prefix, style: monoStyle),
               Icon(
-                isRoot ? Icons.home_outlined : Icons.folder_outlined,
+                rowIconData,
                 size: rowIcon,
                 color: isDark ? Colors.white70 : Colors.black54,
               ),
-              SizedBox(width: (uiFs * 0.2).clamp(5.0, 10.0)),
               Expanded(
                 child: Text(label, style: nameStyle, maxLines: 2),
               ),
@@ -2022,8 +2262,14 @@ class _NotebookMoveFileDialogState extends State<_NotebookMoveFileDialog> {
       height: 1.0,
       color: isDark ? Colors.white : Colors.black87,
     );
+    final isSourceParent = _sourceParentDirs.contains(folder.relativePath);
+    final rowIconData = isSourceParent ? Icons.folder : Icons.folder_outlined;
     return Material(
-      color: Colors.transparent,
+      color: isSourceParent
+          ? (isDark
+              ? Colors.grey.shade700.withValues(alpha: 0.5)
+              : Colors.grey.shade300.withValues(alpha: 0.72))
+          : Colors.transparent,
       child: InkWell(
         onTap: () => _navigateBrowseTo(folder.relativePath),
         child: Padding(
@@ -2035,11 +2281,10 @@ class _NotebookMoveFileDialogState extends State<_NotebookMoveFileDialog> {
             children: [
               if (prefix.isNotEmpty) Text(prefix, style: monoStyle),
               Icon(
-                Icons.folder_outlined,
+                rowIconData,
                 size: rowIcon,
                 color: isDark ? Colors.white70 : Colors.black54,
               ),
-              SizedBox(width: (uiFs * 0.2).clamp(5.0, 10.0)),
               Expanded(
                 child: Text(
                   folder.name,
@@ -2149,7 +2394,6 @@ class _NotebookMoveFileDialogState extends State<_NotebookMoveFileDialog> {
     final uiFs = app.fontSize;
     final chrome = app.chromeButtonSize;
     final rowIcon = (24.0 * uiFs / 16.0).clamp(20.0, 48.0);
-    final titleGap = (chrome * 0.15).clamp(4.0, 8.0);
     final treePanelBg =
         isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF5F5F5);
     return AlertDialog(
@@ -2166,12 +2410,6 @@ class _NotebookMoveFileDialogState extends State<_NotebookMoveFileDialog> {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          NotebookChromeDialogToolbarIconButton(
-            icon: Icons.arrow_upward,
-            onPressed: _browseDir.isEmpty ? null : _goUp,
-            tooltip: 'Уровень выше',
-          ),
-          SizedBox(width: titleGap),
           NotebookChromeDialogCloseButton(
             onPressed: () => Navigator.of(context).pop(false),
           ),
@@ -2179,19 +2417,10 @@ class _NotebookMoveFileDialogState extends State<_NotebookMoveFileDialog> {
       ),
       content: SizedBox(
         width: double.maxFinite,
-        height: 320,
+        height: 380,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'Вниз — по папкам в списке; вверх — кнопка «↑» или строка дерева. '
-              'Затем «Переместить сюда».',
-              style: TextStyle(
-                fontSize: (uiFs * 0.82).clamp(11.5, 20.0),
-                height: 1.35,
-                color: isDark ? Colors.white70 : Colors.black87,
-              ),
-            ),
             SizedBox(height: (uiFs * 0.25).clamp(6.0, 10.0)),
             Expanded(
               child: DecoratedBox(
