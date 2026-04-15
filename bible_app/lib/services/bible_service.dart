@@ -23,7 +23,8 @@ bool _containsWholeWord(String haystackLower, String wordLower) {
     if (i == -1) return false;
     final end = i + wordLower.length;
     final leftOk = i == 0 || !_wordCharAt(haystackLower, i - 1);
-    final rightOk = end >= haystackLower.length || !_wordCharAt(haystackLower, end);
+    final rightOk =
+        end >= haystackLower.length || !_wordCharAt(haystackLower, end);
     if (leftOk && rightOk) return true;
     from = i + 1;
   }
@@ -73,6 +74,180 @@ class BibleService {
 
   BibleService._internal();
 
+  static final RegExp _septuagintBracketChunk = RegExp(r'\[[^\[\]]*\]');
+  static final RegExp _inlineNoteTag =
+      RegExp(r'<note>.*?</note>', dotAll: true);
+  static final Set<String> _alwaysUnwrapSquareBracketVerses = <String>{
+    'Судьи|20|27',
+    'Судьи|20|28',
+    'Псалтирь|67|23',
+    'Псалтирь|67|24',
+    'Притчи|29|6',
+  };
+
+  static String _verseKey(String book, int chapter, int verse) =>
+      '$book|$chapter|$verse';
+
+  static bool _isAlwaysUnwrapSquareBrackets(
+    String book,
+    int chapter,
+    int verse,
+  ) {
+    return _alwaysUnwrapSquareBracketVerses.contains(
+      _verseKey(book, chapter, verse),
+    );
+  }
+
+  static bool _isFullSeptuagintVerse(
+    String book,
+    int chapter,
+    int verse,
+  ) {
+    if (book == 'Иисус Навин' && chapter == 24 && verse >= 34 && verse <= 36) {
+      return true;
+    }
+    if (book == 'Даниил' && chapter == 3 && verse >= 24 && verse <= 90) {
+      return true;
+    }
+    return false;
+  }
+
+  /// Удаляет вставки Септуагинты в квадратных скобках вместе со скобками.
+  static String stripSeptuagintBracketedText(String text) {
+    if (text.isEmpty) return text;
+    var out = text.replaceAll(_septuagintBracketChunk, '');
+    out = out.replaceAll(RegExp(r'\s{2,}'), ' ');
+    out = out.replaceAllMapped(
+      RegExp(r'\s+([,.;:!?])'),
+      (m) => m.group(1) ?? '',
+    );
+    return out.trim();
+  }
+
+  /// Декодирует простые HTML-сущности тегов из источника.
+  static String decodeInlineTagEntities(String text) {
+    if (text.isEmpty) return text;
+    if (!text.contains('&')) return text;
+    return text
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&amp;', '&');
+  }
+
+  /// Убирает служебную разметку стихов:
+  /// - `<note>...</note>` удаляется целиком (вместе с текстом пометки),
+  /// - остальные теги снимаются, сохраняя внутренний текст.
+  static String stripInlineMarkupTags(String text) {
+    if (text.isEmpty) return text;
+    if (!text.contains('<') && !text.contains('&lt;')) return text;
+    var out = decodeInlineTagEntities(text);
+    out = out.replaceAll(_inlineNoteTag, '');
+    out = out.replaceAll(RegExp(r'</?[^>]+>'), '');
+    out = out.replaceAll(RegExp(r'\s{2,}'), ' ');
+    out = out.replaceAllMapped(
+      RegExp(r'\s+([,.;:!?])'),
+      (m) => m.group(1) ?? '',
+    );
+    return out.trim();
+  }
+
+  static String _removeSquareBracketsOnly(String text) {
+    if (text.isEmpty) return text;
+    if (!text.contains('[') && !text.contains(']')) return text;
+    var out = text.replaceAll('[', '').replaceAll(']', '');
+    out = out.replaceAll(RegExp(r'\s{2,}'), ' ');
+    out = out.replaceAllMapped(
+      RegExp(r'\s+([,.;:!?])'),
+      (m) => m.group(1) ?? '',
+    );
+    return out.trim();
+  }
+
+  /// Нормализация текста стиха по правилам Септуагинты и служебной разметки.
+  static String normalizeVerseTextForDisplay(
+    String book,
+    int chapter,
+    int verse,
+    String rawText, {
+    required bool showSeptuagintText,
+    bool stripMarkup = true,
+  }) {
+    var text = rawText;
+    final hasTagEntities = text.contains('&lt;') || text.contains('&gt;');
+    final hasRawTags = text.contains('<') || text.contains('>');
+    final hasSquare = text.contains('[') || text.contains(']');
+
+    if (hasTagEntities) {
+      text = decodeInlineTagEntities(text);
+    }
+    if (_isAlwaysUnwrapSquareBrackets(book, chapter, verse)) {
+      text = _removeSquareBracketsOnly(text);
+    } else if (!showSeptuagintText && hasSquare) {
+      text = showSeptuagintText ? text : stripSeptuagintBracketedText(text);
+    }
+    if (stripMarkup && (hasRawTags || hasTagEntities)) {
+      text = stripInlineMarkupTags(text);
+    }
+    return text;
+  }
+
+  /// Скрыть ли стих целиком, если Септуагинта выключена.
+  static bool shouldHideVerseForSeptuagintToggle(
+    String book,
+    int chapter,
+    int verse, {
+    required bool showSeptuagintText,
+  }) {
+    if (showSeptuagintText) return false;
+    return _isFullSeptuagintVerse(book, chapter, verse);
+  }
+
+  /// Применяет правила отображения по Септуагинте для выбранной главы.
+  List<BibleVerse> adaptVersesForDisplay(
+    List<BibleVerse> source, {
+    required bool showSeptuagintText,
+  }) {
+    if (source.isEmpty) return source;
+    final out = <BibleVerse>[];
+    for (final v in source) {
+      if (shouldHideVerseForSeptuagintToggle(
+        v.book,
+        v.chapter,
+        v.verse,
+        showSeptuagintText: showSeptuagintText,
+      )) {
+        continue;
+      }
+      var newVerseNum = v.verse;
+      if (!showSeptuagintText &&
+          v.book == 'Даниил' &&
+          v.chapter == 3 &&
+          v.verse >= 91) {
+        newVerseNum = v.verse - 67;
+      }
+      final normalizedText = normalizeVerseTextForDisplay(
+        v.book,
+        v.chapter,
+        v.verse,
+        v.text,
+        showSeptuagintText: showSeptuagintText,
+        stripMarkup: false,
+      );
+      out.add(
+        BibleVerse(
+          book: v.book,
+          chapter: v.chapter,
+          verse: newVerseNum,
+          text: normalizedText,
+          type: v.type,
+          speaker: v.speaker,
+        ),
+      );
+    }
+    return out;
+  }
+
   Map<String, Map<String, Map<String, dynamic>>> _oldTestament = {};
   Map<String, Map<String, Map<String, dynamic>>> _newTestament = {};
 
@@ -95,8 +270,8 @@ class BibleService {
 
   Future<void> _loadOldTestament() async {
     try {
-      final oldTestamentData =
-          await rootBundle.loadString('assets/bible/old_testament_correct.json');
+      final oldTestamentData = await rootBundle
+          .loadString('assets/bible/old_testament_correct.json');
       final oldTestamentJson =
           json.decode(oldTestamentData) as Map<String, dynamic>;
       _oldTestament = _convertJsonToBibleData(oldTestamentJson);
@@ -110,8 +285,8 @@ class BibleService {
 
   Future<void> _loadNewTestament() async {
     try {
-      final newTestamentData =
-          await rootBundle.loadString('assets/bible/new_testament_correct.json');
+      final newTestamentData = await rootBundle
+          .loadString('assets/bible/new_testament_correct.json');
       final newTestamentJson =
           json.decode(newTestamentData) as Map<String, dynamic>;
       _newTestament = _convertJsonToBibleData(newTestamentJson);
@@ -144,8 +319,7 @@ class BibleService {
       'Матфея': {
         '1': {
           '1': {
-            'text':
-                'Родословие Иисуса Христа, Сына Давидова, Сына Авраамова.',
+            'text': 'Родословие Иисуса Христа, Сына Давидова, Сына Авраамова.',
             'type': 'narrative'
           },
           '2': {
@@ -265,6 +439,7 @@ class BibleService {
     bool includeOldTestament = true,
     bool includeNewTestament = true,
     bool wholeWordsOnly = false,
+    bool includeSeptuagintText = true,
   }) {
     final trimmed = query.trim();
     if (trimmed.isEmpty) return [];
@@ -275,10 +450,8 @@ class BibleService {
       if (!wholeWordsOnly) {
         return t.contains(qLower);
       }
-      final tokens = qLower
-          .split(RegExp(r'\s+'))
-          .where((e) => e.isNotEmpty)
-          .toList();
+      final tokens =
+          qLower.split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
       if (tokens.isEmpty) return false;
       for (final token in tokens) {
         if (!_containsWholeWord(t, token)) return false;
@@ -297,12 +470,37 @@ class BibleService {
             final vd = verseData is Map<String, dynamic>
                 ? verseData
                 : <String, dynamic>{};
-            final text = (vd['text'] ?? '').toString();
+            final chapterNum = int.parse(chapter);
+            final verseNum = int.parse(verse);
+            if (shouldHideVerseForSeptuagintToggle(
+              book,
+              chapterNum,
+              verseNum,
+              showSeptuagintText: includeSeptuagintText,
+            )) {
+              return;
+            }
+            final sourceText = (vd['text'] ?? '').toString();
+            final text = normalizeVerseTextForDisplay(
+              book,
+              chapterNum,
+              verseNum,
+              sourceText,
+              showSeptuagintText: includeSeptuagintText,
+              stripMarkup: true,
+            );
             if (verseMatches(text)) {
+              var outVerseNum = verseNum;
+              if (!includeSeptuagintText &&
+                  book == 'Даниил' &&
+                  chapterNum == 3 &&
+                  verseNum >= 91) {
+                outVerseNum = verseNum - 67;
+              }
               results.add(BibleVerse(
                 book: book,
-                chapter: int.parse(chapter),
-                verse: int.parse(verse),
+                chapter: chapterNum,
+                verse: outVerseNum,
                 text: text,
                 type: (vd['type'] ?? 'narrative').toString(),
                 speaker: vd['speaker'] as String?,

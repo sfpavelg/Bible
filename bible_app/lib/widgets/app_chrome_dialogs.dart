@@ -111,7 +111,7 @@ void showAppSettingsDialog(BuildContext context) {
       double fontSize = appProvider.fontSize;
       double lineHeight = appProvider.lineHeight;
       double verseSpacing = appProvider.verseSpacing;
-      bool redLettersEnabled = appProvider.redLettersEnabled;
+      bool showSeptuagintText = appProvider.showSeptuagintText;
       bool keepScreenOn = appProvider.keepScreenOn;
       String fontPreset = appProvider.verseFontPreset;
       if (!AppProvider.verseFontLabels.containsKey(fontPreset)) {
@@ -388,16 +388,16 @@ void showAppSettingsDialog(BuildContext context) {
                                 visualDensity: VisualDensity.compact,
                                 contentPadding: EdgeInsets.zero,
                                 title: Text(
-                                  'Красные буквы',
+                                  'Септуагинта [ ]',
                                   style: kSettingsBodyStyle,
                                 ),
-                                value: redLettersEnabled,
+                                value: showSeptuagintText,
                                 activeThumbColor: scheme.primary,
                                 onChanged: (value) {
                                   setModalState(
-                                    () => redLettersEnabled = value,
+                                    () => showSeptuagintText = value,
                                   );
-                                  appProvider.setRedLettersEnabled(value);
+                                  appProvider.setShowSeptuagintText(value);
                                 },
                               ),
                               SwitchListTile(
@@ -733,8 +733,8 @@ void showAppHelpDialog(BuildContext context) {
                     ),
                     Text(
                       '• В списке при входе в папку внизу показана строка «Папка:» — путь от корня блокнота; '
-                          'по сегментам пути можно нажимать и быстро переходить в выбранную папку '
-                          '(с возвратом на нужный уровень).',
+                      'по сегментам пути можно нажимать и быстро переходить в выбранную папку '
+                      '(с возвратом на нужный уровень).',
                     ),
                     Text(
                       '• В редакторе строка «Документ:» внизу напоминает полный путь к заметке, '

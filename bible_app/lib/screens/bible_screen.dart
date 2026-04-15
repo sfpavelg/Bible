@@ -113,6 +113,55 @@ TextStyle _favoritesPanelTextStyle(
   );
 }
 
+String _bibleVisibleText(AppProvider app, String text) {
+  final noMarkup = BibleService.stripInlineMarkupTags(text);
+  if (app.showSeptuagintText) return noMarkup;
+  return BibleService.stripSeptuagintBracketedText(noMarkup);
+}
+
+const String _bibleNoteMarker = '\uE000';
+final RegExp _bibleInlineNoteTag = RegExp(r'<note>(.*?)</note>', dotAll: true);
+
+class _BibleVerseDisplayPayload {
+  const _BibleVerseDisplayPayload({
+    required this.textWithMarkers,
+    required this.notes,
+  });
+
+  final String textWithMarkers;
+  final List<String> notes;
+}
+
+_BibleVerseDisplayPayload _bibleVerseDisplayPayloadFromRaw(
+  String raw,
+) {
+  final src = BibleService.decodeInlineTagEntities(raw);
+  final notes = <String>[];
+  final buf = StringBuffer();
+  var from = 0;
+  for (final m in _bibleInlineNoteTag.allMatches(src)) {
+    if (m.start > from) buf.write(src.substring(from, m.start));
+    final body = (m.group(1) ?? '').trim();
+    if (body.isNotEmpty) {
+      notes.add(body);
+      buf.write(_bibleNoteMarker);
+    }
+    from = m.end;
+  }
+  if (from < src.length) buf.write(src.substring(from));
+  var out = buf.toString();
+  out = out.replaceAll(RegExp(r'</?[^>]+>'), '');
+  out = out.replaceAll(RegExp(r'\s{2,}'), ' ');
+  out = out.replaceAllMapped(
+    RegExp(r'\s+([,.;:!?])'),
+    (m) => m.group(1) ?? '',
+  );
+  return _BibleVerseDisplayPayload(
+    textWithMarkers: out.trim(),
+    notes: notes,
+  );
+}
+
 /// Тело записи «Избранное»: жирная ссылка (книга, глава, стих) и текст в кавычках; по строке на стих.
 Widget _favoritesEntryBody(
   _BookmarkTab tab, {
@@ -266,6 +315,94 @@ class _BibleScreenState extends State<BibleScreen> {
   static const Color _buttonBgDark = Color(0xFF455A64);
 
   final ScrollController _scrollController = ScrollController();
+
+  Future<void> _showVerseNoteDialog(String noteText) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Пометка'),
+        content: SingleChildScrollView(
+          child: Text(noteText),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Закрыть'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<InlineSpan> _buildVerseInlineSpans(
+    AppProvider app,
+    String textWithMarkers,
+    List<String> notes, {
+    required Color textColor,
+  }) {
+    final baseStyle = app.bibleVerseTextStyle(
+      color: textColor,
+      fontWeight: FontWeight.normal,
+    );
+    final starStyle = baseStyle.copyWith(
+      color: Colors.blue,
+      fontWeight: FontWeight.w700,
+    );
+    final noteBtnHeight = app.fontSize.clamp(12.0, 28.0);
+    final noteBtnWidth = (app.fontSize * 2).clamp(24.0, 56.0);
+    final noteBtnRadius = (noteBtnHeight * 0.22).clamp(4.0, 8.0);
+    final spans = <InlineSpan>[];
+    final b = StringBuffer();
+    var noteIdx = 0;
+    void flushBuffer() {
+      if (b.isEmpty) return;
+      spans.add(TextSpan(text: b.toString(), style: baseStyle));
+      b.clear();
+    }
+
+    for (var i = 0; i < textWithMarkers.length; i++) {
+      final ch = textWithMarkers[i];
+      if (ch == _bibleNoteMarker) {
+        flushBuffer();
+        final noteText = noteIdx < notes.length ? notes[noteIdx] : '';
+        noteIdx++;
+        spans.add(
+          WidgetSpan(
+            alignment: PlaceholderAlignment.baseline,
+            baseline: TextBaseline.alphabetic,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 1),
+              child: Material(
+                color: _bibleScreenButtonBg(context),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(noteBtnRadius),
+                  side: ChromeOutline.side,
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: noteText.isEmpty
+                      ? null
+                      : () => unawaited(_showVerseNoteDialog(noteText)),
+                  child: SizedBox(
+                    width: noteBtnWidth,
+                    height: noteBtnHeight,
+                    child: Center(
+                      child: Text('*', style: starStyle),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      } else {
+        b.write(ch);
+      }
+    }
+    flushBuffer();
+    return spans;
+  }
 
   /// Ключи строк главы по номеру стиха — для [Scrollable.ensureVisible] при переходе из поиска.
   final Map<int, GlobalKey> _verseRowKeys = {};
@@ -486,7 +623,10 @@ class _BibleScreenState extends State<BibleScreen> {
   String? _verseText(List<Map<String, dynamic>> verses, int verseNum) {
     for (final v in verses) {
       if (v['verse'] == verseNum) {
-        return v['text'] as String?;
+        final raw = v['text'] as String?;
+        if (raw == null) return null;
+        final app = Provider.of<AppProvider>(context, listen: false);
+        return _bibleVisibleText(app, raw);
       }
     }
     return null;
@@ -778,13 +918,13 @@ class _BibleScreenState extends State<BibleScreen> {
                                 itemBuilder: (context, index) {
                                   final verse = verses[index];
                                   final num = verse['verse'] as int;
-                                  final verseText = '$num. ${verse['text']}';
-                                  final isSpeech = verse['type'] == 'speech';
+                                  final payload =
+                                      _bibleVerseDisplayPayloadFromRaw(
+                                    (verse['text'] ?? '').toString(),
+                                  );
+                                  final verseTextWithMarkers =
+                                      '$num. ${payload.textWithMarkers}';
                                   Color textColor = verseTextColor;
-                                  if (isSpeech &&
-                                      appProvider.redLettersEnabled) {
-                                    textColor = Colors.red;
-                                  }
                                   final highlighted = _highlightVerse == num;
                                   final selected =
                                       _selectedVerses.contains(num);
@@ -843,14 +983,15 @@ class _BibleScreenState extends State<BibleScreen> {
                                             ),
                                             child: Align(
                                               alignment: Alignment.centerLeft,
-                                              child: Text(
-                                                verseText,
-                                                style: appProvider
-                                                    .bibleVerseTextStyle(
-                                                  color: textColor,
-                                                  fontWeight: isSpeech
-                                                      ? FontWeight.bold
-                                                      : FontWeight.normal,
+                                              child: Text.rich(
+                                                TextSpan(
+                                                  children:
+                                                      _buildVerseInlineSpans(
+                                                    appProvider,
+                                                    verseTextWithMarkers,
+                                                    payload.notes,
+                                                    textColor: textColor,
+                                                  ),
                                                 ),
                                               ),
                                             ),
@@ -1502,7 +1643,10 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
       final book = r['book'] as String;
       final ch = r['chapter'] as int;
       final v = r['verse'] as int;
-      final text = (r['text'] as String?) ?? '';
+      final text = _bibleVisibleText(
+        widget.appProvider,
+        (r['text'] as String?) ?? '',
+      );
       parts.add('$book $ch:$v $text');
     }
     if (parts.isEmpty) return;
@@ -1606,20 +1750,15 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
     return out;
   }
 
-  /// Превью стиха вокруг совпадений; высота строки растёт с длиной фрагмента.
+  /// Полный текст стиха в выдаче поиска с подсветкой совпадений (без усечения).
   List<InlineSpan> _buildSearchPreviewSpans(
     BuildContext context,
     String fullText,
     TextStyle baseStyle,
   ) {
-    final range = _searchPreviewRange(fullText);
-    final leadEllipsis = range.start > 0;
-    final trailEllipsis = range.end < fullText.length;
-
-    if (range.start >= range.end) {
+    if (fullText.isEmpty) {
       return [TextSpan(text: '', style: baseStyle)];
     }
-    final slice = fullText.substring(range.start, range.end);
 
     final segments = _querySegments();
     final hiBg = _bibleScreenSearchMatchHighlight(context);
@@ -1636,38 +1775,23 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
             wholeWordsOnly: _wholeWords,
           );
 
-    final rel = <({int start, int end})>[];
-    for (final m in mergedFull) {
-      final lo = m.start < range.start ? range.start : m.start;
-      final clipEnd = m.end > range.end ? range.end : m.end;
-      if (lo < clipEnd) {
-        rel.add((start: lo - range.start, end: clipEnd - range.start));
-      }
-    }
-    final mergedRel = _mergeMatchIntervals(rel);
+    final mergedRel = _mergeMatchIntervals(mergedFull);
 
     final spans = <InlineSpan>[];
-    if (leadEllipsis) {
-      spans.add(TextSpan(text: '…', style: baseStyle));
-    }
-
     var cursor = 0;
     for (final m in mergedRel) {
       if (m.start > cursor) {
         spans.add(
-          TextSpan(text: slice.substring(cursor, m.start), style: baseStyle),
+          TextSpan(text: fullText.substring(cursor, m.start), style: baseStyle),
         );
       }
       spans.add(
-        TextSpan(text: slice.substring(m.start, m.end), style: hiStyle),
+        TextSpan(text: fullText.substring(m.start, m.end), style: hiStyle),
       );
       cursor = m.end;
     }
-    if (cursor < slice.length) {
-      spans.add(TextSpan(text: slice.substring(cursor), style: baseStyle));
-    }
-    if (trailEllipsis) {
-      spans.add(TextSpan(text: '…', style: baseStyle));
+    if (cursor < fullText.length) {
+      spans.add(TextSpan(text: fullText.substring(cursor), style: baseStyle));
     }
     return spans;
   }
@@ -1981,7 +2105,10 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                                   final book = r['book'] as String;
                                   final ch = r['chapter'] as int;
                                   final v = r['verse'] as int;
-                                  final text = (r['text'] as String?) ?? '';
+                                  final text = _bibleVisibleText(
+                                    widget.appProvider,
+                                    (r['text'] as String?) ?? '',
+                                  );
                                   final multi =
                                       _selectedResultIndices.isNotEmpty;
                                   final picked =

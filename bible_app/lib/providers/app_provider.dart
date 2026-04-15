@@ -31,7 +31,7 @@ class AppProvider with ChangeNotifier {
   double _verseSpacing = 6.0;
   double _chromeButtonSize = 40.0;
   String _verseFontPreset = 'sans';
-  bool _redLettersEnabled = true;
+  bool _showSeptuagintText = true;
   bool _keepScreenOn = true;
 
   String _currentBook;
@@ -45,7 +45,7 @@ class AppProvider with ChangeNotifier {
   double get lineHeight => _lineHeight;
   double get verseSpacing => _verseSpacing;
   String get verseFontPreset => _verseFontPreset;
-  bool get redLettersEnabled => _redLettersEnabled;
+  bool get showSeptuagintText => _showSeptuagintText;
   bool get keepScreenOn => _keepScreenOn;
   double get chromeButtonSize => _chromeButtonSize;
   String get currentBook => _currentBook;
@@ -125,9 +125,9 @@ class AppProvider with ChangeNotifier {
       _lineHeight = lineHeight;
     }
 
-    final redLetters = prefs.getBool('ui_red_letters_enabled');
-    if (redLetters != null) {
-      _redLettersEnabled = redLetters;
+    final septuagint = prefs.getBool('ui_show_septuagint_text');
+    if (septuagint != null) {
+      _showSeptuagintText = septuagint;
     }
 
     final verseSpacing = prefs.getDouble('ui_verse_spacing');
@@ -172,7 +172,8 @@ class AppProvider with ChangeNotifier {
   }
 
   void toggleTheme() {
-    _themeMode = _themeMode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
+    _themeMode =
+        _themeMode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
     notifyListeners();
     _saveThemeModeLegacy();
   }
@@ -221,16 +222,16 @@ class AppProvider with ChangeNotifier {
     await prefs.setDouble('ui_line_height', _lineHeight);
   }
 
-  void setRedLettersEnabled(bool enabled) {
-    _redLettersEnabled = enabled;
+  void setShowSeptuagintText(bool enabled) {
+    _showSeptuagintText = enabled;
     notifyListeners();
-    _saveRedLettersEnabled();
+    _saveShowSeptuagintText();
   }
 
-  Future<void> _saveRedLettersEnabled() async {
+  Future<void> _saveShowSeptuagintText() async {
     final prefs = _prefs ?? await SharedPreferences.getInstance();
     _prefs = prefs;
-    await prefs.setBool('ui_red_letters_enabled', _redLettersEnabled);
+    await prefs.setBool('ui_show_septuagint_text', _showSeptuagintText);
   }
 
   void changeVerseSpacing(double value) {
@@ -399,7 +400,11 @@ class AppProvider with ChangeNotifier {
 
   List<Map<String, dynamic>> getCurrentVerses() {
     final verses = _bibleService.getVerses(_currentBook, _currentChapter);
-    return verses.map((verse) => verse.toMap()).toList();
+    final adapted = _bibleService.adaptVersesForDisplay(
+      verses,
+      showSeptuagintText: _showSeptuagintText,
+    );
+    return adapted.map((verse) => verse.toMap()).toList();
   }
 
   List<Map<String, dynamic>> searchBible(
@@ -413,6 +418,7 @@ class AppProvider with ChangeNotifier {
       includeOldTestament: includeOldTestament,
       includeNewTestament: includeNewTestament,
       wholeWordsOnly: wholeWordsOnly,
+      includeSeptuagintText: _showSeptuagintText,
     );
     return results.map((verse) => verse.toMap()).toList();
   }

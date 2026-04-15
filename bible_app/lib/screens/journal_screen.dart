@@ -1027,6 +1027,8 @@ class _JournalScreenState extends State<JournalScreen>
     final quarterIconGap = (chromeSize * 0.07).clamp(2.0, 5.0);
     final quarterLeadingSlot =
         (quarterIconWFirst + 8).clamp(48.0, 56.0);
+    final overflowRightInset =
+        (chromeSize * 0.12).clamp(4.0, 10.0);
 
     return Scaffold(
       appBar: AppBar(
@@ -1124,12 +1126,15 @@ class _JournalScreenState extends State<JournalScreen>
           ],
         ),
         actions: [
-          AppChromeOverflowMenu(
-            iconColor: chromeFg,
-            backgroundColor: buttonBg,
-            tileWidth: inQuarter
-                ? quarterIconWFirst
-                : math.min(chromeSize, 44.0),
+          Padding(
+            padding: EdgeInsets.only(right: overflowRightInset),
+            child: AppChromeOverflowMenu(
+              iconColor: chromeFg,
+              backgroundColor: buttonBg,
+              tileWidth: inQuarter
+                  ? quarterIconWFirst
+                  : math.min(chromeSize, 44.0),
+            ),
           ),
         ],
       ),
