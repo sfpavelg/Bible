@@ -162,6 +162,11 @@ _BibleVerseDisplayPayload _bibleVerseDisplayPayloadFromRaw(
   );
 }
 
+Future<void> _replaceClipboardText(String text) async {
+  await Clipboard.setData(const ClipboardData(text: ''));
+  await Clipboard.setData(ClipboardData(text: text));
+}
+
 /// Тело записи «Избранное»: жирная ссылка (книга, глава, стих) и текст в кавычках; по строке на стих.
 Widget _favoritesEntryBody(
   _BookmarkTab tab, {
@@ -316,21 +321,88 @@ class _BibleScreenState extends State<BibleScreen> {
 
   final ScrollController _scrollController = ScrollController();
 
+  Widget _bibleChromeCloseButton(BuildContext context, VoidCallback onPressed) {
+    final app = context.watch<AppProvider>();
+    final chrome = app.chromeButtonSize;
+    final bg = _bibleScreenButtonBg(context);
+    final fg = _bibleScreenChromeFg(context);
+    final iconSize = (chrome * 0.5).clamp(18.0, 30.0);
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(8),
+      side: ChromeOutline.side,
+    );
+    return Material(
+      color: bg,
+      shape: shape,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onPressed,
+        customBorder: shape,
+        child: SizedBox(
+          width: chrome,
+          height: chrome,
+          child: Icon(Icons.close, color: fg, size: iconSize),
+        ),
+      ),
+    );
+  }
+
   Future<void> _showVerseNoteDialog(String noteText) async {
     if (!mounted) return;
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Пометка'),
-        content: SingleChildScrollView(
-          child: Text(noteText),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        titlePadding: const EdgeInsets.fromLTRB(20, 14, 12, 10),
+        contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
+        title: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(
+                'Примечание',
+                style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
+                      color: _bibleScreenChromeFg(ctx),
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+            ),
+            _bibleChromeCloseButton(ctx, () => Navigator.pop(ctx)),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Закрыть'),
-          ),
-        ],
+        content: Builder(
+          builder: (contentContext) {
+            final app = contentContext.watch<AppProvider>();
+            final fg = _bibleScreenChromeFg(contentContext);
+            final bg = _bibleScreenAppBarBg(contentContext);
+            final textStyle = app.bibleVerseTextStyle(
+              color: fg,
+              fontWeight: FontWeight.normal,
+            );
+            final maxH = MediaQuery.sizeOf(contentContext).height * 0.72;
+            return ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: 560,
+                maxHeight: maxH.clamp(180.0, 900.0),
+              ),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: bg,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Scrollbar(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+                    child: DefaultTextStyle(
+                      style: textStyle,
+                      child: Text(noteText),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -348,6 +420,7 @@ class _BibleScreenState extends State<BibleScreen> {
     final starStyle = baseStyle.copyWith(
       color: Colors.blue,
       fontWeight: FontWeight.w700,
+      height: 1.0,
     );
     final noteBtnHeight = app.fontSize.clamp(12.0, 28.0);
     final noteBtnWidth = (app.fontSize * 2).clamp(24.0, 56.0);
@@ -387,8 +460,16 @@ class _BibleScreenState extends State<BibleScreen> {
                   child: SizedBox(
                     width: noteBtnWidth,
                     height: noteBtnHeight,
-                    child: Center(
-                      child: Text('*', style: starStyle),
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 1),
+                      child: Align(
+                        alignment: Alignment.bottomCenter,
+                        child: Text(
+                          '*',
+                          style: starStyle,
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -409,7 +490,7 @@ class _BibleScreenState extends State<BibleScreen> {
   int? _highlightVerse;
   Timer? _highlightTimer;
 
-  /// Первый стих — долгим нажатием; дальше — обычным касанием. Порядок = порядок копирования.
+  /// Первый стих — долгим нажатием; дальше — обычным касанием.
   final LinkedHashSet<int> _selectedVerses = LinkedHashSet<int>();
   String _navRef = '';
 
@@ -492,8 +573,9 @@ class _BibleScreenState extends State<BibleScreen> {
     List<Map<String, dynamic>> verses,
   ) {
     if (_selectedVerses.isEmpty) return null;
+    final ordered = _selectedVerses.toList()..sort();
     final lines = <_BookmarkVerseLine>[];
-    for (final n in _selectedVerses) {
+    for (final n in ordered) {
       final text = _verseText(verses, n);
       if (text == null) continue;
       lines.add(
@@ -639,16 +721,17 @@ class _BibleScreenState extends State<BibleScreen> {
   ) {
     if (!_isBibleInteractionActive) return;
     if (_selectedVerses.isEmpty) return;
+    final ordered = _selectedVerses.toList()..sort();
     final parts = <String>[];
-    for (final n in _selectedVerses) {
+    for (final n in ordered) {
       final text = _verseText(verses, n);
       if (text == null) continue;
       parts.add(
-        '${appProvider.currentBook} ${appProvider.currentChapter}:$n $text',
+        '**${appProvider.currentBook} ${appProvider.currentChapter}:$n** "$text"',
       );
     }
     if (parts.isEmpty) return;
-    unawaited(Clipboard.setData(ClipboardData(text: parts.join('\n'))));
+    unawaited(_replaceClipboardText(parts.join('\n')));
     if (!context.mounted) return;
     final n = parts.length;
     _showBottomBanner(
@@ -788,8 +871,8 @@ class _BibleScreenState extends State<BibleScreen> {
                   tileWidth: w,
                 );
 
-            /// Полная ширина кнопок [s] с отступами [2*g] и пятью зазорами [g] между ними.
-            final fitsWide = maxW.isFinite && maxW + 0.5 >= 7 * s + 7 * g;
+            /// Полная ширина кнопок [s] с отступами [2*g] и шестью зазорами [g] между кнопками.
+            final fitsWide = maxW.isFinite && maxW + 0.5 >= 7 * s + 8 * g;
 
             if (fitsWide) {
               final row = SizedBox(
@@ -807,6 +890,7 @@ class _BibleScreenState extends State<BibleScreen> {
                       SizedBox(width: g),
                       nextBtn(s),
                       const Spacer(),
+                      SizedBox(width: g),
                       searchBtn(s),
                       SizedBox(width: g),
                       favBtn(s),
@@ -820,10 +904,10 @@ class _BibleScreenState extends State<BibleScreen> {
             }
 
             final innerW = maxW.isFinite ? maxW - 2 * g : double.infinity;
-            var cellW = maxW.isFinite ? (maxW - 7 * g) / 7 : s;
+            var cellW = maxW.isFinite ? (maxW - 8 * g) / 7 : s;
             if (!cellW.isFinite || cellW < 1) cellW = 1;
             if (cellW > s) cellW = s;
-            final contentW = 7 * cellW + 5 * g;
+            final contentW = 7 * cellW + 6 * g;
             final needsScale = maxW.isFinite && contentW > innerW + 0.5;
 
             Widget splitRow(double w) => Row(
@@ -841,6 +925,7 @@ class _BibleScreenState extends State<BibleScreen> {
                         nextBtn(w),
                       ],
                     ),
+                    SizedBox(width: g),
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -1647,10 +1732,10 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
         widget.appProvider,
         (r['text'] as String?) ?? '',
       );
-      parts.add('$book $ch:$v $text');
+      parts.add('**$book $ch:$v** "$text"');
     }
     if (parts.isEmpty) return;
-    await Clipboard.setData(ClipboardData(text: parts.join('\n')));
+    await _replaceClipboardText(parts.join('\n'));
     if (!context.mounted) return;
     final n = parts.length;
     _showTransientOverlayMessage(
@@ -2093,7 +2178,6 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                               ),
                             ),
                             child: Scrollbar(
-                              interactive: true,
                               child: ListView.separated(
                                 padding:
                                     const EdgeInsets.symmetric(horizontal: 2),
@@ -2308,7 +2392,7 @@ class _BibleBookmarksPanelState extends State<_BibleBookmarksPanel> {
       final e = _entries[i];
       parts.add('${_headerLine(i + 1, e.createdAt)}\n${e.plainText}');
     }
-    await Clipboard.setData(ClipboardData(text: parts.join('\n\n')));
+    await _replaceClipboardText(parts.join('\n\n'));
     if (!mounted) return;
     _showTransientOverlayMessage(
       context,
@@ -2456,7 +2540,6 @@ class _BibleBookmarksPanelState extends State<_BibleBookmarksPanel> {
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxHeight: 360),
                       child: Scrollbar(
-                        interactive: true,
                         child: ListView.separated(
                           shrinkWrap: true,
                           padding: const EdgeInsets.symmetric(

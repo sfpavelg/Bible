@@ -132,6 +132,28 @@ class NotebookEditorPanelState extends State<NotebookEditorPanel> {
     }
   }
 
+  /// Вставляет [text] в текущую позицию курсора (или вместо выделения).
+  void insertTextAtCursor(String text) {
+    if (text.isEmpty) return;
+    final value = _controller.value;
+    final selection = value.selection;
+    final hasValidSelection =
+        selection.start >= 0 &&
+        selection.end >= 0 &&
+        selection.start <= value.text.length &&
+        selection.end <= value.text.length;
+    final start = hasValidSelection ? selection.start : value.text.length;
+    final end = hasValidSelection ? selection.end : value.text.length;
+    final newText = value.text.replaceRange(start, end, text);
+    final cursor = start + text.length;
+    _controller.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: cursor),
+      composing: TextRange.empty,
+    );
+    _focus.requestFocus();
+  }
+
   void _showError(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }

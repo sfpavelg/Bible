@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:bible_app/providers/app_provider.dart';
@@ -10,7 +11,7 @@ import 'package:provider/provider.dart';
 
 /// Меню «⋯»: кнопка наследует цвета хрома ([iconColor] / [backgroundColor]),
 /// выпадающий список следует светлой/тёмной теме приложения.
-class AppChromeOverflowMenu extends StatelessWidget {
+class AppChromeOverflowMenu extends StatefulWidget {
   const AppChromeOverflowMenu({
     super.key,
     this.iconColor = Colors.black,
@@ -26,17 +27,91 @@ class AppChromeOverflowMenu extends StatelessWidget {
   final double? tileWidth;
 
   @override
+  State<AppChromeOverflowMenu> createState() => _AppChromeOverflowMenuState();
+}
+
+class _AppChromeOverflowMenuState extends State<AppChromeOverflowMenu> {
+  Future<void> _openMenu(BuildContext context) async {
+    final value = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        title: Row(
+          children: [
+            const Expanded(child: Text('Меню')),
+            NotebookChromeDialogCloseButton(
+              onPressed: () => Navigator.pop(dialogContext),
+            ),
+          ],
+        ),
+        contentPadding: const EdgeInsets.fromLTRB(10, 4, 10, 10),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            InkWell(
+              onTap: () => Navigator.pop(dialogContext, 'settings'),
+              child: chromePopupMenuChoiceTile(
+                context: dialogContext,
+                label: 'Настройки',
+                icon: Icons.settings_outlined,
+              ),
+            ),
+            const SizedBox(height: 4),
+            InkWell(
+              onTap: () => Navigator.pop(dialogContext, 'support'),
+              child: chromePopupMenuChoiceTile(
+                context: dialogContext,
+                label: 'Техподдержка',
+                icon: Icons.support_agent_outlined,
+              ),
+            ),
+            const SizedBox(height: 4),
+            InkWell(
+              onTap: () => Navigator.pop(dialogContext, 'help'),
+              child: chromePopupMenuChoiceTile(
+                context: dialogContext,
+                label: 'Помощь',
+                icon: Icons.help_outline_rounded,
+              ),
+            ),
+            const SizedBox(height: 4),
+            InkWell(
+              onTap: () => Navigator.pop(dialogContext, 'exit'),
+              child: chromePopupMenuChoiceTile(
+                context: dialogContext,
+                label: 'Выход',
+                icon: Icons.logout_rounded,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (!mounted || value == null) return;
+    if (value == 'settings') {
+      showAppSettingsDialog(context);
+    } else if (value == 'support') {
+      showAppSupportDialog(context);
+    } else if (value == 'help') {
+      showAppHelpDialog(context);
+    } else if (value == 'exit') {
+      requestAppExit();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Consumer<AppProvider>(
       builder: (context, app, _) {
         final s = app.chromeButtonSize.clamp(
             AppProvider.chromeButtonSizeMin, AppProvider.chromeButtonSizeMax);
-        final w = tileWidth ?? s;
+        final w = widget.tileWidth ?? s;
         final iconSz = (math.min(w, s) * 0.5).clamp(18.0, 30.0);
         final corner = (math.min(w, s) * 0.22).clamp(4.0, 12.0);
-        final scheme = Theme.of(context).colorScheme;
         return Material(
-          color: backgroundColor,
+          color: widget.backgroundColor,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(corner),
             side: ChromeOutline.side,
@@ -45,70 +120,15 @@ class AppChromeOverflowMenu extends StatelessWidget {
           child: SizedBox(
             width: w,
             height: s,
-            child: PopupMenuButton<String>(
-              padding: EdgeInsets.zero,
-              icon: Icon(
-                Icons.more_vert,
-                color: iconColor,
-                size: iconSz,
+            child: InkWell(
+              onTap: () => unawaited(_openMenu(context)),
+              child: Center(
+                child: Icon(
+                  Icons.more_vert,
+                  color: widget.iconColor,
+                  size: iconSz,
+                ),
               ),
-              tooltip: 'Меню',
-              position: PopupMenuPosition.under,
-              offset: const Offset(0, 8),
-              color: scheme.surfaceContainerHigh,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              elevation: 4,
-              onSelected: (value) {
-                if (value == 'settings') {
-                  showAppSettingsDialog(context);
-                } else if (value == 'support') {
-                  showAppSupportDialog(context);
-                } else if (value == 'help') {
-                  showAppHelpDialog(context);
-                } else if (value == 'exit') {
-                  requestAppExit();
-                }
-              },
-              itemBuilder: (menuContext) => [
-                PopupMenuItem<String>(
-                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 3),
-                  value: 'settings',
-                  child: chromePopupMenuChoiceTile(
-                    context: menuContext,
-                    label: 'Настройки',
-                    icon: Icons.settings_outlined,
-                  ),
-                ),
-                PopupMenuItem<String>(
-                  padding: const EdgeInsets.fromLTRB(8, 3, 8, 3),
-                  value: 'support',
-                  child: chromePopupMenuChoiceTile(
-                    context: menuContext,
-                    label: 'Техподдержка',
-                    icon: Icons.support_agent_outlined,
-                  ),
-                ),
-                PopupMenuItem<String>(
-                  padding: const EdgeInsets.fromLTRB(8, 3, 8, 3),
-                  value: 'help',
-                  child: chromePopupMenuChoiceTile(
-                    context: menuContext,
-                    label: 'Помощь',
-                    icon: Icons.help_outline_rounded,
-                  ),
-                ),
-                PopupMenuItem<String>(
-                  padding: const EdgeInsets.fromLTRB(8, 3, 8, 8),
-                  value: 'exit',
-                  child: chromePopupMenuChoiceTile(
-                    context: menuContext,
-                    label: 'Выход',
-                    icon: Icons.logout_rounded,
-                  ),
-                ),
-              ],
             ),
           ),
         );

@@ -126,6 +126,9 @@ void showAppSettingsDialog(BuildContext context) {
               final theme = Theme.of(consumerContext);
               final scheme = theme.colorScheme;
               final isDark = theme.brightness == Brightness.dark;
+              // Серый фон панели «Настройки».
+              final settingsBg =
+                  isDark ? Colors.grey.shade900 : Colors.grey.shade200;
 
               final kSettingsTitleStyle = TextStyle(
                 fontSize: 20,
@@ -162,7 +165,7 @@ void showAppSettingsDialog(BuildContext context) {
                   );
 
               return Material(
-                color: scheme.surface,
+                color: settingsBg,
                 elevation: 10,
                 shadowColor: Colors.black45,
                 clipBehavior: Clip.antiAlias,
@@ -489,8 +492,14 @@ void showAppSupportDialog(BuildContext context) {
     builder: (routeContext) {
       final theme = Theme.of(routeContext);
       final scheme = theme.colorScheme;
-      final body = theme.textTheme.bodyMedium!
-          .copyWith(color: scheme.onSurface, height: 1.35);
+      final app = routeContext.watch<AppProvider>();
+      final body = theme.textTheme.bodyMedium!.copyWith(
+        color: scheme.onSurface,
+        fontSize: app.fontSize,
+        height: app.lineHeight,
+      );
+      final chrome = app.chromeButtonSize;
+      final copyIcon = (chrome * 0.5).clamp(18.0, 30.0);
       return AlertDialog(
         backgroundColor: scheme.surface,
         titlePadding: const EdgeInsets.fromLTRB(20, 14, 12, 8),
@@ -563,11 +572,12 @@ void showAppSupportDialog(BuildContext context) {
                   ),
                 );
               },
-              child: Padding(
-                padding: const EdgeInsets.all(8),
+              child: SizedBox(
+                width: chrome,
+                height: chrome,
                 child: Icon(
                   Icons.copy_all,
-                  size: 20,
+                  size: copyIcon,
                   color:
                       NotebookChromeUi.secondaryButtonForeground(routeContext),
                 ),
@@ -592,10 +602,18 @@ void showAppHelpDialog(BuildContext context) {
     builder: (routeContext) {
       final theme = Theme.of(routeContext);
       final scheme = theme.colorScheme;
-      final tocStyle = _helpDialogTocStyle.copyWith(color: scheme.onSurface);
+      final app = routeContext.watch<AppProvider>();
+      final fs = app.fontSize;
+      final lh = app.lineHeight;
+      final tocStyle = _helpDialogTocStyle.copyWith(
+        color: scheme.onSurface,
+        fontSize: (fs * 0.95).clamp(12.0, 26.0),
+        height: lh,
+      );
       final bodyStyle = theme.textTheme.bodyMedium!.copyWith(
         color: scheme.onSurface,
-        height: 1.35,
+        fontSize: fs,
+        height: lh,
       );
       final n = kParallelReadingPlan365.length;
       final helpMaxH = MediaQuery.sizeOf(routeContext).height * 0.65;
