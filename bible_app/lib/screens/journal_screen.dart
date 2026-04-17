@@ -4,6 +4,8 @@ import 'dart:math' as math;
 
 import 'package:bible_app/journal/chronological_reading_plan_data.dart';
 import 'package:bible_app/journal/parallel_reading_plan_data.dart';
+import 'package:bible_app/models/bible_model.dart';
+import 'package:bible_app/navigation/app_tab_switcher.dart';
 import 'package:bible_app/providers/app_provider.dart';
 import 'package:bible_app/widgets/app_chrome_overflow_menu.dart';
 import 'package:bible_app/widgets/chrome_outline.dart';
@@ -14,6 +16,20 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum _JournalPlanKind { parallel, chronological }
+
+class _PlanChapterItem {
+  const _PlanChapterItem({
+    required this.key,
+    required this.book,
+    required this.chapter,
+  });
+
+  final String key;
+  final String book;
+  final int chapter;
+
+  String get label => '$book $chapter';
+}
 
 /// Разбиение года на четыре квартала (сумма = 365).
 const List<int> kJournalPlanQuarterDayCounts = [91, 91, 91, 92];
@@ -222,6 +238,9 @@ class _JournalScreenState extends State<JournalScreen>
     with WidgetsBindingObserver {
   static const _prefsKeyParallel = 'journal_parallel_done_days_v1';
   static const _prefsKeyChronological = 'journal_chronological_done_days_v1';
+  static const _prefsKeyParallelItems = 'journal_parallel_done_items_v1';
+  static const _prefsKeyChronologicalItems =
+      'journal_chronological_done_items_v1';
   static const _prefsScrollParallelQuarters =
       'journal_plan_scroll_parallel_quarters_v1';
   static const _prefsScrollChronoQuarters =
@@ -231,6 +250,8 @@ class _JournalScreenState extends State<JournalScreen>
   _JournalPlanKind _plan = _JournalPlanKind.parallel;
   Set<int> _parallelDone = {};
   Set<int> _chronologicalDone = {};
+  Map<int, Set<String>> _parallelDoneItems = {};
+  Map<int, Set<String>> _chronologicalDoneItems = {};
   bool _loading = true;
   final ScrollController _scrollController = ScrollController();
   Timer? _scrollSaveDebounce;
@@ -491,10 +512,34 @@ class _JournalScreenState extends State<JournalScreen>
     final scrollC =
         _decodeQuarterScrollList(p.getString(_prefsScrollChronoQuarters));
     final savedPlanKind = _planKindFromPrefs(p.getString(_prefsPlanKind));
+    final parallelItems = _decodeDoneItems(
+      p.getString(_prefsKeyParallelItems),
+    );
+    final chronoItems = _decodeDoneItems(
+      p.getString(_prefsKeyChronologicalItems),
+    );
+    final parallelDoneByItems = <int>{};
+    for (var i = 0; i < kParallelReadingPlan365.length; i++) {
+      final items = _chapterItemsForDayByPlan(_JournalPlanKind.parallel, i);
+      final done = parallelItems[i] ?? <String>{};
+      if (items.isNotEmpty && items.every((e) => done.contains(e.key))) {
+        parallelDoneByItems.add(i);
+      }
+    }
+    final chronoDoneByItems = <int>{};
+    for (var i = 0; i < kChronologicalReadingPlan365.length; i++) {
+      final items = _chapterItemsForDayByPlan(_JournalPlanKind.chronological, i);
+      final done = chronoItems[i] ?? <String>{};
+      if (items.isNotEmpty && items.every((e) => done.contains(e.key))) {
+        chronoDoneByItems.add(i);
+      }
+    }
     if (!mounted) return;
     setState(() {
-      _parallelDone = parallel;
-      _chronologicalDone = chrono;
+      _parallelDone = {...parallel, ...parallelDoneByItems};
+      _chronologicalDone = {...chrono, ...chronoDoneByItems};
+      _parallelDoneItems = parallelItems;
+      _chronologicalDoneItems = chronoItems;
       _scrollQuarterParallel = scrollP;
       _scrollQuarterChrono = scrollC;
       _plan = savedPlanKind;
@@ -506,34 +551,55 @@ class _JournalScreenState extends State<JournalScreen>
     final p = await SharedPreferences.getInstance();
     final sorted = _parallelDone.toList()..sort();
     await p.setString(_prefsKeyParallel, jsonEncode(sorted));
+    await p.setString(
+      _prefsKeyParallelItems,
+      jsonEncode(_encodeDoneItems(_parallelDoneItems)),
+    );
   }
 
   Future<void> _persistChronological() async {
     final p = await SharedPreferences.getInstance();
     final sorted = _chronologicalDone.toList()..sort();
     await p.setString(_prefsKeyChronological, jsonEncode(sorted));
+    await p.setString(
+      _prefsKeyChronologicalItems,
+      jsonEncode(_encodeDoneItems(_chronologicalDoneItems)),
+    );
   }
 
-  void _toggleParallelDay(int index) {
-    setState(() {
-      if (_parallelDone.contains(index)) {
-        _parallelDone.remove(index);
-      } else {
-        _parallelDone.add(index);
-      }
-    });
-    _persistParallel();
+  Map<String, List<String>> _encodeDoneItems(Map<int, Set<String>> src) {
+    final out = <String, List<String>>{};
+    final days = src.keys.toList()..sort();
+    for (final d in days) {
+      final entries = src[d];
+      if (entries == null || entries.isEmpty) continue;
+      final sorted = entries.toList()..sort();
+      out['$d'] = sorted;
+    }
+    return out;
   }
 
-  void _toggleChronologicalDay(int index) {
-    setState(() {
-      if (_chronologicalDone.contains(index)) {
-        _chronologicalDone.remove(index);
-      } else {
-        _chronologicalDone.add(index);
+  Map<int, Set<String>> _decodeDoneItems(String? raw) {
+    if (raw == null || raw.isEmpty) return {};
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return {};
+      final out = <int, Set<String>>{};
+      for (final e in decoded.entries) {
+        final day = int.tryParse(e.key.toString());
+        if (day == null || day < 0 || day >= _planTotal) continue;
+        final list = e.value;
+        if (list is! List) continue;
+        final values = list
+            .map((v) => v.toString())
+            .where((v) => v.isNotEmpty)
+            .toSet();
+        if (values.isNotEmpty) out[day] = values;
       }
-    });
-    _persistChronological();
+      return out;
+    } catch (_) {
+      return {};
+    }
   }
 
   List<String> _linesForDay(int index) {
@@ -544,18 +610,289 @@ class _JournalScreenState extends State<JournalScreen>
   }
 
   bool _dayDone(int index) {
-    if (_plan == _JournalPlanKind.parallel) {
-      return _parallelDone.contains(index);
+    final items = _chapterItemsForDay(index);
+    if (items.isEmpty) return false;
+    final done = _doneItemsForCurrentPlan(index);
+    for (final i in items) {
+      if (!done.contains(i.key)) return false;
     }
-    return _chronologicalDone.contains(index);
+    return true;
   }
 
-  void _toggleCurrentPlanDay(int index) {
+  Set<String> _doneItemsForCurrentPlan(int dayIndex) {
     if (_plan == _JournalPlanKind.parallel) {
-      _toggleParallelDay(index);
-    } else {
-      _toggleChronologicalDay(index);
+      return _parallelDoneItems[dayIndex] ?? <String>{};
     }
+    return _chronologicalDoneItems[dayIndex] ?? <String>{};
+  }
+
+  Future<void> _setChapterDone({
+    required int dayIndex,
+    required String itemKey,
+    required bool done,
+  }) async {
+    setState(() {
+      final map = _plan == _JournalPlanKind.parallel
+          ? _parallelDoneItems
+          : _chronologicalDoneItems;
+      final selected = (map[dayIndex] ?? <String>{}).toSet();
+      if (done) {
+        selected.add(itemKey);
+      } else {
+        selected.remove(itemKey);
+      }
+      if (selected.isEmpty) {
+        map.remove(dayIndex);
+      } else {
+        map[dayIndex] = selected;
+      }
+
+      final dayIsDone = _dayDone(dayIndex);
+      if (_plan == _JournalPlanKind.parallel) {
+        if (dayIsDone) {
+          _parallelDone.add(dayIndex);
+        } else {
+          _parallelDone.remove(dayIndex);
+        }
+      } else {
+        if (dayIsDone) {
+          _chronologicalDone.add(dayIndex);
+        } else {
+          _chronologicalDone.remove(dayIndex);
+        }
+      }
+    });
+
+    if (_plan == _JournalPlanKind.parallel) {
+      await _persistParallel();
+    } else {
+      await _persistChronological();
+    }
+  }
+
+  static String _normalizeBookToken(String s) =>
+      s.toLowerCase().replaceAll(RegExp(r'[\s\.\-]'), '');
+
+  Map<String, String> _bookNameLookup() {
+    final out = <String, String>{};
+    for (final b in BibleBook.books) {
+      out[_normalizeBookToken(b.name)] = b.name;
+      out[_normalizeBookToken(b.abbreviation)] = b.name;
+      out[_normalizeBookToken('${b.abbreviation}.')] = b.name;
+    }
+    out['быт'] = 'Бытие';
+    out['исх'] = 'Исход';
+    out['лев'] = 'Левит';
+    out['чис'] = 'Числа';
+    out['втор'] = 'Второзаконие';
+    out['пс'] = 'Псалтирь';
+    out['иснав'] = 'Иисус Навин';
+    return out;
+  }
+
+  List<int> _parseChapterToken(String token) {
+    final t = token.trim();
+    if (t.isEmpty) return const [];
+    final colon = t.indexOf(':');
+    if (colon > 0) {
+      final chapter = int.tryParse(t.substring(0, colon).trim());
+      return chapter == null ? const [] : [chapter];
+    }
+    final range = RegExp(r'^(\d+)\s*-\s*(\d+)$').firstMatch(t);
+    if (range != null) {
+      final a = int.tryParse(range.group(1)!);
+      final b = int.tryParse(range.group(2)!);
+      if (a == null || b == null) return const [];
+      final from = math.min(a, b);
+      final to = math.max(a, b);
+      return [for (var i = from; i <= to; i++) i];
+    }
+    final single = int.tryParse(t);
+    return single == null ? const [] : [single];
+  }
+
+  List<_PlanChapterItem> _chapterItemsForDayByPlan(
+    _JournalPlanKind plan,
+    int dayIndex,
+  ) {
+    final lookup = _bookNameLookup();
+    final lines = plan == _JournalPlanKind.parallel
+        ? kParallelReadingPlan365[dayIndex].lines
+        : kChronologicalReadingPlan365[dayIndex].lines;
+    final out = <_PlanChapterItem>[];
+    final seen = <String>{};
+    for (final rawLine in lines) {
+      final chunks = rawLine
+          .replaceAll(';', '.')
+          .split('.')
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty);
+      for (final chunk in chunks) {
+        final m = RegExp(r'^(.+?)(\d.*)$').firstMatch(chunk);
+        if (m == null) continue;
+        final bookRaw = m.group(1)!.trim();
+        final refsRaw = m.group(2)!.trim();
+        final book = lookup[_normalizeBookToken(bookRaw)];
+        if (book == null) continue;
+        final parts = refsRaw
+            .split(',')
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty);
+        for (final p in parts) {
+          for (final chapter in _parseChapterToken(p)) {
+            if (chapter <= 0) continue;
+            final key = '$book|$chapter';
+            if (!seen.add(key)) continue;
+            out.add(_PlanChapterItem(key: key, book: book, chapter: chapter));
+          }
+        }
+      }
+    }
+    return out;
+  }
+
+  List<_PlanChapterItem> _chapterItemsForDay(int dayIndex) =>
+      _chapterItemsForDayByPlan(_plan, dayIndex);
+
+  Future<void> _openDayChapterChecklist(int dayIndex) async {
+    final app = context.read<AppProvider>();
+    final items = _chapterItemsForDay(dayIndex);
+    if (items.isEmpty) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        final isDark = Theme.of(dialogContext).brightness == Brightness.dark;
+        final rowBg = isDark ? const Color(0xFF37474F) : Colors.white;
+        final fg = isDark ? Colors.white : Colors.black87;
+        final buttonBg =
+            isDark ? JournalScreen._buttonBgDark : JournalScreen._buttonBgLight;
+        final chrome = app.chromeButtonSize;
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            final doneNow = _doneItemsForCurrentPlan(dayIndex);
+            return AlertDialog(
+              insetPadding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              titlePadding: const EdgeInsets.fromLTRB(20, 14, 12, 8),
+              title: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Text(
+                      'День ${dayIndex + 1}',
+                    ),
+                  ),
+                  ChromeIconButton(
+                    icon: Icons.close,
+                    tooltip: 'Закрыть',
+                    foregroundColor: fg,
+                    backgroundColor: buttonBg,
+                    width: chrome,
+                    onPressed: () => Navigator.pop(dialogContext),
+                  ),
+                ],
+              ),
+              contentPadding: const EdgeInsets.fromLTRB(10, 4, 10, 10),
+              content: SizedBox(
+                width: 520,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 420),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    primary: false,
+                    itemCount: items.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 6),
+                    itemBuilder: (_, i) {
+                      final item = items[i];
+                      final checked = doneNow.contains(item.key);
+                      return Material(
+                        color: rowBg,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          side: ChromeOutline.side,
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(10, 4, 10, 4),
+                          child: Row(
+                            children: [
+                              SizedBox(
+                                width: 40,
+                                child: Checkbox(
+                                  value: checked,
+                                  onChanged: (v) async {
+                                    await _setChapterDone(
+                                      dayIndex: dayIndex,
+                                      itemKey: item.key,
+                                      done: v ?? false,
+                                    );
+                                    setModalState(() {});
+                                  },
+                                ),
+                              ),
+                              Expanded(
+                                child: Material(
+                                  color: isDark
+                                      ? const Color(0xFF455A64)
+                                      : const Color(0xFFE1F5FE),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    side: ChromeOutline.side,
+                                  ),
+                                  clipBehavior: Clip.antiAlias,
+                                  child: InkWell(
+                                    onTap: () async {
+                                      final dialogNavigator =
+                                          Navigator.of(dialogContext);
+                                      await app.changeBookAndChapter(
+                                        item.book,
+                                        item.chapter,
+                                      );
+                                      if (!mounted) return;
+                                      dialogNavigator.pop();
+                                      appTabSwitchRequest.value = 0;
+                                    },
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 10,
+                                        horizontal: 10,
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              item.label,
+                                              style: app.bibleVerseTextStyle(
+                                                color: fg,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                          ),
+                                          Icon(
+                                            Icons.open_in_new,
+                                            size: (app.chromeButtonSize * 0.42)
+                                                .clamp(14.0, 24.0),
+                                            color: fg.withValues(alpha: 0.9),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   int get _planTotal => _plan == _JournalPlanKind.parallel
@@ -690,11 +1027,36 @@ class _JournalScreenState extends State<JournalScreen>
     );
   }
 
-  /// Открыт квартал: подпись в две строки, масштаб под размер кнопки.
-  Widget _planKindAppBarTitleInQuarter(Color chromeFg) {
-    final line2 = _plan == _JournalPlanKind.parallel
-        ? 'параллельный'
-        : 'хронология';
+  Widget _planKindAppBarTitleInQuarter(
+    BuildContext context,
+    Color chromeFg,
+    double maxWidth,
+  ) {
+    final singleLine = _plan == _JournalPlanKind.parallel
+        ? 'План чтения: параллельный'
+        : 'План чтения: хронология';
+    final singleStyle = TextStyle(
+      color: chromeFg,
+      fontWeight: FontWeight.normal,
+      fontSize: 25.6,
+      height: 1.02,
+    );
+    final tp = TextPainter(
+      text: TextSpan(text: singleLine, style: singleStyle),
+      maxLines: 1,
+      textDirection: Directionality.of(context),
+    )..layout(maxWidth: double.infinity);
+    if (tp.width <= maxWidth) {
+      return Text(
+        singleLine,
+        maxLines: 1,
+        textAlign: TextAlign.center,
+        softWrap: false,
+        style: singleStyle,
+      );
+    }
+    final line2 =
+        _plan == _JournalPlanKind.parallel ? 'параллельный' : 'хронология';
     return Column(
       mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
@@ -704,24 +1066,14 @@ class _JournalScreenState extends State<JournalScreen>
           maxLines: 1,
           textAlign: TextAlign.center,
           softWrap: false,
-          style: TextStyle(
-            color: chromeFg,
-            fontWeight: FontWeight.normal,
-            fontSize: 25.6,
-            height: 1.02,
-          ),
+          style: singleStyle,
         ),
         Text(
           line2,
           maxLines: 1,
           textAlign: TextAlign.center,
           softWrap: false,
-          style: TextStyle(
-            color: chromeFg,
-            fontWeight: FontWeight.normal,
-            fontSize: 25.6,
-            height: 1.02,
-          ),
+          style: singleStyle,
         ),
       ],
     );
@@ -854,8 +1206,6 @@ class _JournalScreenState extends State<JournalScreen>
         ? Colors.amber.shade900.withValues(alpha: 0.42)
         : Colors.amber.shade50;
     final cardTodoBg = isDark ? const Color(0xFF37474F) : Colors.white;
-    final checkAccent = isDark ? const Color(0xFF81D4FA) : Colors.blue;
-    final checkOnAccent = isDark ? const Color(0xFF263238) : Colors.white;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -881,6 +1231,10 @@ class _JournalScreenState extends State<JournalScreen>
                 final lines = _linesForDay(index);
                 final done = _dayDone(index);
                 final n = index + 1;
+                final chapterItems = _chapterItemsForDay(index);
+                final doneItems = _doneItemsForCurrentPlan(index);
+                final doneCount =
+                    chapterItems.where((e) => doneItems.contains(e.key)).length;
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: Material(
@@ -892,45 +1246,78 @@ class _JournalScreenState extends State<JournalScreen>
                     ),
                     child: InkWell(
                       borderRadius: BorderRadius.circular(10),
-                      onTap: () => _toggleCurrentPlanDay(index),
+                      onTap: () => _openDayChapterChecklist(index),
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(8, 10, 12, 10),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            SizedBox(
-                              width: 40,
-                              child: Checkbox(
-                                value: done,
-                                activeColor: checkAccent,
-                                checkColor: checkOnAccent,
-                                side: WidgetStateBorderSide.resolveWith(
-                                  (states) {
-                                    final c = isDark
-                                        ? Colors.grey.shade400
-                                        : Colors.grey.shade600;
-                                    return BorderSide(color: c);
-                                  },
-                                ),
-                                onChanged: (_) => _toggleCurrentPlanDay(index),
-                              ),
-                            ),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    'День $n',
-                                    style: app
-                                        .bibleVerseTextStyle(
-                                          color: titleColor,
-                                          fontWeight: FontWeight.w800,
-                                        )
-                                        .copyWith(
-                                          fontSize: app.fontSize * 1.06,
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          'День $n',
+                                          style: app
+                                              .bibleVerseTextStyle(
+                                                color: titleColor,
+                                                fontWeight: FontWeight.w800,
+                                              )
+                                              .copyWith(
+                                                fontSize: app.fontSize * 1.06,
+                                              ),
                                         ),
+                                      ),
+                                      if (done)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 3,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: isDark
+                                                ? const Color(0xFF81D4FA)
+                                                    .withValues(alpha: 0.2)
+                                                : Colors.blue.shade50,
+                                            borderRadius:
+                                                BorderRadius.circular(999),
+                                            border: Border.all(
+                                              color: ChromeOutline.color,
+                                              width: ChromeOutline.width,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            'Прочитано',
+                                            style: app.bibleVerseTextStyle(
+                                              color: titleColor,
+                                              fontWeight: FontWeight.w700,
+                                            ).copyWith(
+                                              fontSize:
+                                                  (app.fontSize * 0.78).clamp(
+                                                10.0,
+                                                20.0,
+                                              ),
+                                              height: 1.0,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
                                   ),
                                   SizedBox(height: (lineGap + 2).clamp(4.0, 14.0)),
+                                  Text(
+                                    chapterItems.isEmpty
+                                        ? 'Нет глав для отметки'
+                                        : 'Отмечено глав: $doneCount из ${chapterItems.length}',
+                                    style: app.bibleVerseTextStyle(
+                                      color: bodyColor,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  SizedBox(height: (lineGap + 1).clamp(2.0, 8.0)),
                                   ...lines.map(
                                     (line) => Padding(
                                       padding:
@@ -939,7 +1326,8 @@ class _JournalScreenState extends State<JournalScreen>
                                         line,
                                         style: app.bibleVerseTextStyle(
                                           color: bodyColor,
-                                          fontWeight: FontWeight.normal,
+                                          fontWeight:
+                                              done ? FontWeight.w600 : FontWeight.normal,
                                         ),
                                       ),
                                     ),
@@ -1113,7 +1501,14 @@ class _JournalScreenState extends State<JournalScreen>
                             fit: BoxFit.contain,
                             alignment: Alignment.center,
                             child: inQuarter
-                                ? _planKindAppBarTitleInQuarter(chromeFg)
+                                ? LayoutBuilder(
+                                    builder: (ctx, constraints) =>
+                                        _planKindAppBarTitleInQuarter(
+                                      ctx,
+                                      chromeFg,
+                                      constraints.maxWidth,
+                                    ),
+                                  )
                                 : _planKindAppBarTitleOnHub(chromeFg, chromeSize),
                           ),
                         ),
