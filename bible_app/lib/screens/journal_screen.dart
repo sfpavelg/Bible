@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:bible_app/journal/chronological_reading_plan_data.dart';
 import 'package:bible_app/journal/parallel_reading_plan_data.dart';
+import 'package:bible_app/journal/sequential_reading_plan.dart';
 import 'package:bible_app/models/bible_model.dart';
 import 'package:bible_app/navigation/app_tab_switcher.dart';
 import 'package:bible_app/providers/app_provider.dart';
@@ -15,7 +16,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-enum _JournalPlanKind { parallel, chronological }
+enum _JournalPlanKind { parallel, chronological, sequential }
 
 class _PlanChapterItem {
   const _PlanChapterItem({
@@ -245,13 +246,19 @@ class _JournalScreenState extends State<JournalScreen>
       'journal_plan_scroll_parallel_quarters_v1';
   static const _prefsScrollChronoQuarters =
       'journal_plan_scroll_chrono_quarters_v1';
+  static const _prefsScrollSequentialQuarters =
+      'journal_plan_scroll_sequential_quarters_v1';
+  static const _prefsKeySequential = 'journal_sequential_done_days_v1';
+  static const _prefsKeySequentialItems = 'journal_sequential_done_items_v1';
   static const _prefsPlanKind = 'journal_plan_kind_v1';
 
   _JournalPlanKind _plan = _JournalPlanKind.parallel;
   Set<int> _parallelDone = {};
   Set<int> _chronologicalDone = {};
+  Set<int> _sequentialDone = {};
   Map<int, Set<String>> _parallelDoneItems = {};
   Map<int, Set<String>> _chronologicalDoneItems = {};
+  Map<int, Set<String>> _sequentialDoneItems = {};
   final bool _loading = false;
   final ScrollController _scrollController = ScrollController();
   Timer? _scrollSaveDebounce;
@@ -260,10 +267,25 @@ class _JournalScreenState extends State<JournalScreen>
       _buildChapterItemsByDay(_JournalPlanKind.parallel);
   late final List<List<_PlanChapterItem>> _chronologicalChapterItemsByDay =
       _buildChapterItemsByDay(_JournalPlanKind.chronological);
+  late final List<List<_PlanChapterItem>> _sequentialChapterItemsByDay =
+      buildSequentialReadingPlanChaptersByDay()
+          .map(
+            (day) => day
+                .map(
+                  (r) => _PlanChapterItem(
+                    key: '${r.book}|${r.chapter}',
+                    book: r.book,
+                    chapter: r.chapter,
+                  ),
+                )
+                .toList(growable: false),
+          )
+          .toList(growable: false);
 
-  /// Позиция прокрутки списка по каждому кварталу (0…3) для параллельного и хронологического плана.
+  /// Позиция прокрутки списка по каждому кварталу (0…3) для каждого типа плана.
   List<double> _scrollQuarterParallel = List<double>.filled(4, 0.0);
   List<double> _scrollQuarterChrono = List<double>.filled(4, 0.0);
+  List<double> _scrollQuarterSequential = List<double>.filled(4, 0.0);
 
   /// null — экран с четырьмя кварталами; 0…3 — открыт соответствующий квартал.
   int? _openQuarter;
@@ -301,10 +323,16 @@ class _JournalScreenState extends State<JournalScreen>
   void _applyScrollOffsetToQuarterCache(double offset) {
     final q = _openQuarter;
     if (q == null) return;
-    if (_plan == _JournalPlanKind.parallel) {
-      _scrollQuarterParallel[q] = offset;
-    } else {
-      _scrollQuarterChrono[q] = offset;
+    switch (_plan) {
+      case _JournalPlanKind.parallel:
+        _scrollQuarterParallel[q] = offset;
+        break;
+      case _JournalPlanKind.chronological:
+        _scrollQuarterChrono[q] = offset;
+        break;
+      case _JournalPlanKind.sequential:
+        _scrollQuarterSequential[q] = offset;
+        break;
     }
   }
 
@@ -321,6 +349,10 @@ class _JournalScreenState extends State<JournalScreen>
     await p.setString(
       _prefsScrollChronoQuarters,
       jsonEncode(_scrollQuarterChrono),
+    );
+    await p.setString(
+      _prefsScrollSequentialQuarters,
+      jsonEncode(_scrollQuarterSequential),
     );
   }
 
@@ -361,9 +393,11 @@ class _JournalScreenState extends State<JournalScreen>
   void _restoreListScrollForOpenQuarter() {
     final q = _openQuarter;
     if (q == null) return;
-    final target = _plan == _JournalPlanKind.parallel
-        ? _scrollQuarterParallel[q]
-        : _scrollQuarterChrono[q];
+    final target = switch (_plan) {
+      _JournalPlanKind.parallel => _scrollQuarterParallel[q],
+      _JournalPlanKind.chronological => _scrollQuarterChrono[q],
+      _JournalPlanKind.sequential => _scrollQuarterSequential[q],
+    };
 
     void tryJump(int attempt) {
       if (!mounted || attempt > 80) {
@@ -416,9 +450,11 @@ class _JournalScreenState extends State<JournalScreen>
     final start = journalQuarterStartDayIndex(quarterIndex);
     final len = kJournalPlanQuarterDayCounts[quarterIndex];
     final end = start + len;
-    final done = _plan == _JournalPlanKind.parallel
-        ? _parallelDone
-        : _chronologicalDone;
+    final done = switch (_plan) {
+      _JournalPlanKind.parallel => _parallelDone,
+      _JournalPlanKind.chronological => _chronologicalDone,
+      _JournalPlanKind.sequential => _sequentialDone,
+    };
     return done.where((i) => i >= start && i < end).length;
   }
 
@@ -487,14 +523,18 @@ class _JournalScreenState extends State<JournalScreen>
   }
 
   static _JournalPlanKind _planKindFromPrefs(String? raw) {
-    if (raw == 'chronological') {
-      return _JournalPlanKind.chronological;
-    }
-    return _JournalPlanKind.parallel;
+    return switch (raw) {
+      'chronological' => _JournalPlanKind.chronological,
+      'sequential' => _JournalPlanKind.sequential,
+      _ => _JournalPlanKind.parallel,
+    };
   }
 
-  static String _planKindToPrefs(_JournalPlanKind k) =>
-      k == _JournalPlanKind.parallel ? 'parallel' : 'chronological';
+  static String _planKindToPrefs(_JournalPlanKind k) => switch (k) {
+        _JournalPlanKind.parallel => 'parallel',
+        _JournalPlanKind.chronological => 'chronological',
+        _JournalPlanKind.sequential => 'sequential',
+      };
 
   void _persistPlanKind(_JournalPlanKind k) {
     SharedPreferences.getInstance().then(
@@ -512,16 +552,28 @@ class _JournalScreenState extends State<JournalScreen>
       p.getString(_prefsKeyChronological),
       kChronologicalReadingPlan365.length,
     );
+    final sequential = _decodeIndexSet(
+      p.getString(_prefsKeySequential),
+      kSequentialReadingPlanDayCount,
+    );
     final scrollP =
         _decodeQuarterScrollList(p.getString(_prefsScrollParallelQuarters));
     final scrollC =
         _decodeQuarterScrollList(p.getString(_prefsScrollChronoQuarters));
+    final scrollS =
+        _decodeQuarterScrollList(p.getString(_prefsScrollSequentialQuarters));
     final savedPlanKind = _planKindFromPrefs(p.getString(_prefsPlanKind));
     final parallelItems = _decodeDoneItems(
       p.getString(_prefsKeyParallelItems),
+      kParallelReadingPlan365.length,
     );
     final chronoItems = _decodeDoneItems(
       p.getString(_prefsKeyChronologicalItems),
+      kChronologicalReadingPlan365.length,
+    );
+    final sequentialItems = _decodeDoneItems(
+      p.getString(_prefsKeySequentialItems),
+      kSequentialReadingPlanDayCount,
     );
     final parallelDoneByItems = <int>{};
     for (final e in parallelItems.entries) {
@@ -543,14 +595,27 @@ class _JournalScreenState extends State<JournalScreen>
         chronoDoneByItems.add(day);
       }
     }
+    final sequentialDoneByItems = <int>{};
+    for (final e in sequentialItems.entries) {
+      final day = e.key;
+      if (day < 0 || day >= _sequentialChapterItemsByDay.length) continue;
+      final items = _sequentialChapterItemsByDay[day];
+      final done = e.value;
+      if (items.isNotEmpty && items.every((it) => done.contains(it.key))) {
+        sequentialDoneByItems.add(day);
+      }
+    }
     if (!mounted) return;
     setState(() {
       _parallelDone = {...parallel, ...parallelDoneByItems};
       _chronologicalDone = {...chrono, ...chronoDoneByItems};
+      _sequentialDone = {...sequential, ...sequentialDoneByItems};
       _parallelDoneItems = parallelItems;
       _chronologicalDoneItems = chronoItems;
+      _sequentialDoneItems = sequentialItems;
       _scrollQuarterParallel = scrollP;
       _scrollQuarterChrono = scrollC;
+      _scrollQuarterSequential = scrollS;
       _plan = savedPlanKind;
     });
   }
@@ -575,6 +640,16 @@ class _JournalScreenState extends State<JournalScreen>
     );
   }
 
+  Future<void> _persistSequential() async {
+    final p = await SharedPreferences.getInstance();
+    final sorted = _sequentialDone.toList()..sort();
+    await p.setString(_prefsKeySequential, jsonEncode(sorted));
+    await p.setString(
+      _prefsKeySequentialItems,
+      jsonEncode(_encodeDoneItems(_sequentialDoneItems)),
+    );
+  }
+
   Map<String, List<String>> _encodeDoneItems(Map<int, Set<String>> src) {
     final out = <String, List<String>>{};
     final days = src.keys.toList()..sort();
@@ -587,7 +662,7 @@ class _JournalScreenState extends State<JournalScreen>
     return out;
   }
 
-  Map<int, Set<String>> _decodeDoneItems(String? raw) {
+  Map<int, Set<String>> _decodeDoneItems(String? raw, int maxLen) {
     if (raw == null || raw.isEmpty) return {};
     try {
       final decoded = jsonDecode(raw);
@@ -595,7 +670,7 @@ class _JournalScreenState extends State<JournalScreen>
       final out = <int, Set<String>>{};
       for (final e in decoded.entries) {
         final day = int.tryParse(e.key.toString());
-        if (day == null || day < 0 || day >= _planTotal) continue;
+        if (day == null || day < 0 || day >= maxLen) continue;
         final list = e.value;
         if (list is! List) continue;
         final values = list
@@ -611,10 +686,47 @@ class _JournalScreenState extends State<JournalScreen>
   }
 
   List<String> _linesForDay(int index) {
-    final rawLines = _plan == _JournalPlanKind.parallel
-        ? kParallelReadingPlan365[index].lines
-        : kChronologicalReadingPlan365[index].lines;
-    return rawLines.map(_expandBookNamesForDisplay).toList(growable: false);
+    switch (_plan) {
+      case _JournalPlanKind.parallel:
+        return kParallelReadingPlan365[index].lines
+            .map(_expandBookNamesForDisplay)
+            .toList(growable: false);
+      case _JournalPlanKind.chronological:
+        return kChronologicalReadingPlan365[index].lines
+            .map(_expandBookNamesForDisplay)
+            .toList(growable: false);
+      case _JournalPlanKind.sequential:
+        return _formatChapterItemsAsDisplayLines(
+          _sequentialChapterItemsByDay[index],
+        );
+    }
+  }
+
+  /// Строки дня для последовательного плана (полные названия книг из [BibleBook]).
+  List<String> _formatChapterItemsAsDisplayLines(List<_PlanChapterItem> items) {
+    if (items.isEmpty) return const [];
+    final byBook = <String, List<int>>{};
+    for (final i in items) {
+      byBook.putIfAbsent(i.book, () => <int>[]).add(i.chapter);
+    }
+    return byBook.entries.map((e) {
+      final chapters = (e.value.toSet().toList()..sort());
+      final parts = <String>[];
+      var start = chapters.first;
+      var prev = chapters.first;
+      for (var idx = 1; idx < chapters.length; idx++) {
+        final curr = chapters[idx];
+        if (curr == prev + 1) {
+          prev = curr;
+          continue;
+        }
+        parts.add(start == prev ? '$start' : '$start-$prev');
+        start = curr;
+        prev = curr;
+      }
+      parts.add(start == prev ? '$start' : '$start-$prev');
+      return '${e.key} ${parts.join(', ')}';
+    }).toList(growable: false);
   }
 
   String _expandBookNamesForDisplay(String line) {
@@ -641,10 +753,13 @@ class _JournalScreenState extends State<JournalScreen>
   }
 
   Set<String> _doneItemsForCurrentPlan(int dayIndex) {
-    if (_plan == _JournalPlanKind.parallel) {
-      return _parallelDoneItems[dayIndex] ?? <String>{};
-    }
-    return _chronologicalDoneItems[dayIndex] ?? <String>{};
+    return switch (_plan) {
+      _JournalPlanKind.parallel => _parallelDoneItems[dayIndex] ?? <String>{},
+      _JournalPlanKind.chronological =>
+        _chronologicalDoneItems[dayIndex] ?? <String>{},
+      _JournalPlanKind.sequential =>
+        _sequentialDoneItems[dayIndex] ?? <String>{},
+    };
   }
 
   Future<void> _setChapterDone({
@@ -653,9 +768,11 @@ class _JournalScreenState extends State<JournalScreen>
     required bool done,
   }) async {
     setState(() {
-      final map = _plan == _JournalPlanKind.parallel
-          ? _parallelDoneItems
-          : _chronologicalDoneItems;
+      final map = switch (_plan) {
+        _JournalPlanKind.parallel => _parallelDoneItems,
+        _JournalPlanKind.chronological => _chronologicalDoneItems,
+        _JournalPlanKind.sequential => _sequentialDoneItems,
+      };
       final selected = (map[dayIndex] ?? <String>{}).toSet();
       if (done) {
         selected.add(itemKey);
@@ -669,25 +786,28 @@ class _JournalScreenState extends State<JournalScreen>
       }
 
       final dayIsDone = _dayDone(dayIndex);
-      if (_plan == _JournalPlanKind.parallel) {
-        if (dayIsDone) {
-          _parallelDone.add(dayIndex);
-        } else {
-          _parallelDone.remove(dayIndex);
-        }
+      final doneSet = switch (_plan) {
+        _JournalPlanKind.parallel => _parallelDone,
+        _JournalPlanKind.chronological => _chronologicalDone,
+        _JournalPlanKind.sequential => _sequentialDone,
+      };
+      if (dayIsDone) {
+        doneSet.add(dayIndex);
       } else {
-        if (dayIsDone) {
-          _chronologicalDone.add(dayIndex);
-        } else {
-          _chronologicalDone.remove(dayIndex);
-        }
+        doneSet.remove(dayIndex);
       }
     });
 
-    if (_plan == _JournalPlanKind.parallel) {
-      await _persistParallel();
-    } else {
-      await _persistChronological();
+    switch (_plan) {
+      case _JournalPlanKind.parallel:
+        await _persistParallel();
+        break;
+      case _JournalPlanKind.chronological:
+        await _persistChronological();
+        break;
+      case _JournalPlanKind.sequential:
+        await _persistSequential();
+        break;
     }
   }
 
@@ -838,9 +958,12 @@ class _JournalScreenState extends State<JournalScreen>
     _JournalPlanKind plan,
     int dayIndex,
   ) {
-    return plan == _JournalPlanKind.parallel
-        ? _parallelChapterItemsByDay[dayIndex]
-        : _chronologicalChapterItemsByDay[dayIndex];
+    return switch (plan) {
+      _JournalPlanKind.parallel => _parallelChapterItemsByDay[dayIndex],
+      _JournalPlanKind.chronological =>
+        _chronologicalChapterItemsByDay[dayIndex],
+      _JournalPlanKind.sequential => _sequentialChapterItemsByDay[dayIndex],
+    };
   }
 
   List<_PlanChapterItem> _chapterItemsForDay(int dayIndex) =>
@@ -989,13 +1112,17 @@ class _JournalScreenState extends State<JournalScreen>
     );
   }
 
-  int get _planTotal => _plan == _JournalPlanKind.parallel
-      ? kParallelReadingPlan365.length
-      : kChronologicalReadingPlan365.length;
+  int get _planTotal => switch (_plan) {
+    _JournalPlanKind.parallel => kParallelReadingPlan365.length,
+    _JournalPlanKind.chronological => kChronologicalReadingPlan365.length,
+    _JournalPlanKind.sequential => kSequentialReadingPlanDayCount,
+  };
 
-  int get _planDoneCount => _plan == _JournalPlanKind.parallel
-      ? _parallelDone.length
-      : _chronologicalDone.length;
+  int get _planDoneCount => switch (_plan) {
+    _JournalPlanKind.parallel => _parallelDone.length,
+    _JournalPlanKind.chronological => _chronologicalDone.length,
+    _JournalPlanKind.sequential => _sequentialDone.length,
+  };
 
   int _dayCountInOpenQuarter() {
     final q = _openQuarter;
@@ -1083,6 +1210,21 @@ class _JournalScreenState extends State<JournalScreen>
                           }
                         },
                       ),
+                      const SizedBox(height: 8),
+                      _planRectButton(
+                        label: 'Последовательный',
+                        height: chromeHeight,
+                        selected: _plan == _JournalPlanKind.sequential,
+                        isDark: isDark,
+                        unselectedBg: unselectedBtn,
+                        chromeFg: chromeFg,
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          if (_plan != _JournalPlanKind.sequential) {
+                            _selectPlanKind(_JournalPlanKind.sequential);
+                          }
+                        },
+                      ),
                     ],
                   ),
                 ),
@@ -1096,9 +1238,11 @@ class _JournalScreenState extends State<JournalScreen>
 
   /// Экран с четырьмя кварталами: одна строка, шрифт по возможности на всю кнопку.
   Widget _planKindAppBarTitleOnHub(Color chromeFg, double chromeSize) {
-    final full = _plan == _JournalPlanKind.parallel
-        ? 'План чтения: параллельный'
-        : 'План чтения: хронология';
+    final full = switch (_plan) {
+      _JournalPlanKind.parallel => 'План чтения: параллельный',
+      _JournalPlanKind.chronological => 'План чтения: хронология',
+      _JournalPlanKind.sequential => 'План чтения: последовательный',
+    };
     return Text(
       full,
       maxLines: 1,
@@ -1119,9 +1263,11 @@ class _JournalScreenState extends State<JournalScreen>
     Color chromeFg,
     double maxWidth,
   ) {
-    final singleLine = _plan == _JournalPlanKind.parallel
-        ? 'План чтения: параллельный'
-        : 'План чтения: хронология';
+    final singleLine = switch (_plan) {
+      _JournalPlanKind.parallel => 'План чтения: параллельный',
+      _JournalPlanKind.chronological => 'План чтения: хронология',
+      _JournalPlanKind.sequential => 'План чтения: последовательный',
+    };
     final singleStyle = TextStyle(
       color: chromeFg,
       fontWeight: FontWeight.normal,
@@ -1142,8 +1288,11 @@ class _JournalScreenState extends State<JournalScreen>
         style: singleStyle,
       );
     }
-    final line2 =
-        _plan == _JournalPlanKind.parallel ? 'параллельный' : 'хронология';
+    final line2 = switch (_plan) {
+      _JournalPlanKind.parallel => 'параллельный',
+      _JournalPlanKind.chronological => 'хронология',
+      _JournalPlanKind.sequential => 'последовательный',
+    };
     return Column(
       mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
