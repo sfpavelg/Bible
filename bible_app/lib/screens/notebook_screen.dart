@@ -286,6 +286,8 @@ class _NotebookScreenState extends State<NotebookScreen> {
   DateTime? _lastNameLimitWarningAt;
   bool _editorClipboardHasText = false;
   Timer? _clipboardPollTimer;
+  final ScrollController _folderPathScrollController = ScrollController();
+  bool _folderPathHasOverflow = false;
 
   bool get _fileBulkSelectionUi =>
       _fileActionsAnchor != null && !_fileActionsAnchor!.isFolder;
@@ -321,6 +323,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
   @override
   void dispose() {
     _clipboardPollTimer?.cancel();
+    _folderPathScrollController.dispose();
     super.dispose();
   }
 
@@ -331,6 +334,14 @@ class _NotebookScreenState extends State<NotebookScreen> {
       (_) => unawaited(_refreshEditorClipboardState()),
     );
     unawaited(_refreshEditorClipboardState());
+  }
+
+  void _recomputeFolderPathOverflow() {
+    final c = _folderPathScrollController;
+    if (!c.hasClients || !c.position.hasContentDimensions) return;
+    final hasOverflow = c.position.maxScrollExtent > 0;
+    if (hasOverflow == _folderPathHasOverflow || !mounted) return;
+    setState(() => _folderPathHasOverflow = hasOverflow);
   }
 
   Future<void> _refreshEditorClipboardState() async {
@@ -978,6 +989,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
 
   Widget _buildFolderPathBreadcrumb() {
     final fs = context.watch<AppProvider>().fontSize;
+    final app = context.watch<AppProvider>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final segs = _notebookMoveDialogPathSegments(_currentDir);
     final crumbFs = fs.clamp(12.0, 40.0);
@@ -1051,9 +1063,51 @@ class _NotebookScreenState extends State<NotebookScreen> {
       );
     }
 
-    return Wrap(
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: chips,
+    final rowHeight = crumbFs * 1.2;
+    final maxPathHeight = rowHeight * 2;
+    final railSize = (app.chromeButtonSize * 0.68).clamp(26.0, 36.0);
+    final railTrack = isDark
+        ? Colors.blueGrey.shade700.withValues(alpha: 0.9)
+        : Colors.blue.shade100.withValues(alpha: 0.75);
+    final railThumb = isDark ? _buttonBgDark : _buttonBgLight;
+    final railBg = isDark
+        ? const Color(0xFF263238)
+        : const Color(0xFFE1F5FE);
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _recomputeFolderPathOverflow());
+    return SizedBox(
+      height: maxPathHeight,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: Scrollbar(
+              controller: _folderPathScrollController,
+              thumbVisibility: false,
+              child: SingleChildScrollView(
+                controller: _folderPathScrollController,
+                child: Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: chips,
+                ),
+              ),
+            ),
+          ),
+          if (_folderPathHasOverflow) ...[
+            const SizedBox(width: 2),
+            Container(
+              width: railSize,
+              color: railBg,
+              child: _NotebookPathScrollRail(
+                controller: _folderPathScrollController,
+                thumbSize: railSize,
+                thumbColor: railThumb,
+                trackHintColor: railTrack,
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -1084,11 +1138,18 @@ class _NotebookScreenState extends State<NotebookScreen> {
   }
 
   Widget _buildListFolderFooter() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final pathAreaBg = isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF5F5F5);
     return _buildNotebookPathStrip(
       label: 'Папка:',
       pathValue: '',
-      pathWidget: _buildFolderPathBreadcrumb(),
-      contentPadding: const EdgeInsets.fromLTRB(0, 8, 12, 10),
+      pathWidget: Container(
+        color: pathAreaBg,
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        child: _buildFolderPathBreadcrumb(),
+      ),
+      // Небольшой левый отступ + минимальный правый, чтобы скроллбар прижимался вправо.
+      contentPadding: const EdgeInsets.fromLTRB(8, 8, 0, 10),
     );
   }
 
@@ -2129,6 +2190,162 @@ class _NotebookScreenState extends State<NotebookScreen> {
                         if (_currentDir.isNotEmpty) _buildListFolderFooter(),
                       ],
                     ),
+    );
+  }
+}
+
+class _NotebookPathScrollRail extends StatefulWidget {
+  const _NotebookPathScrollRail({
+    required this.controller,
+    required this.thumbSize,
+    required this.thumbColor,
+    required this.trackHintColor,
+  });
+
+  final ScrollController controller;
+  final double thumbSize;
+  final Color thumbColor;
+  final Color trackHintColor;
+
+  @override
+  State<_NotebookPathScrollRail> createState() => _NotebookPathScrollRailState();
+}
+
+class _NotebookPathScrollRailState extends State<_NotebookPathScrollRail> {
+  bool get _hasMetrics =>
+      widget.controller.hasClients && widget.controller.position.hasContentDimensions;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_onScroll);
+  }
+
+  @override
+  void didUpdateWidget(covariant _NotebookPathScrollRail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_onScroll);
+      widget.controller.addListener(_onScroll);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onScroll);
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (mounted) setState(() {});
+  }
+
+  void _jumpToLocalY(double localY, double trackH, double ts, double travel) {
+    final c = widget.controller;
+    if (!_hasMetrics || travel <= 0) return;
+    final maxExt = c.position.maxScrollExtent;
+    if (maxExt <= 0) {
+      c.jumpTo(0);
+      return;
+    }
+    final targetTop = (localY - ts / 2).clamp(0.0, travel);
+    final pixels = (targetTop / travel) * maxExt;
+    c.jumpTo(pixels.clamp(0.0, maxExt));
+  }
+
+  Widget _gripLine(double width) => Container(
+        width: width,
+        height: 2.5,
+        decoration: BoxDecoration(
+          color: Colors.black,
+          borderRadius: BorderRadius.circular(1.25),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final ts = widget.thumbSize;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final h = constraints.maxHeight;
+        final travel = (h - ts).clamp(0.0, double.infinity);
+        final c = widget.controller;
+        double thumbTop = 0;
+        if (_hasMetrics && travel > 0) {
+          final pos = c.position;
+          final maxExt = pos.maxScrollExtent;
+          if (maxExt > 0) {
+            thumbTop = (pos.pixels / maxExt) * travel;
+            thumbTop = thumbTop.clamp(0.0, travel);
+          }
+        }
+        return SizedBox(
+          width: ts,
+          height: h,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTapDown: (d) => _jumpToLocalY(d.localPosition.dy, h, ts, travel),
+                ),
+              ),
+              Center(
+                child: IgnorePointer(
+                  child: Container(
+                    width: 4,
+                    height: (h - 8).clamp(0.0, double.infinity),
+                    margin: const EdgeInsets.symmetric(vertical: 4),
+                    decoration: BoxDecoration(
+                      color: widget.trackHintColor,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 0,
+                top: thumbTop,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onVerticalDragUpdate: (details) {
+                    if (!_hasMetrics || travel <= 0) return;
+                    final pos = c.position;
+                    final maxExt = pos.maxScrollExtent;
+                    if (maxExt <= 0) return;
+                    final next = pos.pixels + details.delta.dy * maxExt / travel;
+                    c.jumpTo(next.clamp(0.0, maxExt));
+                  },
+                  child: Material(
+                    color: widget.thumbColor,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: ChromeOutline.side,
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: SizedBox(
+                      width: ts,
+                      height: ts,
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _gripLine((ts * 0.55).clamp(14.0, 24.0)),
+                            SizedBox(height: (ts * 0.1).clamp(3.0, 6.0)),
+                            _gripLine((ts * 0.55).clamp(14.0, 24.0)),
+                            SizedBox(height: (ts * 0.1).clamp(3.0, 6.0)),
+                            _gripLine((ts * 0.55).clamp(14.0, 24.0)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

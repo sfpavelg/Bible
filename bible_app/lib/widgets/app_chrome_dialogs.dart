@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:bible_app/journal/parallel_reading_plan_data.dart';
 import 'package:bible_app/providers/app_provider.dart';
 import 'package:bible_app/widgets/chrome_outline.dart';
@@ -102,10 +100,10 @@ void showAppSettingsDialog(BuildContext context) {
 
   showGeneralDialog<void>(
     context: context,
-    barrierDismissible: false,
+    barrierDismissible: true,
     barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
-    barrierColor: Colors.transparent,
-    transitionDuration: const Duration(milliseconds: 240),
+    barrierColor: Colors.black26,
+    transitionDuration: const Duration(milliseconds: 160),
     pageBuilder: (dialogContext, animation, secondaryAnimation) {
       ThemeMode selectedTheme = appProvider.themeMode;
       double fontSize = appProvider.fontSize;
@@ -123,26 +121,32 @@ void showAppSettingsDialog(BuildContext context) {
         builder: (modalContext, setModalState) {
           return Consumer<AppProvider>(
             builder: (consumerContext, _, __) {
+              // Держим локальное значение в синхроне с провайдером, чтобы якорь и
+              // геометрия панели пересчитывались сразу при изменении размера кнопок.
+              chromeBtnSize = appProvider.chromeButtonSize;
               final theme = Theme.of(consumerContext);
               final scheme = theme.colorScheme;
               final isDark = theme.brightness == Brightness.dark;
-              // Серый фон панели «Настройки».
               final settingsBg =
-                  isDark ? Colors.grey.shade900 : Colors.grey.shade200;
+                  isDark ? const Color(0xFF37474F) : const Color(0xFFE1F5FE);
 
+              final uiFs = fontSize.clamp(12.0, 28.0);
               final kSettingsTitleStyle = TextStyle(
-                fontSize: 20,
+                fontSize: (uiFs * 1.25).clamp(16.0, 32.0),
                 fontWeight: FontWeight.w600,
                 color: scheme.onSurface,
               );
               final kSettingsHeadingStyle = TextStyle(
                 fontWeight: FontWeight.bold,
-                fontSize: 14,
+                fontSize: (uiFs * 0.9).clamp(12.0, 26.0),
                 color: scheme.onSurface,
               );
               final kSettingsBodyStyle = TextStyle(
-                fontSize: 15,
+                fontSize: uiFs,
                 color: scheme.onSurface,
+              );
+              final kSettingsSegmentTextStyle = TextStyle(
+                fontSize: (uiFs * 0.92).clamp(12.0, 24.0),
               );
               const kSegIcon = 18.0;
 
@@ -164,43 +168,64 @@ void showAppSettingsDialog(BuildContext context) {
                     disabledInactiveTickMarkColor: Colors.grey.shade500,
                   );
 
-              return Material(
-                color: settingsBg,
-                elevation: 10,
-                shadowColor: Colors.black45,
-                clipBehavior: Clip.antiAlias,
-                child: SafeArea(
-                  left: false,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                'Настройки',
-                                style: kSettingsTitleStyle,
-                              ),
-                            ),
-                            _PopRouteOnce(
-                              navigatorContext: modalContext,
-                              builder: (c, popOnce) =>
-                                  NotebookChromeDialogCloseButton(
-                                onPressed: popOnce,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Divider(height: 1, color: scheme.outlineVariant),
-                      Expanded(
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.fromLTRB(10, 6, 10, 14),
+              final panelWidth = ((MediaQuery.sizeOf(consumerContext).width - 12) * (2 / 3))
+                  .clamp(300.0, 362.5);
+              final topAnchor = MediaQuery.paddingOf(consumerContext).top +
+                  AppProvider.toolbarHeightForChrome(chromeBtnSize);
+              final maxBodyHeight = (MediaQuery.sizeOf(consumerContext).height -
+                      topAnchor -
+                      24)
+                  .clamp(220.0, 640.0);
+
+              return Stack(
+                children: [
+                  Positioned.fill(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => Navigator.pop(modalContext),
+                    ),
+                  ),
+                  Positioned(
+                    top: topAnchor,
+                    right: 0,
+                    child: SizedBox(
+                      width: panelWidth,
+                      child: Material(
+                        color: settingsBg,
+                        elevation: 10,
+                        borderRadius: BorderRadius.circular(12),
+                        clipBehavior: Clip.antiAlias,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
                           child: Column(
+                            mainAxisSize: MainAxisSize.min,
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      'Настройки',
+                                      style: kSettingsTitleStyle,
+                                    ),
+                                  ),
+                                  _PopRouteOnce(
+                                    navigatorContext: modalContext,
+                                    builder: (c, popOnce) =>
+                                        NotebookChromeDialogCloseButton(
+                                      onPressed: popOnce,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              ConstrainedBox(
+                                constraints: BoxConstraints(maxHeight: maxBodyHeight),
+                                child: SingleChildScrollView(
+                                  padding: const EdgeInsets.fromLTRB(2, 2, 2, 2),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    children: [
                               Text(
                                 'Размер шрифта',
                                 style: kSettingsHeadingStyle,
@@ -270,50 +295,55 @@ void showAppSettingsDialog(BuildContext context) {
                                 style: kSettingsHeadingStyle,
                               ),
                               const SizedBox(height: 4),
-                              DropdownButtonFormField<String>(
-                                isExpanded: true,
-                                value: fontPreset,
-                                style: kSettingsBodyStyle,
-                                decoration: InputDecoration(
-                                  filled: true,
-                                  fillColor: scheme.surfaceContainerHighest
-                                      .withValues(alpha: 0.75),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                    borderSide: ChromeOutline.side,
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                    borderSide: ChromeOutline.side,
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                    borderSide: ChromeOutline.side.copyWith(
-                                      width: ChromeOutline.width + 0.3,
+                              SizedBox(
+                                height: chromeBtnSize,
+                                child: DropdownButtonFormField<String>(
+                                  isExpanded: true,
+                                  isDense: true,
+                                  itemHeight: chromeBtnSize,
+                                  value: fontPreset,
+                                  style: kSettingsBodyStyle,
+                                  decoration: InputDecoration(
+                                    filled: true,
+                                    fillColor: scheme.surfaceContainerHighest
+                                        .withValues(alpha: 0.75),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: ChromeOutline.side,
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: ChromeOutline.side,
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: ChromeOutline.side.copyWith(
+                                        width: ChromeOutline.width + 0.3,
+                                      ),
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 0,
                                     ),
                                   ),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 10,
-                                  ),
-                                ),
-                                items: AppProvider.verseFontLabels.entries
-                                    .map(
-                                      (e) => DropdownMenuItem<String>(
-                                        value: e.key,
-                                        child: Text(
-                                          e.value,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: kSettingsBodyStyle,
+                                  items: AppProvider.verseFontLabels.entries
+                                      .map(
+                                        (e) => DropdownMenuItem<String>(
+                                          value: e.key,
+                                          child: Text(
+                                            e.value,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: kSettingsBodyStyle,
+                                          ),
                                         ),
-                                      ),
-                                    )
-                                    .toList(),
-                                onChanged: (value) {
-                                  if (value == null) return;
-                                  setModalState(() => fontPreset = value);
-                                  appProvider.setVerseFontPreset(value);
-                                },
+                                      )
+                                      .toList(),
+                                  onChanged: (value) {
+                                    if (value == null) return;
+                                    setModalState(() => fontPreset = value);
+                                    appProvider.setVerseFontPreset(value);
+                                  },
+                                ),
                               ),
                               const SizedBox(height: 8),
                               Text(
@@ -349,9 +379,14 @@ void showAppSettingsDialog(BuildContext context) {
                                 segments: <ButtonSegment<ThemeMode>>[
                                   ButtonSegment<ThemeMode>(
                                     value: ThemeMode.light,
-                                    label: const Text(
-                                      'Светлая',
-                                      style: TextStyle(fontSize: 14),
+                                    label: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Text(
+                                        'Светлая',
+                                        maxLines: 1,
+                                        softWrap: false,
+                                        style: kSettingsSegmentTextStyle,
+                                      ),
                                     ),
                                     icon: const Icon(
                                       Icons.light_mode_outlined,
@@ -360,9 +395,14 @@ void showAppSettingsDialog(BuildContext context) {
                                   ),
                                   ButtonSegment<ThemeMode>(
                                     value: ThemeMode.dark,
-                                    label: const Text(
-                                      'Тёмная',
-                                      style: TextStyle(fontSize: 14),
+                                    label: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Text(
+                                        'Тёмная',
+                                        maxLines: 1,
+                                        softWrap: false,
+                                        style: kSettingsSegmentTextStyle,
+                                      ),
                                     ),
                                     icon: const Icon(
                                       Icons.dark_mode_outlined,
@@ -371,8 +411,19 @@ void showAppSettingsDialog(BuildContext context) {
                                   ),
                                 ],
                                 style: SegmentedButton.styleFrom(
-                                  textStyle: const TextStyle(fontSize: 14),
+                                  textStyle: kSettingsSegmentTextStyle,
                                 ).copyWith(
+                                  backgroundColor:
+                                      WidgetStateProperty.resolveWith<Color?>(
+                                    (states) {
+                                      if (states
+                                          .contains(WidgetState.selected)) {
+                                        return scheme.surfaceContainerHighest
+                                            .withValues(alpha: 0.75);
+                                      }
+                                      return null;
+                                    },
+                                  ),
                                   side: const WidgetStatePropertyAll(
                                     ChromeOutline.side,
                                   ),
@@ -418,67 +469,31 @@ void showAppSettingsDialog(BuildContext context) {
                                   await appProvider.setKeepScreenOn(value);
                                 },
                               ),
+                                    ],
+                                  ),
+                                ),
+                              ),
                             ],
                           ),
                         ),
                       ),
-                    ],
+                    ),
                   ),
-                ),
+                ],
               );
             },
           );
         },
       );
     },
-    transitionBuilder: (ctx, animation, secondaryAnimation, child) {
-      final size = MediaQuery.sizeOf(ctx);
-      final w = size.width;
-      final leftReveal = math.min(w * 0.42, math.max(64.0, w * 0.28));
-      final panelWidth = size.width - leftReveal;
-      final curved = CurvedAnimation(
+    transitionBuilder: (ctx, animation, secondaryAnimation, child) => FadeTransition(
+      opacity: CurvedAnimation(
         parent: animation,
         curve: Curves.easeOutCubic,
         reverseCurve: Curves.easeInCubic,
-      );
-
-      return SizedBox(
-        width: size.width,
-        height: size.height,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(
-              width: leftReveal,
-              child: FadeTransition(
-                opacity: curved,
-                child: _PopRouteOnce(
-                  navigatorContext: ctx,
-                  builder: (c, popOnce) => GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: popOnce,
-                    child: ColoredBox(
-                      color: Colors.black.withOpacity(0.28),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(1, 0),
-                end: Offset.zero,
-              ).animate(curved),
-              child: SizedBox(
-                width: panelWidth,
-                height: size.height,
-                child: child,
-              ),
-            ),
-          ],
-        ),
-      );
-    },
+      ),
+      child: child,
+    ),
   );
 }
 

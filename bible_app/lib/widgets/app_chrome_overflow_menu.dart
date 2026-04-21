@@ -32,61 +32,110 @@ class AppChromeOverflowMenu extends StatefulWidget {
 
 class _AppChromeOverflowMenuState extends State<AppChromeOverflowMenu> {
   Future<void> _openMenu(BuildContext context) async {
-    final value = await showDialog<String>(
+    final app = context.read<AppProvider>();
+    final safeTop = MediaQuery.paddingOf(context).top;
+    final toolbarH = AppProvider.toolbarHeightForChrome(app.chromeButtonSize);
+    // Контент начинается ниже закруглённой нижней кромки AppBar.
+    // Привязываем меню к верхней кромке области текста, чтобы исключить наезд.
+    final topAnchor = safeTop + toolbarH + 24;
+    final panelBg = Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF37474F)
+        : const Color(0xFFE1F5FE);
+
+    final value = await showGeneralDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        title: Row(
+      barrierDismissible: true,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      barrierColor: Colors.black26,
+      transitionDuration: const Duration(milliseconds: 140),
+      pageBuilder: (dialogContext, _, __) {
+        return Stack(
           children: [
-            const Expanded(child: Text('Меню')),
-            NotebookChromeDialogCloseButton(
-              onPressed: () => Navigator.pop(dialogContext),
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => Navigator.pop(dialogContext),
+              ),
+            ),
+            Positioned(
+              top: topAnchor,
+              right: 0,
+              child: IntrinsicWidth(
+                child: Material(
+                  color: panelBg,
+                  elevation: 10,
+                  borderRadius: BorderRadius.circular(12),
+                  clipBehavior: Clip.antiAlias,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Меню',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w600,
+                                  color: Theme.of(dialogContext)
+                                      .colorScheme
+                                      .onSurface,
+                                ),
+                              ),
+                            ),
+                            NotebookChromeDialogCloseButton(
+                              onPressed: () => Navigator.pop(dialogContext),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        InkWell(
+                          onTap: () => Navigator.pop(dialogContext, 'settings'),
+                          child: chromePopupMenuChoiceTile(
+                            context: dialogContext,
+                            label: 'Настройки',
+                            icon: Icons.settings_outlined,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        InkWell(
+                          onTap: () => Navigator.pop(dialogContext, 'support'),
+                          child: chromePopupMenuChoiceTile(
+                            context: dialogContext,
+                            label: 'Техподдержка',
+                            icon: Icons.support_agent_outlined,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        InkWell(
+                          onTap: () => Navigator.pop(dialogContext, 'help'),
+                          child: chromePopupMenuChoiceTile(
+                            context: dialogContext,
+                            label: 'Помощь',
+                            icon: Icons.help_outline_rounded,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        InkWell(
+                          onTap: () => Navigator.pop(dialogContext, 'exit'),
+                          child: chromePopupMenuChoiceTile(
+                            context: dialogContext,
+                            label: 'Выход',
+                            icon: Icons.logout_rounded,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
           ],
-        ),
-        contentPadding: const EdgeInsets.fromLTRB(10, 4, 10, 10),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            InkWell(
-              onTap: () => Navigator.pop(dialogContext, 'settings'),
-              child: chromePopupMenuChoiceTile(
-                context: dialogContext,
-                label: 'Настройки',
-                icon: Icons.settings_outlined,
-              ),
-            ),
-            const SizedBox(height: 4),
-            InkWell(
-              onTap: () => Navigator.pop(dialogContext, 'support'),
-              child: chromePopupMenuChoiceTile(
-                context: dialogContext,
-                label: 'Техподдержка',
-                icon: Icons.support_agent_outlined,
-              ),
-            ),
-            const SizedBox(height: 4),
-            InkWell(
-              onTap: () => Navigator.pop(dialogContext, 'help'),
-              child: chromePopupMenuChoiceTile(
-                context: dialogContext,
-                label: 'Помощь',
-                icon: Icons.help_outline_rounded,
-              ),
-            ),
-            const SizedBox(height: 4),
-            InkWell(
-              onTap: () => Navigator.pop(dialogContext, 'exit'),
-              child: chromePopupMenuChoiceTile(
-                context: dialogContext,
-                label: 'Выход',
-                icon: Icons.logout_rounded,
-              ),
-            ),
-          ],
-        ),
-      ),
+        );
+      },
     );
 
     if (!mounted || value == null) return;
@@ -146,6 +195,7 @@ Widget chromePopupMenuChoiceTile({
   final chrome = context.watch<AppProvider>().chromeButtonSize;
   final iconSize = (chrome * 0.48).clamp(18.0, 30.0);
   final fontSize = (chrome * 0.34).clamp(12.0, 16.0);
+  final textIconGap = (fontSize * 2).clamp(18.0, 32.0);
   final hPad = (chrome * 0.30).clamp(10.0, 16.0);
   final vPad = (chrome * 0.18).clamp(7.0, 11.0);
   final minHeight = (chrome * 0.96).clamp(42.0, 62.0);
@@ -181,6 +231,7 @@ Widget chromePopupMenuChoiceTile({
                     ),
                   ),
                 ),
+                SizedBox(width: textIconGap),
                 Icon(icon, color: fg, size: iconSize),
               ],
             ),

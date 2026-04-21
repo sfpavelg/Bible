@@ -252,9 +252,14 @@ class _JournalScreenState extends State<JournalScreen>
   Set<int> _chronologicalDone = {};
   Map<int, Set<String>> _parallelDoneItems = {};
   Map<int, Set<String>> _chronologicalDoneItems = {};
-  bool _loading = true;
+  final bool _loading = false;
   final ScrollController _scrollController = ScrollController();
   Timer? _scrollSaveDebounce;
+  late final Map<String, String> _bookLookup = _bookNameLookup();
+  late final List<List<_PlanChapterItem>> _parallelChapterItemsByDay =
+      _buildChapterItemsByDay(_JournalPlanKind.parallel);
+  late final List<List<_PlanChapterItem>> _chronologicalChapterItemsByDay =
+      _buildChapterItemsByDay(_JournalPlanKind.chronological);
 
   /// Позиция прокрутки списка по каждому кварталу (0…3) для параллельного и хронологического плана.
   List<double> _scrollQuarterParallel = List<double>.filled(4, 0.0);
@@ -519,19 +524,23 @@ class _JournalScreenState extends State<JournalScreen>
       p.getString(_prefsKeyChronologicalItems),
     );
     final parallelDoneByItems = <int>{};
-    for (var i = 0; i < kParallelReadingPlan365.length; i++) {
-      final items = _chapterItemsForDayByPlan(_JournalPlanKind.parallel, i);
-      final done = parallelItems[i] ?? <String>{};
-      if (items.isNotEmpty && items.every((e) => done.contains(e.key))) {
-        parallelDoneByItems.add(i);
+    for (final e in parallelItems.entries) {
+      final day = e.key;
+      if (day < 0 || day >= _parallelChapterItemsByDay.length) continue;
+      final items = _parallelChapterItemsByDay[day];
+      final done = e.value;
+      if (items.isNotEmpty && items.every((it) => done.contains(it.key))) {
+        parallelDoneByItems.add(day);
       }
     }
     final chronoDoneByItems = <int>{};
-    for (var i = 0; i < kChronologicalReadingPlan365.length; i++) {
-      final items = _chapterItemsForDayByPlan(_JournalPlanKind.chronological, i);
-      final done = chronoItems[i] ?? <String>{};
-      if (items.isNotEmpty && items.every((e) => done.contains(e.key))) {
-        chronoDoneByItems.add(i);
+    for (final e in chronoItems.entries) {
+      final day = e.key;
+      if (day < 0 || day >= _chronologicalChapterItemsByDay.length) continue;
+      final items = _chronologicalChapterItemsByDay[day];
+      final done = e.value;
+      if (items.isNotEmpty && items.every((it) => done.contains(it.key))) {
+        chronoDoneByItems.add(day);
       }
     }
     if (!mounted) return;
@@ -543,7 +552,6 @@ class _JournalScreenState extends State<JournalScreen>
       _scrollQuarterParallel = scrollP;
       _scrollQuarterChrono = scrollC;
       _plan = savedPlanKind;
-      _loading = false;
     });
   }
 
@@ -690,6 +698,17 @@ class _JournalScreenState extends State<JournalScreen>
     return out;
   }
 
+  List<List<_PlanChapterItem>> _buildChapterItemsByDay(_JournalPlanKind plan) {
+    final total = plan == _JournalPlanKind.parallel
+        ? kParallelReadingPlan365.length
+        : kChronologicalReadingPlan365.length;
+    return List<List<_PlanChapterItem>>.generate(
+      total,
+      (dayIndex) => _parseChapterItemsForDay(plan, dayIndex),
+      growable: false,
+    );
+  }
+
   List<int> _parseChapterToken(String token) {
     final t = token.trim();
     if (t.isEmpty) return const [];
@@ -711,11 +730,10 @@ class _JournalScreenState extends State<JournalScreen>
     return single == null ? const [] : [single];
   }
 
-  List<_PlanChapterItem> _chapterItemsForDayByPlan(
+  List<_PlanChapterItem> _parseChapterItemsForDay(
     _JournalPlanKind plan,
     int dayIndex,
   ) {
-    final lookup = _bookNameLookup();
     final lines = plan == _JournalPlanKind.parallel
         ? kParallelReadingPlan365[dayIndex].lines
         : kChronologicalReadingPlan365[dayIndex].lines;
@@ -732,7 +750,7 @@ class _JournalScreenState extends State<JournalScreen>
         if (m == null) continue;
         final bookRaw = m.group(1)!.trim();
         final refsRaw = m.group(2)!.trim();
-        final book = lookup[_normalizeBookToken(bookRaw)];
+        final book = _bookLookup[_normalizeBookToken(bookRaw)];
         if (book == null) continue;
         final parts = refsRaw
             .split(',')
@@ -749,6 +767,15 @@ class _JournalScreenState extends State<JournalScreen>
       }
     }
     return out;
+  }
+
+  List<_PlanChapterItem> _chapterItemsForDayByPlan(
+    _JournalPlanKind plan,
+    int dayIndex,
+  ) {
+    return plan == _JournalPlanKind.parallel
+        ? _parallelChapterItemsByDay[dayIndex]
+        : _chronologicalChapterItemsByDay[dayIndex];
   }
 
   List<_PlanChapterItem> _chapterItemsForDay(int dayIndex) =>
@@ -1206,6 +1233,8 @@ class _JournalScreenState extends State<JournalScreen>
         ? Colors.amber.shade900.withValues(alpha: 0.42)
         : Colors.amber.shade50;
     final cardTodoBg = isDark ? const Color(0xFF37474F) : Colors.white;
+    final railSize = (chromeSize * 0.68).clamp(26.0, 36.0);
+    final railBg = isDark ? const Color(0xFF263238) : const Color(0xFFE1F5FE);
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1347,12 +1376,16 @@ class _JournalScreenState extends State<JournalScreen>
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(0, 8, 6, 8),
-          child: _PlanScrollRail(
-            controller: _scrollController,
-            thumbSize: chromeSize,
-            thumbColor: thumbColor,
-            trackHintColor: trackHintColor,
-            onScrollAdjusted: _scheduleScrollPersist,
+          child: Container(
+            width: railSize,
+            color: railBg,
+            child: _PlanScrollRail(
+              controller: _scrollController,
+              thumbSize: railSize,
+              thumbColor: thumbColor,
+              trackHintColor: trackHintColor,
+              onScrollAdjusted: _scheduleScrollPersist,
+            ),
           ),
         ),
       ],
@@ -1469,47 +1502,52 @@ class _JournalScreenState extends State<JournalScreen>
               ),
               SizedBox(width: quarterIconGap),
             ],
-            Expanded(
-              child: Padding(
-                padding: EdgeInsets.only(
-                  left: inQuarter ? 2 : 0,
-                  right: inQuarter ? 4 : 0,
-                ),
-                child: Material(
-                  color: buttonBg,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    side: ChromeOutline.side,
+            if (!inQuarter)
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    left: inQuarter ? 2 : 0,
+                    right: inQuarter ? 4 : 0,
                   ),
-                  clipBehavior: Clip.antiAlias,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(8),
-                    onTap: () => _openPlanKindPicker(chromeSize),
-                    child: SizedBox(
-                      height: chromeSize,
-                      child: Center(
-                        child: Padding(
-                          padding: inQuarter
-                              ? EdgeInsets.all(
-                                  (chromeSize * 0.22).clamp(8.0, 16.0),
-                                )
-                              : EdgeInsets.symmetric(
-                                  horizontal:
-                                      (chromeSize * 0.26).clamp(10.0, 20.0),
-                                ),
-                          child: FittedBox(
-                            fit: BoxFit.contain,
-                            alignment: Alignment.center,
-                            child: inQuarter
-                                ? LayoutBuilder(
-                                    builder: (ctx, constraints) =>
-                                        _planKindAppBarTitleInQuarter(
-                                      ctx,
-                                      chromeFg,
-                                      constraints.maxWidth,
-                                    ),
+                  child: Material(
+                    color: buttonBg,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: ChromeOutline.side,
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () => _openPlanKindPicker(chromeSize),
+                      child: SizedBox(
+                        height: chromeSize,
+                        child: Center(
+                          child: Padding(
+                            padding: inQuarter
+                                ? EdgeInsets.all(
+                                    (chromeSize * 0.22).clamp(8.0, 16.0),
                                   )
-                                : _planKindAppBarTitleOnHub(chromeFg, chromeSize),
+                                : EdgeInsets.symmetric(
+                                    horizontal:
+                                        (chromeSize * 0.26).clamp(10.0, 20.0),
+                                  ),
+                            child: FittedBox(
+                              fit: BoxFit.contain,
+                              alignment: Alignment.center,
+                              child: inQuarter
+                                  ? LayoutBuilder(
+                                      builder: (ctx, constraints) =>
+                                          _planKindAppBarTitleInQuarter(
+                                        ctx,
+                                        chromeFg,
+                                        constraints.maxWidth,
+                                      ),
+                                    )
+                                  : _planKindAppBarTitleOnHub(
+                                      chromeFg,
+                                      chromeSize,
+                                    ),
+                            ),
                           ),
                         ),
                       ),
@@ -1517,7 +1555,6 @@ class _JournalScreenState extends State<JournalScreen>
                   ),
                 ),
               ),
-            ),
           ],
         ),
         actions: [

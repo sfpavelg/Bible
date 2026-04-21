@@ -103,9 +103,9 @@ TextStyle _favoritesPanelTextStyle(
   required FontWeight fontWeight,
   double? fontSize,
 }) {
-  final family = app.verseFontPreset == 'serif' ? 'serif' : 'sans-serif';
   return TextStyle(
-    fontFamily: family,
+    fontFamily: app.verseFontFamily,
+    fontFamilyFallback: app.verseFontFallback,
     fontSize: fontSize ?? app.fontSize,
     height: app.lineHeight,
     color: color,
@@ -208,6 +208,16 @@ class _BookmarkVerseLine {
 
   _BookmarkVerseLine copy() =>
       _BookmarkVerseLine(reference: reference, body: body);
+}
+
+class _BibleSelectedRangeBlock {
+  const _BibleSelectedRangeBlock({
+    required this.reference,
+    required this.body,
+  });
+
+  final String reference;
+  final String body;
 }
 
 class _BookmarkTab {
@@ -573,21 +583,59 @@ class _BibleScreenState extends State<BibleScreen> {
     List<Map<String, dynamic>> verses,
   ) {
     if (_selectedVerses.isEmpty) return null;
+    final blocks = _buildSelectedRangeBlocks(appProvider, verses);
+    if (blocks.isEmpty) return null;
+    return blocks
+        .map(
+          (b) => _BookmarkVerseLine(
+            reference: b.reference,
+            body: b.body,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  List<_BibleSelectedRangeBlock> _buildSelectedRangeBlocks(
+    AppProvider appProvider,
+    List<Map<String, dynamic>> verses,
+  ) {
     final ordered = _selectedVerses.toList()..sort();
-    final lines = <_BookmarkVerseLine>[];
-    for (final n in ordered) {
-      final text = _verseText(verses, n);
-      if (text == null) continue;
-      lines.add(
-        _BookmarkVerseLine(
-          reference:
-              '${appProvider.currentBook} ${appProvider.currentChapter}:$n',
-          body: text,
+    if (ordered.isEmpty) return const [];
+    final ranges = <({int start, int end})>[];
+    var start = ordered.first;
+    var prev = ordered.first;
+    for (var i = 1; i < ordered.length; i++) {
+      final cur = ordered[i];
+      if (cur == prev + 1) {
+        prev = cur;
+        continue;
+      }
+      ranges.add((start: start, end: prev));
+      start = cur;
+      prev = cur;
+    }
+    ranges.add((start: start, end: prev));
+
+    final out = <_BibleSelectedRangeBlock>[];
+    for (final r in ranges) {
+      final ref = r.start == r.end
+          ? '${appProvider.currentBook} ${appProvider.currentChapter}:${r.start}'
+          : '${appProvider.currentBook} ${appProvider.currentChapter}:${r.start}-${r.end}';
+      final lines = <String>[];
+      for (var n = r.start; n <= r.end; n++) {
+        final text = _verseText(verses, n);
+        if (text == null) continue;
+        lines.add('$n $text');
+      }
+      if (lines.isEmpty) continue;
+      out.add(
+        _BibleSelectedRangeBlock(
+          reference: ref,
+          body: lines.join('\n'),
         ),
       );
     }
-    if (lines.isEmpty) return null;
-    return lines;
+    return out;
   }
 
   void _addSelectedVersesToBookmarks(
@@ -721,14 +769,10 @@ class _BibleScreenState extends State<BibleScreen> {
   ) {
     if (!_isBibleInteractionActive) return;
     if (_selectedVerses.isEmpty) return;
-    final ordered = _selectedVerses.toList()..sort();
+    final blocks = _buildSelectedRangeBlocks(appProvider, verses);
     final parts = <String>[];
-    for (final n in ordered) {
-      final text = _verseText(verses, n);
-      if (text == null) continue;
-      parts.add(
-        '**${appProvider.currentBook} ${appProvider.currentChapter}:$n** "$text"',
-      );
+    for (final b in blocks) {
+      parts.add('(${b.reference})\n"${b.body}"');
     }
     if (parts.isEmpty) return;
     unawaited(_replaceClipboardText(parts.join('\n')));

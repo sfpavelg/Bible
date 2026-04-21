@@ -125,3 +125,10 @@ flutter:
     - assets/bible/old_testament_correct.json
     - assets/bible/new_testament_correct.json
     - assets/branding/launch_logo.png
+  fonts:
+    - family: AppSans
+      fonts:
+        - asset: assets/fonts/AppSans.ttf
+    - family: AppSerif
+      fonts:
+        - asset: assets/fonts/AppSerif.ttf

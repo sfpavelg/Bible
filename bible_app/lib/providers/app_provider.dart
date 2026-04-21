@@ -31,7 +31,7 @@ class AppProvider with ChangeNotifier {
   double _verseSpacing = 6.0;
   double _chromeButtonSize = 40.0;
   String _verseFontPreset = 'sans';
-  bool _showSeptuagintText = true;
+  bool _showSeptuagintText = false;
   bool _keepScreenOn = true;
 
   String _currentBook;
@@ -259,15 +259,24 @@ class AppProvider with ChangeNotifier {
     await prefs.setString('ui_verse_font_preset', _verseFontPreset);
   }
 
-  /// Платформенные `serif` / `sans-serif` — офлайн, без положенных в бандл TTF.
+  /// Встроенные шрифты (из assets), одинаково работают на Android/Web/Windows.
+  String? get verseFontFamily {
+    if (_verseFontPreset == 'serif') return 'AppSerif';
+    return 'AppSans';
+  }
+
+  List<String> get verseFontFallback {
+    return const [];
+  }
+
   TextStyle bibleVerseTextStyle({
     required Color color,
     required FontWeight fontWeight,
   }) {
-    final family = _verseFontPreset == 'serif' ? 'serif' : 'sans-serif';
     return TextStyle(
       inherit: false,
-      fontFamily: family,
+      fontFamily: verseFontFamily,
+      fontFamilyFallback: verseFontFallback,
       fontSize: _fontSize,
       height: _lineHeight,
       color: color,
