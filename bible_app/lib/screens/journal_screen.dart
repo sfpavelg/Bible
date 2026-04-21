@@ -611,10 +611,23 @@ class _JournalScreenState extends State<JournalScreen>
   }
 
   List<String> _linesForDay(int index) {
-    if (_plan == _JournalPlanKind.parallel) {
-      return kParallelReadingPlan365[index].lines;
-    }
-    return kChronologicalReadingPlan365[index].lines;
+    final rawLines = _plan == _JournalPlanKind.parallel
+        ? kParallelReadingPlan365[index].lines
+        : kChronologicalReadingPlan365[index].lines;
+    return rawLines.map(_expandBookNamesForDisplay).toList(growable: false);
+  }
+
+  String _expandBookNamesForDisplay(String line) {
+    final bookBeforeRef = RegExp(
+      r'((?:[1-4]\s*)?[А-ЯЁа-яёA-Za-z]+(?:\.[А-ЯЁа-яёA-Za-z]+)*\.?)\s*(?=\d)',
+    );
+    return line.replaceAllMapped(bookBeforeRef, (m) {
+      final rawBook = (m.group(1) ?? '').trim();
+      if (rawBook.isEmpty) return m.group(0) ?? '';
+      final full = _bookLookup[_normalizeBookToken(rawBook)];
+      if (full == null) return m.group(0) ?? '';
+      return '$full ';
+    });
   }
 
   bool _dayDone(int index) {
@@ -695,6 +708,59 @@ class _JournalScreenState extends State<JournalScreen>
     out['втор'] = 'Второзаконие';
     out['пс'] = 'Псалтирь';
     out['иснав'] = 'Иисус Навин';
+    out['пр'] = 'Притчи';
+    out['притч'] = 'Притчи';
+    out['еккл'] = 'Екклесиаст';
+    out['ппесней'] = 'Песня Песней';
+    out['ппесн'] = 'Песня Песней';
+    out['есф'] = 'Есфирь';
+    out['авдий'] = 'Авдий';
+    out['наума'] = 'Наум';
+    out['плиер'] = 'Плач Иеремии';
+    out['плачиеремии'] = 'Плач Иеремии';
+    out['иерем'] = 'Иеремия';
+    out['иоиль'] = 'Иоиль';
+    out['дан'] = 'Даниил';
+    out['езд'] = 'Ездра';
+    out['неем'] = 'Неемия';
+    out['мтф'] = 'Матфея';
+    out['лук'] = 'Луки';
+    out['иоан'] = 'Иоанна';
+    out['деян'] = 'Деяния';
+    out['иакова'] = 'Иакова';
+    out['гал'] = 'Галатам';
+    out['рим'] = 'Римлянам';
+    out['колос'] = 'Колоссянам';
+    out['ефесянам'] = 'Ефесянам';
+    out['филип'] = 'Филиппийцам';
+    out['титу'] = 'Титу';
+    out['евр'] = 'Евреям';
+    out['иуды'] = 'Иуды';
+    out['откр'] = 'Откровение';
+    out['осия'] = 'Осия';
+    out['амос'] = 'Амос';
+    out['михея'] = 'Михей';
+    out['софония'] = 'Софония';
+    out['аввакум'] = 'Аввакум';
+    out['аггей'] = 'Аггей';
+    out['зах'] = 'Захария';
+    out['1цар'] = '1 Царств';
+    out['2цар'] = '2 Царств';
+    out['3цар'] = '3 Царств';
+    out['4цар'] = '4 Царств';
+    out['1пар'] = '1 Паралипоменон';
+    out['2пар'] = '2 Паралипоменон';
+    out['1фес'] = '1 Фессалоникийцам';
+    out['2фес'] = '2 Фессалоникийцам';
+    out['1кор'] = '1 Коринфянам';
+    out['2кор'] = '2 Коринфянам';
+    out['1тим'] = '1 Тимофею';
+    out['2тим'] = '2 Тимофею';
+    out['1петр'] = '1 Петра';
+    out['2петр'] = '2 Петра';
+    out['1иоан'] = '1 Иоанна';
+    out['2иоан'] = '2 Иоанна';
+    out['3иоан'] = '3 Иоанна';
     return out;
   }
 
@@ -739,17 +805,16 @@ class _JournalScreenState extends State<JournalScreen>
         : kChronologicalReadingPlan365[dayIndex].lines;
     final out = <_PlanChapterItem>[];
     final seen = <String>{};
+    final pairPattern = RegExp(
+      r'((?:[1-4]\s*)?[А-ЯЁа-яёA-Za-z]+(?:\.[А-ЯЁа-яёA-Za-z]+)*\.?(?:\s+[А-ЯЁа-яёA-Za-z]+(?:\.[А-ЯЁа-яёA-Za-z]+)*\.?)*)\s*([\d:,\-\s]+)',
+    );
     for (final rawLine in lines) {
-      final chunks = rawLine
-          .replaceAll(';', '.')
-          .split('.')
-          .map((e) => e.trim())
-          .where((e) => e.isNotEmpty);
-      for (final chunk in chunks) {
-        final m = RegExp(r'^(.+?)(\d.*)$').firstMatch(chunk);
-        if (m == null) continue;
-        final bookRaw = m.group(1)!.trim();
-        final refsRaw = m.group(2)!.trim();
+      final normalizedLine = rawLine.replaceAll(';', ' ');
+      final matches = pairPattern.allMatches(normalizedLine);
+      for (final m in matches) {
+        final bookRaw = m.group(1)?.trim() ?? '';
+        final refsRaw = m.group(2)?.trim() ?? '';
+        if (bookRaw.isEmpty || refsRaw.isEmpty) continue;
         final book = _bookLookup[_normalizeBookToken(bookRaw)];
         if (book == null) continue;
         final parts = refsRaw
@@ -789,7 +854,6 @@ class _JournalScreenState extends State<JournalScreen>
       context: context,
       builder: (dialogContext) {
         final isDark = Theme.of(dialogContext).brightness == Brightness.dark;
-        final rowBg = isDark ? const Color(0xFF37474F) : Colors.white;
         final fg = isDark ? Colors.white : Colors.black87;
         final buttonBg =
             isDark ? JournalScreen._buttonBgDark : JournalScreen._buttonBgLight;
@@ -819,7 +883,7 @@ class _JournalScreenState extends State<JournalScreen>
                   ),
                 ],
               ),
-              contentPadding: const EdgeInsets.fromLTRB(10, 4, 10, 10),
+              contentPadding: const EdgeInsets.fromLTRB(0, 4, 12, 10),
               content: SizedBox(
                 width: 520,
                 child: ConstrainedBox(
@@ -833,14 +897,13 @@ class _JournalScreenState extends State<JournalScreen>
                       final item = items[i];
                       final checked = doneNow.contains(item.key);
                       return Material(
-                        color: rowBg,
+                        color: Colors.transparent,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
-                          side: ChromeOutline.side,
                         ),
                         clipBehavior: Clip.antiAlias,
                         child: Padding(
-                          padding: const EdgeInsets.fromLTRB(10, 4, 10, 4),
+                          padding: const EdgeInsets.fromLTRB(0, 4, 0, 4),
                           child: Row(
                             children: [
                               SizedBox(
@@ -857,6 +920,7 @@ class _JournalScreenState extends State<JournalScreen>
                                   },
                                 ),
                               ),
+                              const SizedBox(width: 12),
                               Expanded(
                                 child: Material(
                                   color: isDark
@@ -864,7 +928,10 @@ class _JournalScreenState extends State<JournalScreen>
                                       : const Color(0xFFE1F5FE),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(8),
-                                    side: ChromeOutline.side,
+                                    side: const BorderSide(
+                                      color: Colors.black,
+                                      width: ChromeOutline.width,
+                                    ),
                                   ),
                                   clipBehavior: Clip.antiAlias,
                                   child: InkWell(
@@ -967,7 +1034,7 @@ class _JournalScreenState extends State<JournalScreen>
       builder: (ctx) {
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -982,14 +1049,7 @@ class _JournalScreenState extends State<JournalScreen>
                   ),
                 ),
                 const SizedBox(height: 14),
-                Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: ChromeOutline.color,
-                      width: ChromeOutline.width,
-                    ),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
+                Padding(
                   padding: const EdgeInsets.all(6),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1440,6 +1500,12 @@ class _JournalScreenState extends State<JournalScreen>
     final hubCardBg = isDark ? const Color(0xFF37474F) : Colors.white;
 
     final inQuarter = _openQuarter != null;
+    final uiFs = app.fontSize.clamp(12.0, 28.0);
+    final quarterLabelStyle = TextStyle(
+      fontSize: (uiFs * 1.25).clamp(16.0, 32.0),
+      fontWeight: FontWeight.w600,
+      color: chromeFg,
+    );
 
     /// В режиме квартала: иконки прямоугольные (ширина ограничена, высота [chromeSize]);
     /// вторая в ряду («в конец») не шире 42 px при большом [chromeSize]; промежутки уже.
@@ -1501,6 +1567,19 @@ class _JournalScreenState extends State<JournalScreen>
                 onPressed: _jumpScrollToEnd,
               ),
               SizedBox(width: quarterIconGap),
+              Expanded(
+                child: Center(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      '${_openQuarter! + 1} квартал',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: quarterLabelStyle,
+                    ),
+                  ),
+                ),
+              ),
             ],
             if (!inQuarter)
               Expanded(
