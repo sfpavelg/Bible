@@ -625,7 +625,7 @@ class _BibleScreenState extends State<BibleScreen> {
       for (var n = r.start; n <= r.end; n++) {
         final text = _verseText(verses, n);
         if (text == null) continue;
-        lines.add('$n $text');
+        lines.add('$n. $text');
       }
       if (lines.isEmpty) continue;
       out.add(

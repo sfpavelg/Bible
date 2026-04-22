@@ -729,6 +729,40 @@ class _JournalScreenState extends State<JournalScreen>
     }).toList(growable: false);
   }
 
+  String _normalizeReadingBlockForDisplay(String block) {
+    var out = block.trim().replaceAll(RegExp(r'\.+$'), '');
+    out = out.replaceAllMapped(
+      RegExp(r'\d+(?:\s*,\s*\d+)+'),
+      (m) {
+        final raw = m.group(0);
+        if (raw == null || raw.contains(':')) return raw ?? '';
+        final nums = raw
+            .split(RegExp(r'\s*,\s*'))
+            .map(int.tryParse)
+            .whereType<int>()
+            .toList();
+        if (nums.length < 2) return raw;
+        for (var i = 1; i < nums.length; i++) {
+          if (nums[i] != nums[i - 1] + 1) return raw;
+        }
+        return '${nums.first}-${nums.last}';
+      },
+    );
+    return out;
+  }
+
+  List<String> _readingBlocksFromLines(List<String> lines) {
+    final out = <String>[];
+    for (final line in lines) {
+      final parts = line
+          .split(RegExp(r'[.;]'))
+          .map((e) => _normalizeReadingBlockForDisplay(e))
+          .where((e) => e.isNotEmpty);
+      out.addAll(parts);
+    }
+    return out;
+  }
+
   String _expandBookNamesForDisplay(String line) {
     final bookBeforeRef = RegExp(
       r'((?:[1-4]\s*)?[А-ЯЁа-яёA-Za-z]+(?:\.[А-ЯЁа-яёA-Za-z]+)*\.?)\s*(?=\d)',
@@ -1236,24 +1270,34 @@ class _JournalScreenState extends State<JournalScreen>
     );
   }
 
-  /// Экран с четырьмя кварталами: одна строка, шрифт по возможности на всю кнопку.
-  Widget _planKindAppBarTitleOnHub(Color chromeFg, double chromeSize) {
+  /// Экран с четырьмя кварталами: одна строка, текст масштабируется и
+  /// выравнивается в кнопке по левому краю.
+  Widget _planKindAppBarTitleOnHub(
+    Color chromeFg,
+    double chromeSize,
+    double maxWidth,
+  ) {
     final full = switch (_plan) {
       _JournalPlanKind.parallel => 'План чтения: параллельный',
       _JournalPlanKind.chronological => 'План чтения: хронология',
       _JournalPlanKind.sequential => 'План чтения: последовательный',
     };
-    return Text(
-      full,
-      maxLines: 1,
-      textAlign: TextAlign.center,
-      softWrap: false,
-      overflow: TextOverflow.fade,
-      style: TextStyle(
-        color: chromeFg,
-        fontWeight: FontWeight.normal,
-        fontSize: (chromeSize * 0.864).clamp(14.4, 44.8),
-        height: 1.0,
+    final titleStyle = TextStyle(
+      color: chromeFg,
+      fontWeight: FontWeight.w600,
+      fontSize: (chromeSize * 0.42).clamp(14.0, 22.0),
+      height: 1.0,
+    );
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Text(
+        full,
+        maxLines: 1,
+        textAlign: TextAlign.left,
+        softWrap: false,
+        overflow: TextOverflow.visible,
+        style: titleStyle,
       ),
     );
   }
@@ -1457,129 +1501,282 @@ class _JournalScreenState extends State<JournalScreen>
               }
               return false;
             },
-            child: ListView.builder(
-              controller: _scrollController,
-              primary: false,
-              padding: const EdgeInsets.fromLTRB(12, 8, 6, 12),
-              itemCount: _dayCountInOpenQuarter(),
-              itemBuilder: (context, localIndex) {
-                final q = _openQuarter!;
-                final index =
-                    journalQuarterStartDayIndex(q) + localIndex;
-                final lines = _linesForDay(index);
-                final done = _dayDone(index);
-                final n = index + 1;
-                final chapterItems = _chapterItemsForDay(index);
-                final doneItems = _doneItemsForCurrentPlan(index);
-                final doneCount =
-                    chapterItems.where((e) => doneItems.contains(e.key)).length;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Material(
-                    color: done ? cardDoneBg : cardTodoBg,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      side: ChromeOutline.side,
-                    ),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(10),
-                      onTap: () => _openDayChapterChecklist(index),
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(8, 10, 12, 10),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
+            child: ScrollConfiguration(
+              behavior: ScrollConfiguration.of(context)
+                  .copyWith(scrollbars: false),
+              child: ListView.builder(
+                controller: _scrollController,
+                primary: false,
+                padding: const EdgeInsets.fromLTRB(12, 8, 6, 12),
+                itemCount: _dayCountInOpenQuarter(),
+                itemBuilder: (context, localIndex) {
+                  final q = _openQuarter!;
+                  final index =
+                      journalQuarterStartDayIndex(q) + localIndex;
+                  final lines = _linesForDay(index);
+                  final done = _dayDone(index);
+                  final n = index + 1;
+                  final chapterItems = _chapterItemsForDay(index);
+                  final doneItems = _doneItemsForCurrentPlan(index);
+                  final doneCount =
+                      chapterItems.where((e) => doneItems.contains(e.key)).length;
+                final readingBlocks = _readingBlocksFromLines(lines);
+                final readingsStyle = app.bibleVerseTextStyle(
+                  color: bodyColor,
+                  fontWeight: done ? FontWeight.w600 : FontWeight.normal,
+                );
+                final doneLabelStyle = app.bibleVerseTextStyle(
+                  color: titleColor,
+                  fontWeight: FontWeight.w700,
+                ).copyWith(
+                  fontSize: (app.fontSize * 0.78).clamp(10.0, 20.0),
+                  height: 1.0,
+                );
+                Widget doneBadge() => Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? const Color(0xFF81D4FA).withValues(alpha: 0.2)
+                            : Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: ChromeOutline.color,
+                          width: ChromeOutline.width,
+                        ),
+                      ),
+                      child: Text('Прочитано', style: doneLabelStyle),
+                    );
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Material(
+                      color: done ? cardDoneBg : cardTodoBg,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        side: ChromeOutline.side,
+                      ),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(10),
+                        onTap: () => _openDayChapterChecklist(index),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(8, 10, 12, 10),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            'День $n',
+                                            style: app
+                                                .bibleVerseTextStyle(
+                                                  color: titleColor,
+                                                  fontWeight: FontWeight.w800,
+                                                )
+                                                .copyWith(
+                                                  fontSize: app.fontSize * 1.06,
+                                                ),
+                                          ),
+                                        ),
+                                      Text(
+                                        chapterItems.isEmpty
+                                            ? 'Нет глав для отметки'
+                                            : 'Отмечено глав: $doneCount из ${chapterItems.length}',
+                                        textAlign: TextAlign.right,
+                                        style: app.bibleVerseTextStyle(
+                                          color: bodyColor,
+                                          fontWeight: FontWeight.w600,
+                                        ).copyWith(
+                                          fontSize: (app.fontSize * 0.92).clamp(
+                                            11.0,
+                                            26.0,
+                                          ),
+                                        ),
+                                      ),
+                                      ],
+                                    ),
+                                    SizedBox(height: (lineGap + 2).clamp(4.0, 14.0)),
                                   Row(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Expanded(
-                                        child: Text(
-                                          'День $n',
-                                          style: app
-                                              .bibleVerseTextStyle(
-                                                color: titleColor,
-                                                fontWeight: FontWeight.w800,
-                                              )
-                                              .copyWith(
-                                                fontSize: app.fontSize * 1.06,
+                                        child: LayoutBuilder(
+                                          builder: (ctx, constraints) {
+                                            if (readingBlocks.isEmpty) {
+                                              return Text(
+                                                'Нет чтений для дня',
+                                                style: readingsStyle,
+                                              );
+                                            }
+                                            final dir = Directionality.of(ctx);
+                                            const minInterItemGap = 10.0;
+                                            const badgeGap = 8.0;
+                                            final displayBlocks = <String>[
+                                              for (var i = 0;
+                                                  i < readingBlocks.length;
+                                                  i++)
+                                                i < readingBlocks.length - 1
+                                                    ? '${readingBlocks[i]}.'
+                                                    : readingBlocks[i],
+                                            ];
+                                            var totalWidth = 0.0;
+                                            for (final block in displayBlocks) {
+                                              final tp = TextPainter(
+                                                text: TextSpan(
+                                                  text: block,
+                                                  style: readingsStyle,
+                                                ),
+                                                maxLines: 1,
+                                                textDirection: dir,
+                                              )..layout(maxWidth: double.infinity);
+                                              totalWidth += tp.width;
+                                            }
+                                            final baseGaps = displayBlocks.length <= 1
+                                                ? 0.0
+                                                : minInterItemGap *
+                                                    (displayBlocks.length - 1);
+                                            final canFitOneLine =
+                                                totalWidth + baseGaps <=
+                                                    constraints.maxWidth;
+                                            final tpBadge = TextPainter(
+                                              text: TextSpan(
+                                                text: 'Прочитано',
+                                                style: doneLabelStyle,
                                               ),
+                                              maxLines: 1,
+                                              textDirection: dir,
+                                            )..layout(maxWidth: double.infinity);
+                                            final badgeWidth = tpBadge.width + 16 + 2;
+                                            final canFitWithBadge = done &&
+                                                canFitOneLine &&
+                                                (totalWidth +
+                                                        baseGaps +
+                                                        badgeGap +
+                                                        badgeWidth) <=
+                                                    constraints.maxWidth;
+
+                                            Widget textLine(double maxWidth) {
+                                              if (displayBlocks.length == 1) {
+                                                return Text(
+                                                  displayBlocks.first,
+                                                  maxLines: 1,
+                                                  softWrap: false,
+                                                  style: readingsStyle,
+                                                );
+                                              }
+                                              final gap = ((maxWidth - totalWidth) /
+                                                      (displayBlocks.length - 1))
+                                                  .clamp(minInterItemGap, 80.0);
+                                              return Row(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  for (var i = 0;
+                                                      i < displayBlocks.length;
+                                                      i++) ...[
+                                                    Text(
+                                                      displayBlocks[i],
+                                                      maxLines: 1,
+                                                      softWrap: false,
+                                                      style: readingsStyle,
+                                                    ),
+                                                    if (i < displayBlocks.length - 1)
+                                                      SizedBox(width: gap),
+                                                  ],
+                                                ],
+                                              );
+                                            }
+
+                                            Widget wrappedBlocks() => Wrap(
+                                                  spacing: minInterItemGap,
+                                                  runSpacing: (lineGap * 0.35)
+                                                      .clamp(1.0, 6.0),
+                                                  children: [
+                                                    for (final block in displayBlocks)
+                                                      Text(
+                                                        block,
+                                                        style: readingsStyle,
+                                                      ),
+                                                  ],
+                                                );
+
+                                            if (canFitWithBadge) {
+                                              final lineMaxWidth =
+                                                  constraints.maxWidth -
+                                                      badgeGap -
+                                                      badgeWidth;
+                                              return Row(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Expanded(
+                                                    child: textLine(lineMaxWidth),
+                                                  ),
+                                                  const SizedBox(width: badgeGap),
+                                                  doneBadge(),
+                                                ],
+                                              );
+                                            }
+                                            if (canFitOneLine) {
+                                              final line = textLine(constraints.maxWidth);
+                                              if (!done) return line;
+                                              return Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  line,
+                                                  SizedBox(
+                                                    height: (lineGap * 0.5)
+                                                        .clamp(2.0, 8.0),
+                                                  ),
+                                                  Align(
+                                                    alignment: Alignment.centerRight,
+                                                    child: doneBadge(),
+                                                  ),
+                                                ],
+                                              );
+                                            }
+                                            final wrapped = wrappedBlocks();
+                                            if (!done) return wrapped;
+                                            return Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                wrapped,
+                                                SizedBox(
+                                                  height: (lineGap * 0.5)
+                                                      .clamp(2.0, 8.0),
+                                                ),
+                                                Align(
+                                                  alignment: Alignment.centerRight,
+                                                  child: doneBadge(),
+                                                ),
+                                              ],
+                                            );
+                                          },
                                         ),
                                       ),
-                                      if (done)
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 3,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: isDark
-                                                ? const Color(0xFF81D4FA)
-                                                    .withValues(alpha: 0.2)
-                                                : Colors.blue.shade50,
-                                            borderRadius:
-                                                BorderRadius.circular(999),
-                                            border: Border.all(
-                                              color: ChromeOutline.color,
-                                              width: ChromeOutline.width,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            'Прочитано',
-                                            style: app.bibleVerseTextStyle(
-                                              color: titleColor,
-                                              fontWeight: FontWeight.w700,
-                                            ).copyWith(
-                                              fontSize:
-                                                  (app.fontSize * 0.78).clamp(
-                                                10.0,
-                                                20.0,
-                                              ),
-                                              height: 1.0,
-                                            ),
-                                          ),
-                                        ),
                                     ],
                                   ),
-                                  SizedBox(height: (lineGap + 2).clamp(4.0, 14.0)),
-                                  Text(
-                                    chapterItems.isEmpty
-                                        ? 'Нет глав для отметки'
-                                        : 'Отмечено глав: $doneCount из ${chapterItems.length}',
-                                    style: app.bibleVerseTextStyle(
-                                      color: bodyColor,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  SizedBox(height: (lineGap + 1).clamp(2.0, 8.0)),
-                                  ...lines.map(
-                                    (line) => Padding(
-                                      padding:
-                                          EdgeInsets.only(bottom: lineGap),
-                                      child: Text(
-                                        line,
-                                        style: app.bibleVerseTextStyle(
-                                          color: bodyColor,
-                                          fontWeight:
-                                              done ? FontWeight.w600 : FontWeight.normal,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
           ),
         ),
@@ -1731,52 +1928,28 @@ class _JournalScreenState extends State<JournalScreen>
               ),
             ],
             if (!inQuarter)
-              Expanded(
-                child: Padding(
-                  padding: EdgeInsets.only(
-                    left: inQuarter ? 2 : 0,
-                    right: inQuarter ? 4 : 0,
+              Padding(
+                padding: const EdgeInsets.only(left: 0, right: 4),
+                child: Material(
+                  color: buttonBg,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    side: ChromeOutline.side,
                   ),
-                  child: Material(
-                    color: buttonBg,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      side: ChromeOutline.side,
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(8),
-                      onTap: () => _openPlanKindPicker(chromeSize),
-                      child: SizedBox(
-                        height: chromeSize,
-                        child: Center(
-                          child: Padding(
-                            padding: inQuarter
-                                ? EdgeInsets.all(
-                                    (chromeSize * 0.22).clamp(8.0, 16.0),
-                                  )
-                                : EdgeInsets.symmetric(
-                                    horizontal:
-                                        (chromeSize * 0.26).clamp(10.0, 20.0),
-                                  ),
-                            child: FittedBox(
-                              fit: BoxFit.contain,
-                              alignment: Alignment.center,
-                              child: inQuarter
-                                  ? LayoutBuilder(
-                                      builder: (ctx, constraints) =>
-                                          _planKindAppBarTitleInQuarter(
-                                        ctx,
-                                        chromeFg,
-                                        constraints.maxWidth,
-                                      ),
-                                    )
-                                  : _planKindAppBarTitleOnHub(
-                                      chromeFg,
-                                      chromeSize,
-                                    ),
-                            ),
-                          ),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () => _openPlanKindPicker(chromeSize),
+                    child: SizedBox(
+                      height: chromeSize,
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: (chromeSize * 0.26).clamp(10.0, 20.0),
+                        ),
+                        child: _planKindAppBarTitleOnHub(
+                          chromeFg,
+                          chromeSize,
+                          double.infinity,
                         ),
                       ),
                     ),

@@ -266,6 +266,7 @@ class NotebookScreen extends StatefulWidget {
 }
 
 class _NotebookScreenState extends State<NotebookScreen> {
+  static const int _windowsDirectoryPathLimit = 247;
   NotebookRepository? _repo;
   bool _loading = true;
   String? _error;
@@ -288,6 +289,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
   Timer? _clipboardPollTimer;
   final ScrollController _folderPathScrollController = ScrollController();
   bool _folderPathHasOverflow = false;
+  bool _createFolderBlockedByPathLimit = false;
 
   bool get _fileBulkSelectionUi =>
       _fileActionsAnchor != null && !_fileActionsAnchor!.isFolder;
@@ -417,10 +419,13 @@ class _NotebookScreenState extends State<NotebookScreen> {
     try {
       final list = await repo.listDirectory(_currentDir);
       final hasFolders = await _repoAnyFolderExists(repo);
+      final createFolderBlocked =
+          await _isCreateFolderBlockedForCurrentDirectory();
       if (mounted) {
         setState(() {
           _items = list;
           _notebookHasFolders = hasFolders;
+          _createFolderBlockedByPathLimit = createFolderBlocked;
         });
       }
     } catch (e) {
@@ -430,6 +435,23 @@ class _NotebookScreenState extends State<NotebookScreen> {
         );
       }
     }
+  }
+
+  Future<bool> _fitsWindowsDirectoryPathLimit(String relativePath) async {
+    if (!Platform.isWindows) return true;
+    final repo = _repo;
+    if (repo == null) return true;
+    final abs = await repo.nativeFilePath(relativePath);
+    if (abs == null) return true;
+    return abs.length <= _windowsDirectoryPathLimit;
+  }
+
+  Future<bool> _isCreateFolderBlockedForCurrentDirectory() async {
+    // Проверяем минимально возможное добавление: папка из 1 символа.
+    final probeRel =
+        _currentDir.isEmpty ? 'x' : p.posix.join(_currentDir, 'x');
+    final fits = await _fitsWindowsDirectoryPathLimit(probeRel);
+    return !fits;
   }
 
   Future<void> _closeEditor() async {
@@ -1081,15 +1103,11 @@ class _NotebookScreenState extends State<NotebookScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
-            child: Scrollbar(
+            child: SingleChildScrollView(
               controller: _folderPathScrollController,
-              thumbVisibility: false,
-              child: SingleChildScrollView(
-                controller: _folderPathScrollController,
-                child: Wrap(
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: chips,
-                ),
+              child: Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: chips,
               ),
             ),
           ),
@@ -1288,6 +1306,15 @@ class _NotebookScreenState extends State<NotebookScreen> {
   Future<void> _createFolder() async {
     final repo = _repo;
     if (repo == null) return;
+    if (_createFolderBlockedByPathLimit) {
+      _showNotebookWarningBanner(
+        context,
+        title: 'Достигнут лимит длины пути',
+        subtitle:
+            'Создание папки в текущем месте заблокировано. Поднимитесь на уровень выше или сократите имена.',
+      );
+      return;
+    }
     final ctrl = TextEditingController();
     final ok = await showDialog<bool>(
       context: context,
@@ -1347,6 +1374,15 @@ class _NotebookScreenState extends State<NotebookScreen> {
       return;
     }
     final rel = _currentDir.isEmpty ? seg : p.posix.join(_currentDir, seg);
+    if (!await _fitsWindowsDirectoryPathLimit(rel)) {
+      _showNotebookWarningBanner(
+        context,
+        title: 'Слишком длинный путь для новой папки',
+        subtitle:
+            'Сократите имя папки или поднимитесь на уровень выше, затем повторите.',
+      );
+      return;
+    }
     try {
       await repo.createFolder(rel);
       await _refresh();
@@ -1766,7 +1802,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
   Widget _chromeIconButton({
     required IconData icon,
     required String tooltip,
-    required VoidCallback onPressed,
+    required VoidCallback? onPressed,
     required Color chromeFg,
     required Color buttonBg,
   }) {
@@ -1825,8 +1861,11 @@ class _NotebookScreenState extends State<NotebookScreen> {
           children: [
             _chromeIconButton(
               icon: Icons.create_new_folder_outlined,
-              tooltip: 'Новая папка',
-              onPressed: _createFolder,
+              tooltip: _createFolderBlockedByPathLimit
+                  ? 'Новая папка недоступна: лимит пути'
+                  : 'Новая папка',
+              onPressed:
+                  _createFolderBlockedByPathLimit ? null : _createFolder,
               chromeFg: chromeFg,
               buttonBg: buttonBg,
             ),

@@ -100,7 +100,7 @@ void showAppSettingsDialog(BuildContext context) {
 
   showGeneralDialog<void>(
     context: context,
-    barrierDismissible: true,
+    barrierDismissible: false,
     barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
     barrierColor: Colors.black26,
     transitionDuration: const Duration(milliseconds: 160),
@@ -149,6 +149,9 @@ void showAppSettingsDialog(BuildContext context) {
                 fontSize: (uiFs * 0.92).clamp(12.0, 24.0),
               );
               const kSegIcon = 18.0;
+              final dropdownHeight = chromeBtnSize < kMinInteractiveDimension
+                  ? kMinInteractiveDimension
+                  : chromeBtnSize;
 
               SliderThemeData sliderDecor(SliderThemeData base) =>
                   base.copyWith(
@@ -179,12 +182,6 @@ void showAppSettingsDialog(BuildContext context) {
 
               return Stack(
                 children: [
-                  Positioned.fill(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => Navigator.pop(modalContext),
-                    ),
-                  ),
                   Positioned(
                     top: topAnchor,
                     right: 0,
@@ -296,11 +293,11 @@ void showAppSettingsDialog(BuildContext context) {
                               ),
                               const SizedBox(height: 4),
                               SizedBox(
-                                height: chromeBtnSize,
+                                height: dropdownHeight,
                                 child: DropdownButtonFormField<String>(
                                   isExpanded: true,
                                   isDense: true,
-                                  itemHeight: chromeBtnSize,
+                                  itemHeight: dropdownHeight,
                                   value: fontPreset,
                                   style: kSettingsBodyStyle,
                                   decoration: InputDecoration(
@@ -779,6 +776,10 @@ void showAppHelpDialog(BuildContext context) {
                     Text(
                       '• Текст набирается во всю ширину экрана; стихи из вкладки «Библия» можно '
                       'скопировать и вставить сюда.',
+                    ),
+                    Text(
+                      '• После копирования и вставки буфер очищается автоматически — это защищает '
+                      'от случайного повторного нажатия кнопки «Вставить».',
                     ),
                     const SizedBox(height: 12),
                     Text(
