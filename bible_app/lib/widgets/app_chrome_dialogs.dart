@@ -101,9 +101,6 @@ class _SettingsSliderVerticalTickMarkShape extends SliderTickMarkShape {
   }
 }
 
-const String _releaseFolderUrl =
-    'https://drive.google.com/drive/folders/1df9Dgaw1T2k6rbJW0q5B59aAx8IJayZ7?usp=drive_link';
-
 /// Публичный JSON с информацией о последней версии.
 /// Формат (пример):
 /// {
@@ -116,7 +113,7 @@ const String _releaseFolderUrl =
 /// После загрузки `latest.json` в Google Drive замените FILE_ID_JSON на ID файла:
 /// https://drive.google.com/file/d/FILE_ID_JSON/view
 const String _releaseManifestUrl =
-    'https://drive.google.com/uc?export=download&id=FILE_ID_JSON';
+    'https://drive.google.com/uc?export=download&id=1QGINCs2h6GSbgLLIlrH749gTRRA6sCmV';
 
 class _SupportChangelogEntry {
   const _SupportChangelogEntry({
@@ -152,14 +149,10 @@ class _SupportDialogData {
   const _SupportDialogData({
     required this.packageInfo,
     required this.changelog,
-    required this.remoteRelease,
-    required this.remoteError,
   });
 
   final PackageInfo packageInfo;
   final List<_SupportChangelogEntry> changelog;
-  final _SupportRemoteRelease? remoteRelease;
-  final String? remoteError;
 }
 
 int _versionCodeFromPackageVersion(String version) {
@@ -213,7 +206,8 @@ Future<_SupportRemoteRelease?> _fetchSupportRemoteRelease() async {
   if (response.statusCode < 200 || response.statusCode >= 300) {
     throw StateError('HTTP ${response.statusCode}');
   }
-  final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+  final decoded =
+      jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
   final versionName = (decoded['version_name'] ?? decoded['versionName'] ?? '')
       .toString()
       .trim();
@@ -240,19 +234,23 @@ Future<_SupportRemoteRelease?> _fetchSupportRemoteRelease() async {
 Future<_SupportDialogData> _loadSupportDialogData() async {
   final packageInfo = await PackageInfo.fromPlatform();
   final changelog = await _loadSupportChangelog();
-  _SupportRemoteRelease? remoteRelease;
-  String? remoteError;
-  try {
-    remoteRelease = await _fetchSupportRemoteRelease();
-  } catch (e) {
-    remoteError = 'Не удалось проверить обновление: $e';
-  }
   return _SupportDialogData(
     packageInfo: packageInfo,
     changelog: changelog,
-    remoteRelease: remoteRelease,
-    remoteError: remoteError,
   );
+}
+
+String _friendlySupportUpdateError(Object e) {
+  final raw = e.toString();
+  if (raw.contains('SocketException') ||
+      raw.contains('Failed host lookup') ||
+      raw.contains('No address associated with hostname')) {
+    return 'Нет подключения к сети.';
+  }
+  if (raw.contains('TimeoutException')) {
+    return 'Сервер обновлений не отвечает. Попробуйте позже.';
+  }
+  return 'Не удалось проверить обновление.';
 }
 
 Future<void> _openSupportUrl(
@@ -742,202 +740,212 @@ void showAppSupportDialog(BuildContext context) {
           final currentCode = int.tryParse(currentBuild) ??
               _versionCodeFromPackageVersion('$currentVersion+$currentBuild');
 
-          final remote = data?.remoteRelease;
-          final hasRemote = remote != null;
-          final hasUpdate = hasRemote && remote.versionCode > currentCode;
-
           final supportPayload = 'Автор проекта: Софеин Павел Геннадьевич\n'
               'Контактная почта: sfpavelg@gmail.com\n'
               'Версия проекта: $currentVersion+$currentBuild';
 
-          return AlertDialog(
-            backgroundColor: scheme.surface,
-            titlePadding: const EdgeInsets.fromLTRB(20, 14, 12, 8),
-            title: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Техподдержка',
-                    style: theme.textTheme.titleLarge
-                        ?.copyWith(color: scheme.onSurface),
-                  ),
+          _SupportRemoteRelease? remoteRelease;
+          String? remoteError;
+          var isChecking = false;
+          var hasChecked = false;
+
+          return StatefulBuilder(
+            builder: (modalContext, setModalState) {
+              final hasRemote = remoteRelease != null;
+              final hasUpdate =
+                  hasRemote && remoteRelease!.versionCode > currentCode;
+
+              return AlertDialog(
+                backgroundColor: scheme.surface,
+                titlePadding: const EdgeInsets.fromLTRB(20, 14, 12, 8),
+                title: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Техподдержка',
+                        style: theme.textTheme.titleLarge
+                            ?.copyWith(color: scheme.onSurface),
+                      ),
+                    ),
+                    _PopRouteOnce(
+                      navigatorContext: routeContext,
+                      builder: (c, popOnce) =>
+                          NotebookChromeDialogCloseButton(onPressed: popOnce),
+                    ),
+                  ],
                 ),
-                _PopRouteOnce(
-                  navigatorContext: routeContext,
-                  builder: (c, popOnce) =>
-                      NotebookChromeDialogCloseButton(onPressed: popOnce),
-                ),
-              ],
-            ),
-            content: DefaultTextStyle(
-              style: body,
-              child: SizedBox(
-                width: 420,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Автор проекта:'),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Софеин Павел Геннадьевич',
-                        style: body.copyWith(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 12),
-                      const Text('Контактная почта:'),
-                      const SizedBox(height: 4),
-                      Text(
-                        'sfpavelg@gmail.com',
-                        style: body.copyWith(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Версия приложения: $currentVersion+$currentBuild',
-                        style: body.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 8),
-                      ExpansionTile(
-                        tilePadding: EdgeInsets.zero,
-                        childrenPadding:
-                            const EdgeInsets.only(left: 4, right: 4),
-                        title: const Text('История версий'),
-                        subtitle: Text(
-                          data != null && data.changelog.isNotEmpty
-                              ? 'Нажмите, чтобы посмотреть изменения'
-                              : 'Пока нет записей',
-                        ),
+                content: DefaultTextStyle(
+                  style: body,
+                  child: SizedBox(
+                    width: 420,
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (data != null && data.changelog.isNotEmpty)
-                            for (final v in data.changelog)
-                              ExpansionTile(
-                                tilePadding: EdgeInsets.zero,
-                                childrenPadding:
-                                    const EdgeInsets.only(left: 6, bottom: 6),
-                                title: Text(v.fullVersion),
-                                subtitle: Text(v.date),
-                                children: [
-                                  for (final ch in v.changes)
-                                    Padding(
-                                      padding: const EdgeInsets.only(bottom: 4),
-                                      child: Text('• $ch'),
-                                    ),
-                                ],
-                              ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Обновление',
-                        style: body.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 6),
-                      if (hasRemote) ...[
-                        Text(
-                          hasUpdate
-                              ? 'Доступна новая версия: ${remote.versionName}+${remote.versionCode}'
-                              : 'Установлена актуальная версия',
-                        ),
-                        if (remote.changes.isNotEmpty) ...[
+                          const Text('Автор проекта:'),
                           const SizedBox(height: 4),
-                          for (final ch in remote.changes) Text('• $ch'),
-                        ],
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            if (hasUpdate)
-                              OutlinedButton.icon(
-                                onPressed: () => unawaited(
-                                  _openSupportUrl(
-                                    routeContext,
-                                    remote.apkUrl,
-                                    errorMessage:
-                                        'Не удалось открыть ссылку APK',
+                          Text(
+                            'Софеин Павел Геннадьевич',
+                            style: body.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 12),
+                          const Text('Контактная почта:'),
+                          const SizedBox(height: 4),
+                          Text(
+                            'sfpavelg@gmail.com',
+                            style: body.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Версия приложения: $currentVersion+$currentBuild',
+                            style: body.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 8),
+                          ExpansionTile(
+                            tilePadding: EdgeInsets.zero,
+                            childrenPadding:
+                                const EdgeInsets.only(left: 4, right: 4),
+                            title: const Text('История версий'),
+                            subtitle: Text(
+                              data != null && data.changelog.isNotEmpty
+                                  ? 'Нажмите, чтобы посмотреть изменения'
+                                  : 'Пока нет записей',
+                            ),
+                            children: [
+                              if (data != null && data.changelog.isNotEmpty)
+                                for (final v in data.changelog)
+                                  ExpansionTile(
+                                    tilePadding: EdgeInsets.zero,
+                                    childrenPadding: const EdgeInsets.only(
+                                        left: 6, bottom: 6),
+                                    title: Text(v.fullVersion),
+                                    subtitle: Text(v.date),
+                                    children: [
+                                      for (final ch in v.changes)
+                                        Padding(
+                                          padding:
+                                              const EdgeInsets.only(bottom: 4),
+                                          child: Text('• $ch'),
+                                        ),
+                                    ],
                                   ),
-                                ),
-                                icon: const Icon(Icons.system_update_alt),
-                                label: const Text('Скачать обновление'),
-                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Обновление',
+                            style: body.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 6),
+                          OutlinedButton.icon(
+                            onPressed: isChecking
+                                ? null
+                                : () async {
+                                    setModalState(() {
+                                      isChecking = true;
+                                      remoteError = null;
+                                    });
+                                    try {
+                                      final remote =
+                                          await _fetchSupportRemoteRelease();
+                                      setModalState(() {
+                                        remoteRelease = remote;
+                                        hasChecked = true;
+                                        isChecking = false;
+                                      });
+                                    } catch (e) {
+                                      setModalState(() {
+                                        remoteRelease = null;
+                                        remoteError =
+                                            _friendlySupportUpdateError(e);
+                                        hasChecked = true;
+                                        isChecking = false;
+                                      });
+                                    }
+                                  },
+                            icon: const Icon(Icons.sync),
+                            label: Text(
+                              isChecking
+                                  ? 'Проверяем...'
+                                  : 'Проверить обновление',
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          if (!hasChecked)
+                            const Text(
+                                'Нажмите кнопку для проверки обновления.')
+                          else if (remoteError != null)
+                            Text(
+                              remoteError!,
+                              style:
+                                  body.copyWith(color: Colors.orange.shade700),
+                            )
+                          else if (hasRemote && hasUpdate) ...[
+                            Text(
+                              'Доступна новая версия: ${remoteRelease!.versionName}+${remoteRelease!.versionCode}',
+                            ),
+                            if (remoteRelease!.changes.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              for (final ch in remoteRelease!.changes)
+                                Text('• $ch'),
+                            ],
+                            const SizedBox(height: 8),
                             OutlinedButton.icon(
                               onPressed: () => unawaited(
                                 _openSupportUrl(
                                   routeContext,
-                                  _releaseFolderUrl,
-                                  errorMessage:
-                                      'Не удалось открыть папку релизов',
+                                  remoteRelease!.apkUrl,
+                                  errorMessage: 'Не удалось открыть ссылку APK',
                                 ),
                               ),
-                              icon: const Icon(Icons.folder_open),
-                              label: const Text('Папка релизов'),
+                              icon: const Icon(Icons.system_update_alt),
+                              label: const Text('Скачать обновление'),
                             ),
-                          ],
-                        ),
-                      ] else ...[
-                        const Text(
-                          'Автопроверка обновлений пока не настроена. '
-                          'Используйте папку релизов.',
-                        ),
-                        if (data?.remoteError != null) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            data!.remoteError!,
-                            style: body.copyWith(color: Colors.orange.shade700),
-                          ),
+                          ] else
+                            const Text('Установлена актуальная версия'),
                         ],
-                        const SizedBox(height: 8),
-                        OutlinedButton.icon(
-                          onPressed: () => unawaited(
-                            _openSupportUrl(
-                              routeContext,
-                              _releaseFolderUrl,
-                              errorMessage: 'Не удалось открыть папку релизов',
-                            ),
-                          ),
-                          icon: const Icon(Icons.folder_open),
-                          label: const Text('Открыть папку релизов'),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            actions: [
-              Material(
-                color: NotebookChromeUi.secondaryButtonBackground(routeContext),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: ChromeOutline.side,
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(8),
-                  onTap: () async {
-                    await Clipboard.setData(
-                      ClipboardData(text: supportPayload),
-                    );
-                    if (!routeContext.mounted) return;
-                    ScaffoldMessenger.of(routeContext).showSnackBar(
-                      const SnackBar(
-                        content: Text('Данные техподдержки скопированы'),
                       ),
-                    );
-                  },
-                  child: SizedBox(
-                    width: chrome,
-                    height: chrome,
-                    child: Icon(
-                      Icons.copy_all,
-                      size: copyIcon,
-                      color: NotebookChromeUi.secondaryButtonForeground(
-                          routeContext),
                     ),
                   ),
                 ),
-              ),
-            ],
+                actions: [
+                  Material(
+                    color: NotebookChromeUi.secondaryButtonBackground(
+                        routeContext),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: ChromeOutline.side,
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () async {
+                        await Clipboard.setData(
+                          ClipboardData(text: supportPayload),
+                        );
+                        if (!routeContext.mounted) return;
+                        ScaffoldMessenger.of(routeContext).showSnackBar(
+                          const SnackBar(
+                            content: Text('Данные техподдержки скопированы'),
+                          ),
+                        );
+                      },
+                      child: SizedBox(
+                        width: chrome,
+                        height: chrome,
+                        child: Icon(
+                          Icons.copy_all,
+                          size: copyIcon,
+                          color: NotebookChromeUi.secondaryButtonForeground(
+                              routeContext),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
           );
         },
       );

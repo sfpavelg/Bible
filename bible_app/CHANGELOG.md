@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## 1.1.1+3 - 2026-04-23
+
+- Support: manual "Проверить обновление" only (no check on open); friendlier network errors; UTF-8 manifest decoding.
+- Support: show remote release notes and "Скачать обновление" only when a newer build is available; removed the Drive folder shortcut.
+
 ## 1.1.0+2 - 2026-04-22
 
 - Added version history UI in Support.
