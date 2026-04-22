@@ -167,6 +167,25 @@ String _versionNameFromPackageVersion(String version) {
   return version.substring(0, plus);
 }
 
+/// Список изменений из manifest: массив строк или одна многострочная строка.
+List<String> _manifestChangesList(dynamic raw) {
+  if (raw == null) return const [];
+  if (raw is String) {
+    return raw
+        .split(RegExp(r'\r?\n'))
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList(growable: false);
+  }
+  if (raw is List) {
+    return raw
+        .map((e) => e.toString().trim())
+        .where((e) => e.isNotEmpty)
+        .toList(growable: false);
+  }
+  return const [];
+}
+
 Future<List<_SupportChangelogEntry>> _loadSupportChangelog() async {
   try {
     final raw = await rootBundle.loadString('assets/version/changelog.json');
@@ -216,10 +235,7 @@ Future<_SupportRemoteRelease?> _fetchSupportRemoteRelease() async {
   final versionCode = rawVersionCode is num ? rawVersionCode.toInt() : 0;
   final apkUrl =
       (decoded['apk_url'] ?? decoded['apkUrl'] ?? '').toString().trim();
-  final changes = (decoded['changes'] as List<dynamic>? ?? const [])
-      .map((e) => e.toString().trim())
-      .where((e) => e.isNotEmpty)
-      .toList(growable: false);
+  final changes = _manifestChangesList(decoded['changes']);
   if (versionName.isEmpty || versionCode <= 0 || apkUrl.isEmpty) {
     throw StateError('Неверный формат release manifest');
   }
@@ -253,13 +269,15 @@ String _friendlySupportUpdateError(Object e) {
   return 'Не удалось проверить обновление.';
 }
 
-/// Краткое предупреждение на время вызова системы (пока [launchUrl] и переключение
-/// в браузер/установщик); без кнопки — закрывается само после передачи ссылки ОС.
+/// Предупреждение перед установщиком ОС: сначала показываем окно и держим его
+/// на экране ~1.5 с, затем [launchUrl]; иначе в том же кадре открывается менеджер
+/// и диалог не успевает отрисоваться.
 Future<void> _openApkDownloadUrl(
   BuildContext context,
   String url, {
   String errorMessage = 'Не удалось открыть ссылку APK',
 }) async {
+  const installerHandoffPause = Duration(milliseconds: 1500);
   await showDialog<void>(
     context: context,
     barrierDismissible: false,
@@ -268,6 +286,9 @@ Future<void> _openApkDownloadUrl(
     builder: (dialogContext) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         try {
+          await WidgetsBinding.instance.endOfFrame;
+          await Future<void>.delayed(installerHandoffPause);
+          if (!dialogContext.mounted) return;
           final uri = Uri.parse(url);
           final ok = await launchUrl(
             uri,
@@ -783,6 +804,7 @@ void showAppSupportDialog(BuildContext context) {
           String? remoteError;
           var isChecking = false;
           var hasChecked = false;
+          var remoteChangesExpanded = false;
 
           return StatefulBuilder(
             builder: (modalContext, setModalState) {
@@ -888,6 +910,7 @@ void showAppSupportDialog(BuildContext context) {
                                         remoteRelease = remote;
                                         hasChecked = true;
                                         isChecking = false;
+                                        remoteChangesExpanded = false;
                                       });
                                     } catch (e) {
                                       setModalState(() {
@@ -896,6 +919,7 @@ void showAppSupportDialog(BuildContext context) {
                                             _friendlySupportUpdateError(e);
                                         hasChecked = true;
                                         isChecking = false;
+                                        remoteChangesExpanded = false;
                                       });
                                     }
                                   },
@@ -933,23 +957,59 @@ void showAppSupportDialog(BuildContext context) {
                             ),
                             if (remoteRelease!.changes.isNotEmpty) ...[
                               const SizedBox(height: 6),
-                              ExpansionTile(
-                                tilePadding: EdgeInsets.zero,
-                                childrenPadding:
-                                    const EdgeInsets.only(left: 4, right: 4),
-                                title: const Text('Описание обновления'),
-                                subtitle: const Text(
-                                  'Нажмите, чтобы посмотреть список изменений',
+                              InkWell(
+                                onTap: () => setModalState(() {
+                                  remoteChangesExpanded =
+                                      !remoteChangesExpanded;
+                                }),
+                                borderRadius: BorderRadius.circular(8),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 6,
+                                    horizontal: 2,
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Icon(
+                                        remoteChangesExpanded
+                                            ? Icons.expand_less
+                                            : Icons.expand_more,
+                                        color: scheme.onSurface,
+                                      ),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            const Text('Описание обновления'),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              'Нажмите, чтобы посмотреть список изменений',
+                                              style: body.copyWith(
+                                                color: scheme.onSurface
+                                                    .withValues(alpha: 0.72),
+                                                fontSize: app.fontSize * 0.92,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                                children: [
-                                  for (final ch in remoteRelease!.changes)
-                                    Padding(
-                                      padding:
-                                          const EdgeInsets.only(bottom: 4),
-                                      child: Text('• $ch'),
-                                    ),
-                                ],
                               ),
+                              if (remoteChangesExpanded)
+                                for (final ch in remoteRelease!.changes)
+                                  Padding(
+                                    padding: const EdgeInsets.only(
+                                      left: 28,
+                                      bottom: 4,
+                                      top: 2,
+                                    ),
+                                    child: Text('• $ch'),
+                                  ),
                             ],
                           ] else
                             const Text('Установлена актуальная версия'),
