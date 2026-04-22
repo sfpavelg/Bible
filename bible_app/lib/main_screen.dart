@@ -98,20 +98,22 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final tabOrder = _mountedTabs.toList()..sort();
-    return Scaffold(
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          for (final i in tabOrder)
-            Offstage(
-              offstage: _selectedIndex != i,
-              child: _tabBody(i),
-            ),
-        ],
-      ),
-      bottomNavigationBar: MainChromeTabBar(
-        currentIndex: _selectedIndex,
-        onChanged: _onItemTapped,
+    return SafeArea(
+      child: Scaffold(
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            for (final i in tabOrder)
+              Offstage(
+                offstage: _selectedIndex != i,
+                child: _tabBody(i),
+              ),
+          ],
+        ),
+        bottomNavigationBar: MainChromeTabBar(
+          currentIndex: _selectedIndex,
+          onChanged: _onItemTapped,
+        ),
       ),
     );
   }

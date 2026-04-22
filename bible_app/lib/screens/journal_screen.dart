@@ -1695,18 +1695,18 @@ class _JournalScreenState extends State<JournalScreen>
                                               );
                                             }
 
-                                            Widget wrappedBlocks() => Wrap(
-                                                  spacing: minInterItemGap,
-                                                  runSpacing: (lineGap * 0.35)
-                                                      .clamp(1.0, 6.0),
-                                                  children: [
-                                                    for (final block in displayBlocks)
-                                                      Text(
-                                                        block,
-                                                        style: readingsStyle,
-                                                      ),
+                                            Widget lineText(List<String> blocks) {
+                                              return Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  for (var i = 0; i < blocks.length; i++) ...[
+                                                    Text(blocks[i], style: readingsStyle),
+                                                    if (i < blocks.length - 1)
+                                                      const SizedBox(width: minInterItemGap),
                                                   ],
-                                                );
+                                                ],
+                                              );
+                                            }
 
                                             if (canFitWithBadge) {
                                               final lineMaxWidth =
@@ -1744,21 +1744,102 @@ class _JournalScreenState extends State<JournalScreen>
                                                 ],
                                               );
                                             }
-                                            final wrapped = wrappedBlocks();
-                                            if (!done) return wrapped;
+                                            // Многострочный режим: раскладываем блоки по строкам вручную.
+                                            final linesByWidth = <List<String>>[];
+                                            var current = <String>[];
+                                            var currentWidth = 0.0;
+                                            for (var i = 0; i < displayBlocks.length; i++) {
+                                              final block = displayBlocks[i];
+                                              final tp = TextPainter(
+                                                text: TextSpan(
+                                                  text: block,
+                                                  style: readingsStyle,
+                                                ),
+                                                maxLines: 1,
+                                                textDirection: dir,
+                                              )..layout(maxWidth: double.infinity);
+                                              final w = tp.width;
+                                              final extra = current.isEmpty
+                                                  ? w
+                                                  : (minInterItemGap + w);
+                                              if (current.isNotEmpty &&
+                                                  currentWidth + extra > constraints.maxWidth) {
+                                                linesByWidth.add(current);
+                                                current = <String>[block];
+                                                currentWidth = w;
+                                              } else {
+                                                current.add(block);
+                                                currentWidth += extra;
+                                              }
+                                            }
+                                            if (current.isNotEmpty) {
+                                              linesByWidth.add(current);
+                                            }
+
+                                            if (!done) {
+                                              return Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  for (var i = 0; i < linesByWidth.length; i++) ...[
+                                                    lineText(linesByWidth[i]),
+                                                    if (i < linesByWidth.length - 1)
+                                                      SizedBox(
+                                                        height: (lineGap * 0.35).clamp(1.0, 6.0),
+                                                      ),
+                                                  ],
+                                                ],
+                                              );
+                                            }
+
+                                            final lastLine = linesByWidth.last;
+                                            final tpLast = TextPainter(
+                                              text: TextSpan(
+                                                text: lastLine.join(' '),
+                                                style: readingsStyle,
+                                              ),
+                                              maxLines: 1,
+                                              textDirection: dir,
+                                            )..layout(maxWidth: double.infinity);
+                                            final lastLineTextWidth = tpLast.width;
+                                            final canPutBadgeOnLastLine =
+                                                lastLineTextWidth +
+                                                        (lastLine.length > 1
+                                                            ? (lastLine.length - 1) *
+                                                                minInterItemGap
+                                                            : 0) +
+                                                        badgeGap +
+                                                        badgeWidth <=
+                                                    constraints.maxWidth;
+
                                             return Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
+                                              crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
-                                                wrapped,
-                                                SizedBox(
-                                                  height: (lineGap * 0.5)
-                                                      .clamp(2.0, 8.0),
-                                                ),
-                                                Align(
-                                                  alignment: Alignment.centerRight,
-                                                  child: doneBadge(),
-                                                ),
+                                                for (var i = 0;
+                                                    i < linesByWidth.length - 1;
+                                                    i++) ...[
+                                                  lineText(linesByWidth[i]),
+                                                  SizedBox(
+                                                    height: (lineGap * 0.35).clamp(1.0, 6.0),
+                                                  ),
+                                                ],
+                                                if (canPutBadgeOnLastLine)
+                                                  Row(
+                                                    children: [
+                                                      lineText(lastLine),
+                                                      const Spacer(),
+                                                      doneBadge(),
+                                                    ],
+                                                  )
+                                                else ...[
+                                                  lineText(lastLine),
+                                                  SizedBox(
+                                                    height: (lineGap * 0.5).clamp(2.0, 8.0),
+                                                  ),
+                                                  Align(
+                                                    alignment: Alignment.centerRight,
+                                                    child: doneBadge(),
+                                                  ),
+                                                ],
                                               ],
                                             );
                                           },
