@@ -253,18 +253,53 @@ String _friendlySupportUpdateError(Object e) {
   return 'Не удалось проверить обновление.';
 }
 
-Future<void> _openSupportUrl(
+/// Краткое предупреждение на время вызова системы (пока [launchUrl] и переключение
+/// в браузер/установщик); без кнопки — закрывается само после передачи ссылки ОС.
+Future<void> _openApkDownloadUrl(
   BuildContext context,
   String url, {
-  String errorMessage = 'Не удалось открыть ссылку',
+  String errorMessage = 'Не удалось открыть ссылку APK',
 }) async {
-  final uri = Uri.parse(url);
-  final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-  if (!ok && context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(errorMessage)),
-    );
-  }
+  await showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    useRootNavigator: true,
+    barrierColor: Colors.black54,
+    builder: (dialogContext) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        try {
+          final uri = Uri.parse(url);
+          final ok = await launchUrl(
+            uri,
+            mode: LaunchMode.externalApplication,
+          );
+          if (!dialogContext.mounted) return;
+          if (!ok) {
+            ScaffoldMessenger.of(dialogContext).showSnackBar(
+              SnackBar(content: Text(errorMessage)),
+            );
+          }
+        } finally {
+          if (dialogContext.mounted) {
+            Navigator.of(dialogContext, rootNavigator: true).pop();
+          }
+        }
+      });
+      final theme = Theme.of(dialogContext);
+      final scheme = theme.colorScheme;
+      return PopScope(
+        canPop: false,
+        child: AlertDialog(
+          backgroundColor: scheme.surface,
+          content: Text(
+            'Работает менеджер установки операционной системы, следуйте командам.',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyLarge?.copyWith(color: scheme.onSurface),
+          ),
+        ),
+      );
+    },
+  );
 }
 
 void showAppSettingsDialog(BuildContext context) {
@@ -885,23 +920,37 @@ void showAppSupportDialog(BuildContext context) {
                             Text(
                               'Доступна новая версия: ${remoteRelease!.versionName}+${remoteRelease!.versionCode}',
                             ),
-                            if (remoteRelease!.changes.isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              for (final ch in remoteRelease!.changes)
-                                Text('• $ch'),
-                            ],
                             const SizedBox(height: 8),
                             OutlinedButton.icon(
                               onPressed: () => unawaited(
-                                _openSupportUrl(
+                                _openApkDownloadUrl(
                                   routeContext,
                                   remoteRelease!.apkUrl,
-                                  errorMessage: 'Не удалось открыть ссылку APK',
                                 ),
                               ),
                               icon: const Icon(Icons.system_update_alt),
                               label: const Text('Скачать обновление'),
                             ),
+                            if (remoteRelease!.changes.isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              ExpansionTile(
+                                tilePadding: EdgeInsets.zero,
+                                childrenPadding:
+                                    const EdgeInsets.only(left: 4, right: 4),
+                                title: const Text('Описание обновления'),
+                                subtitle: const Text(
+                                  'Нажмите, чтобы посмотреть список изменений',
+                                ),
+                                children: [
+                                  for (final ch in remoteRelease!.changes)
+                                    Padding(
+                                      padding:
+                                          const EdgeInsets.only(bottom: 4),
+                                      child: Text('• $ch'),
+                                    ),
+                                ],
+                              ),
+                            ],
                           ] else
                             const Text('Установлена актуальная версия'),
                         ],
