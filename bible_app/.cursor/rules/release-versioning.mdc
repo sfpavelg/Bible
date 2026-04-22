@@ -1,0 +1,22 @@
+---
+description: Commit rule for version bump and changelog updates
+alwaysApply: true
+---
+
+# Release Versioning Rule
+
+When user asks to create a commit:
+
+- Always bump app version in `pubspec.yaml` (`version: x.y.z+build`).
+- Always add/update release notes in:
+  - `CHANGELOG.md`
+  - `assets/version/changelog.json`
+- Always update release manifest JSON:
+  - `assets/version/release-manifests/latest.json`
+  - `assets/version/release-manifests/<version+build>/latest.json` (copy for archive)
+- Keep `version_code` in `assets/version/changelog.json` equal to `build` from `pubspec.yaml`.
+- Keep `version_code` in release manifest JSON equal to `build` from `pubspec.yaml`.
+- Include concise "why" release notes (1-5 bullets).
+- Never modify old version entries except typo fixes.
+
+If user explicitly says "commit without release bump", follow user instruction.

@@ -1,10 +1,16 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:bible_app/journal/parallel_reading_plan_data.dart';
 import 'package:bible_app/providers/app_provider.dart';
 import 'package:bible_app/widgets/chrome_outline.dart';
 import 'package:bible_app/widgets/notebook_chrome_dialog_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Снимает один маршрут с навигатора не более одного раза (двойной клик не уводит
 /// со стека экран под диалогом — чёрный экран).
@@ -95,6 +101,174 @@ class _SettingsSliderVerticalTickMarkShape extends SliderTickMarkShape {
   }
 }
 
+const String _releaseFolderUrl =
+    'https://drive.google.com/drive/folders/1df9Dgaw1T2k6rbJW0q5B59aAx8IJayZ7?usp=drive_link';
+
+/// Публичный JSON с информацией о последней версии.
+/// Формат (пример):
+/// {
+///   "version_name": "1.1.0",
+///   "version_code": 2,
+///   "apk_url": "https://....apk",
+///   "changes": ["...", "..."]
+/// }
+///
+/// После загрузки `latest.json` в Google Drive замените FILE_ID_JSON на ID файла:
+/// https://drive.google.com/file/d/FILE_ID_JSON/view
+const String _releaseManifestUrl =
+    'https://drive.google.com/uc?export=download&id=FILE_ID_JSON';
+
+class _SupportChangelogEntry {
+  const _SupportChangelogEntry({
+    required this.versionName,
+    required this.versionCode,
+    required this.date,
+    required this.changes,
+  });
+
+  final String versionName;
+  final int versionCode;
+  final String date;
+  final List<String> changes;
+
+  String get fullVersion => '$versionName+$versionCode';
+}
+
+class _SupportRemoteRelease {
+  const _SupportRemoteRelease({
+    required this.versionName,
+    required this.versionCode,
+    required this.apkUrl,
+    required this.changes,
+  });
+
+  final String versionName;
+  final int versionCode;
+  final String apkUrl;
+  final List<String> changes;
+}
+
+class _SupportDialogData {
+  const _SupportDialogData({
+    required this.packageInfo,
+    required this.changelog,
+    required this.remoteRelease,
+    required this.remoteError,
+  });
+
+  final PackageInfo packageInfo;
+  final List<_SupportChangelogEntry> changelog;
+  final _SupportRemoteRelease? remoteRelease;
+  final String? remoteError;
+}
+
+int _versionCodeFromPackageVersion(String version) {
+  final plus = version.lastIndexOf('+');
+  if (plus < 0 || plus == version.length - 1) return 0;
+  return int.tryParse(version.substring(plus + 1)) ?? 0;
+}
+
+String _versionNameFromPackageVersion(String version) {
+  final plus = version.lastIndexOf('+');
+  if (plus < 0) return version;
+  return version.substring(0, plus);
+}
+
+Future<List<_SupportChangelogEntry>> _loadSupportChangelog() async {
+  try {
+    final raw = await rootBundle.loadString('assets/version/changelog.json');
+    final decoded = jsonDecode(raw) as Map<String, dynamic>;
+    final list = (decoded['versions'] as List<dynamic>? ?? const []);
+    final out = <_SupportChangelogEntry>[];
+    for (final item in list) {
+      final m = item as Map<String, dynamic>;
+      final versionName = (m['version_name'] ?? '').toString().trim();
+      final versionCode = (m['version_code'] as num?)?.toInt() ?? 0;
+      final date = (m['date'] ?? '').toString().trim();
+      final changes = (m['changes'] as List<dynamic>? ?? const [])
+          .map((e) => e.toString().trim())
+          .where((e) => e.isNotEmpty)
+          .toList(growable: false);
+      if (versionName.isEmpty || versionCode <= 0) continue;
+      out.add(
+        _SupportChangelogEntry(
+          versionName: versionName,
+          versionCode: versionCode,
+          date: date,
+          changes: changes,
+        ),
+      );
+    }
+    return out;
+  } catch (_) {
+    return const [];
+  }
+}
+
+Future<_SupportRemoteRelease?> _fetchSupportRemoteRelease() async {
+  final manifestUrl = _releaseManifestUrl.trim();
+  if (manifestUrl.isEmpty || manifestUrl.contains('FILE_ID_JSON')) return null;
+  final uri = Uri.parse(manifestUrl);
+  final response = await http.get(uri).timeout(const Duration(seconds: 8));
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    throw StateError('HTTP ${response.statusCode}');
+  }
+  final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+  final versionName = (decoded['version_name'] ?? decoded['versionName'] ?? '')
+      .toString()
+      .trim();
+  final dynamic rawVersionCode =
+      decoded['version_code'] ?? decoded['versionCode'];
+  final versionCode = rawVersionCode is num ? rawVersionCode.toInt() : 0;
+  final apkUrl =
+      (decoded['apk_url'] ?? decoded['apkUrl'] ?? '').toString().trim();
+  final changes = (decoded['changes'] as List<dynamic>? ?? const [])
+      .map((e) => e.toString().trim())
+      .where((e) => e.isNotEmpty)
+      .toList(growable: false);
+  if (versionName.isEmpty || versionCode <= 0 || apkUrl.isEmpty) {
+    throw StateError('Неверный формат release manifest');
+  }
+  return _SupportRemoteRelease(
+    versionName: versionName,
+    versionCode: versionCode,
+    apkUrl: apkUrl,
+    changes: changes,
+  );
+}
+
+Future<_SupportDialogData> _loadSupportDialogData() async {
+  final packageInfo = await PackageInfo.fromPlatform();
+  final changelog = await _loadSupportChangelog();
+  _SupportRemoteRelease? remoteRelease;
+  String? remoteError;
+  try {
+    remoteRelease = await _fetchSupportRemoteRelease();
+  } catch (e) {
+    remoteError = 'Не удалось проверить обновление: $e';
+  }
+  return _SupportDialogData(
+    packageInfo: packageInfo,
+    changelog: changelog,
+    remoteRelease: remoteRelease,
+    remoteError: remoteError,
+  );
+}
+
+Future<void> _openSupportUrl(
+  BuildContext context,
+  String url, {
+  String errorMessage = 'Не удалось открыть ссылку',
+}) async {
+  final uri = Uri.parse(url);
+  final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  if (!ok && context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(errorMessage)),
+    );
+  }
+}
+
 void showAppSettingsDialog(BuildContext context) {
   final appProvider = Provider.of<AppProvider>(context, listen: false);
 
@@ -171,14 +345,14 @@ void showAppSettingsDialog(BuildContext context) {
                     disabledInactiveTickMarkColor: Colors.grey.shade500,
                   );
 
-              final panelWidth = ((MediaQuery.sizeOf(consumerContext).width - 12) * (2 / 3))
-                  .clamp(300.0, 362.5);
+              final panelWidth =
+                  ((MediaQuery.sizeOf(consumerContext).width - 12) * (2 / 3))
+                      .clamp(300.0, 362.5);
               final topAnchor = MediaQuery.paddingOf(consumerContext).top +
                   AppProvider.toolbarHeightForChrome(chromeBtnSize);
-              final maxBodyHeight = (MediaQuery.sizeOf(consumerContext).height -
-                      topAnchor -
-                      24)
-                  .clamp(220.0, 640.0);
+              final maxBodyHeight =
+                  (MediaQuery.sizeOf(consumerContext).height - topAnchor - 24)
+                      .clamp(220.0, 640.0);
 
               return Stack(
                 children: [
@@ -217,255 +391,285 @@ void showAppSettingsDialog(BuildContext context) {
                               ),
                               const SizedBox(height: 6),
                               ConstrainedBox(
-                                constraints: BoxConstraints(maxHeight: maxBodyHeight),
+                                constraints:
+                                    BoxConstraints(maxHeight: maxBodyHeight),
                                 child: SingleChildScrollView(
-                                  padding: const EdgeInsets.fromLTRB(2, 2, 2, 2),
+                                  padding:
+                                      const EdgeInsets.fromLTRB(2, 2, 2, 2),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
                                     children: [
-                              Text(
-                                'Размер шрифта',
-                                style: kSettingsHeadingStyle,
-                              ),
-                              const SizedBox(height: 4),
-                              SliderTheme(
-                                data: sliderDecor(
-                                    SliderTheme.of(consumerContext)),
-                                child: Slider(
-                                  padding: EdgeInsets.zero,
-                                  value: fontSize.clamp(12.0, 28.0),
-                                  min: 12.0,
-                                  max: 28.0,
-                                  divisions: 16,
-                                  label: fontSize.toStringAsFixed(0),
-                                  onChanged: (value) {
-                                    setModalState(() => fontSize = value);
-                                    appProvider.changeFontSize(value);
-                                  },
-                                ),
-                              ),
-                              const SizedBox(height: 5),
-                              Text(
-                                'Межстрочный интервал',
-                                style: kSettingsHeadingStyle,
-                              ),
-                              SliderTheme(
-                                data: sliderDecor(
-                                    SliderTheme.of(consumerContext)),
-                                child: Slider(
-                                  padding: EdgeInsets.zero,
-                                  value: lineHeight.clamp(1.0, 2.2),
-                                  min: 1.0,
-                                  max: 2.2,
-                                  divisions: 12,
-                                  label: lineHeight.toStringAsFixed(2),
-                                  onChanged: (value) {
-                                    setModalState(() => lineHeight = value);
-                                    appProvider.changeLineHeight(value);
-                                  },
-                                ),
-                              ),
-                              const SizedBox(height: 5),
-                              Text(
-                                'Интервал между стихами',
-                                style: kSettingsHeadingStyle,
-                              ),
-                              SliderTheme(
-                                data: sliderDecor(
-                                    SliderTheme.of(consumerContext)),
-                                child: Slider(
-                                  padding: EdgeInsets.zero,
-                                  value: verseSpacing.clamp(0.0, 28.0),
-                                  min: 0.0,
-                                  max: 28.0,
-                                  divisions: 28,
-                                  label: verseSpacing.toStringAsFixed(0),
-                                  onChanged: (value) {
-                                    setModalState(() => verseSpacing = value);
-                                    appProvider.changeVerseSpacing(value);
-                                  },
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Шрифт текста',
-                                style: kSettingsHeadingStyle,
-                              ),
-                              const SizedBox(height: 4),
-                              SizedBox(
-                                height: dropdownHeight,
-                                child: DropdownButtonFormField<String>(
-                                  isExpanded: true,
-                                  isDense: true,
-                                  itemHeight: dropdownHeight,
-                                  value: fontPreset,
-                                  style: kSettingsBodyStyle,
-                                  decoration: InputDecoration(
-                                    filled: true,
-                                    fillColor: scheme.surfaceContainerHighest
-                                        .withValues(alpha: 0.75),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                      borderSide: ChromeOutline.side,
-                                    ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                      borderSide: ChromeOutline.side,
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                      borderSide: ChromeOutline.side.copyWith(
-                                        width: ChromeOutline.width + 0.3,
+                                      Text(
+                                        'Размер шрифта',
+                                        style: kSettingsHeadingStyle,
                                       ),
-                                    ),
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 0,
-                                    ),
-                                  ),
-                                  items: AppProvider.verseFontLabels.entries
-                                      .map(
-                                        (e) => DropdownMenuItem<String>(
-                                          value: e.key,
-                                          child: Text(
-                                            e.value,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: kSettingsBodyStyle,
+                                      const SizedBox(height: 4),
+                                      SliderTheme(
+                                        data: sliderDecor(
+                                            SliderTheme.of(consumerContext)),
+                                        child: Slider(
+                                          padding: EdgeInsets.zero,
+                                          value: fontSize.clamp(12.0, 28.0),
+                                          min: 12.0,
+                                          max: 28.0,
+                                          divisions: 16,
+                                          label: fontSize.toStringAsFixed(0),
+                                          onChanged: (value) {
+                                            setModalState(
+                                                () => fontSize = value);
+                                            appProvider.changeFontSize(value);
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(height: 5),
+                                      Text(
+                                        'Межстрочный интервал',
+                                        style: kSettingsHeadingStyle,
+                                      ),
+                                      SliderTheme(
+                                        data: sliderDecor(
+                                            SliderTheme.of(consumerContext)),
+                                        child: Slider(
+                                          padding: EdgeInsets.zero,
+                                          value: lineHeight.clamp(1.0, 2.2),
+                                          min: 1.0,
+                                          max: 2.2,
+                                          divisions: 12,
+                                          label: lineHeight.toStringAsFixed(2),
+                                          onChanged: (value) {
+                                            setModalState(
+                                                () => lineHeight = value);
+                                            appProvider.changeLineHeight(value);
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(height: 5),
+                                      Text(
+                                        'Интервал между стихами',
+                                        style: kSettingsHeadingStyle,
+                                      ),
+                                      SliderTheme(
+                                        data: sliderDecor(
+                                            SliderTheme.of(consumerContext)),
+                                        child: Slider(
+                                          padding: EdgeInsets.zero,
+                                          value: verseSpacing.clamp(0.0, 28.0),
+                                          min: 0.0,
+                                          max: 28.0,
+                                          divisions: 28,
+                                          label:
+                                              verseSpacing.toStringAsFixed(0),
+                                          onChanged: (value) {
+                                            setModalState(
+                                                () => verseSpacing = value);
+                                            appProvider
+                                                .changeVerseSpacing(value);
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'Шрифт текста',
+                                        style: kSettingsHeadingStyle,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      SizedBox(
+                                        height: dropdownHeight,
+                                        child: DropdownButtonFormField<String>(
+                                          isExpanded: true,
+                                          isDense: true,
+                                          itemHeight: dropdownHeight,
+                                          value: fontPreset,
+                                          style: kSettingsBodyStyle,
+                                          decoration: InputDecoration(
+                                            filled: true,
+                                            fillColor: scheme
+                                                .surfaceContainerHighest
+                                                .withValues(alpha: 0.75),
+                                            border: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              borderSide: ChromeOutline.side,
+                                            ),
+                                            enabledBorder: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              borderSide: ChromeOutline.side,
+                                            ),
+                                            focusedBorder: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              borderSide:
+                                                  ChromeOutline.side.copyWith(
+                                                width:
+                                                    ChromeOutline.width + 0.3,
+                                              ),
+                                            ),
+                                            contentPadding:
+                                                const EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                              vertical: 0,
+                                            ),
+                                          ),
+                                          items: AppProvider
+                                              .verseFontLabels.entries
+                                              .map(
+                                                (e) => DropdownMenuItem<String>(
+                                                  value: e.key,
+                                                  child: Text(
+                                                    e.value,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: kSettingsBodyStyle,
+                                                  ),
+                                                ),
+                                              )
+                                              .toList(),
+                                          onChanged: (value) {
+                                            if (value == null) return;
+                                            setModalState(
+                                                () => fontPreset = value);
+                                            appProvider
+                                                .setVerseFontPreset(value);
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'Размер кнопок',
+                                        style: kSettingsHeadingStyle,
+                                      ),
+                                      SliderTheme(
+                                        data: sliderDecor(
+                                            SliderTheme.of(consumerContext)),
+                                        child: Slider(
+                                          padding: EdgeInsets.zero,
+                                          value: chromeBtnSize.clamp(
+                                            AppProvider.chromeButtonSizeMin,
+                                            AppProvider.chromeButtonSizeMax,
+                                          ),
+                                          min: AppProvider.chromeButtonSizeMin,
+                                          max: AppProvider.chromeButtonSizeMax,
+                                          divisions: 24,
+                                          label:
+                                              chromeBtnSize.round().toString(),
+                                          onChanged: (value) {
+                                            setModalState(
+                                                () => chromeBtnSize = value);
+                                            appProvider
+                                                .changeChromeButtonSize(value);
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'Тема',
+                                        style: kSettingsHeadingStyle,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      SegmentedButton<ThemeMode>(
+                                        segments: <ButtonSegment<ThemeMode>>[
+                                          ButtonSegment<ThemeMode>(
+                                            value: ThemeMode.light,
+                                            label: FittedBox(
+                                              fit: BoxFit.scaleDown,
+                                              child: Text(
+                                                'Светлая',
+                                                maxLines: 1,
+                                                softWrap: false,
+                                                style:
+                                                    kSettingsSegmentTextStyle,
+                                              ),
+                                            ),
+                                            icon: const Icon(
+                                              Icons.light_mode_outlined,
+                                              size: kSegIcon,
+                                            ),
+                                          ),
+                                          ButtonSegment<ThemeMode>(
+                                            value: ThemeMode.dark,
+                                            label: FittedBox(
+                                              fit: BoxFit.scaleDown,
+                                              child: Text(
+                                                'Тёмная',
+                                                maxLines: 1,
+                                                softWrap: false,
+                                                style:
+                                                    kSettingsSegmentTextStyle,
+                                              ),
+                                            ),
+                                            icon: const Icon(
+                                              Icons.dark_mode_outlined,
+                                              size: kSegIcon,
+                                            ),
+                                          ),
+                                        ],
+                                        style: SegmentedButton.styleFrom(
+                                          textStyle: kSettingsSegmentTextStyle,
+                                        ).copyWith(
+                                          backgroundColor: WidgetStateProperty
+                                              .resolveWith<Color?>(
+                                            (states) {
+                                              if (states.contains(
+                                                  WidgetState.selected)) {
+                                                return scheme
+                                                    .surfaceContainerHighest
+                                                    .withValues(alpha: 0.75);
+                                              }
+                                              return null;
+                                            },
+                                          ),
+                                          side: const WidgetStatePropertyAll(
+                                            ChromeOutline.side,
                                           ),
                                         ),
-                                      )
-                                      .toList(),
-                                  onChanged: (value) {
-                                    if (value == null) return;
-                                    setModalState(() => fontPreset = value);
-                                    appProvider.setVerseFontPreset(value);
-                                  },
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Размер кнопок',
-                                style: kSettingsHeadingStyle,
-                              ),
-                              SliderTheme(
-                                data: sliderDecor(
-                                    SliderTheme.of(consumerContext)),
-                                child: Slider(
-                                  padding: EdgeInsets.zero,
-                                  value: chromeBtnSize.clamp(
-                                    AppProvider.chromeButtonSizeMin,
-                                    AppProvider.chromeButtonSizeMax,
-                                  ),
-                                  min: AppProvider.chromeButtonSizeMin,
-                                  max: AppProvider.chromeButtonSizeMax,
-                                  divisions: 24,
-                                  label: chromeBtnSize.round().toString(),
-                                  onChanged: (value) {
-                                    setModalState(() => chromeBtnSize = value);
-                                    appProvider.changeChromeButtonSize(value);
-                                  },
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Тема',
-                                style: kSettingsHeadingStyle,
-                              ),
-                              const SizedBox(height: 4),
-                              SegmentedButton<ThemeMode>(
-                                segments: <ButtonSegment<ThemeMode>>[
-                                  ButtonSegment<ThemeMode>(
-                                    value: ThemeMode.light,
-                                    label: FittedBox(
-                                      fit: BoxFit.scaleDown,
-                                      child: Text(
-                                        'Светлая',
-                                        maxLines: 1,
-                                        softWrap: false,
-                                        style: kSettingsSegmentTextStyle,
+                                        selected: <ThemeMode>{selectedTheme},
+                                        onSelectionChanged:
+                                            (Set<ThemeMode> next) {
+                                          if (next.isEmpty) return;
+                                          final m = next.first;
+                                          setModalState(
+                                              () => selectedTheme = m);
+                                          appProvider.setThemeMode(m);
+                                        },
                                       ),
-                                    ),
-                                    icon: const Icon(
-                                      Icons.light_mode_outlined,
-                                      size: kSegIcon,
-                                    ),
-                                  ),
-                                  ButtonSegment<ThemeMode>(
-                                    value: ThemeMode.dark,
-                                    label: FittedBox(
-                                      fit: BoxFit.scaleDown,
-                                      child: Text(
-                                        'Тёмная',
-                                        maxLines: 1,
-                                        softWrap: false,
-                                        style: kSettingsSegmentTextStyle,
+                                      const SizedBox(height: 4),
+                                      SwitchListTile(
+                                        dense: true,
+                                        visualDensity: VisualDensity.compact,
+                                        contentPadding: EdgeInsets.zero,
+                                        title: Text(
+                                          'Септуагинта [ ]',
+                                          style: kSettingsBodyStyle,
+                                        ),
+                                        value: showSeptuagintText,
+                                        activeThumbColor: scheme.primary,
+                                        onChanged: (value) {
+                                          setModalState(
+                                            () => showSeptuagintText = value,
+                                          );
+                                          appProvider
+                                              .setShowSeptuagintText(value);
+                                        },
                                       ),
-                                    ),
-                                    icon: const Icon(
-                                      Icons.dark_mode_outlined,
-                                      size: kSegIcon,
-                                    ),
-                                  ),
-                                ],
-                                style: SegmentedButton.styleFrom(
-                                  textStyle: kSettingsSegmentTextStyle,
-                                ).copyWith(
-                                  backgroundColor:
-                                      WidgetStateProperty.resolveWith<Color?>(
-                                    (states) {
-                                      if (states
-                                          .contains(WidgetState.selected)) {
-                                        return scheme.surfaceContainerHighest
-                                            .withValues(alpha: 0.75);
-                                      }
-                                      return null;
-                                    },
-                                  ),
-                                  side: const WidgetStatePropertyAll(
-                                    ChromeOutline.side,
-                                  ),
-                                ),
-                                selected: <ThemeMode>{selectedTheme},
-                                onSelectionChanged: (Set<ThemeMode> next) {
-                                  if (next.isEmpty) return;
-                                  final m = next.first;
-                                  setModalState(() => selectedTheme = m);
-                                  appProvider.setThemeMode(m);
-                                },
-                              ),
-                              const SizedBox(height: 4),
-                              SwitchListTile(
-                                dense: true,
-                                visualDensity: VisualDensity.compact,
-                                contentPadding: EdgeInsets.zero,
-                                title: Text(
-                                  'Септуагинта [ ]',
-                                  style: kSettingsBodyStyle,
-                                ),
-                                value: showSeptuagintText,
-                                activeThumbColor: scheme.primary,
-                                onChanged: (value) {
-                                  setModalState(
-                                    () => showSeptuagintText = value,
-                                  );
-                                  appProvider.setShowSeptuagintText(value);
-                                },
-                              ),
-                              SwitchListTile(
-                                dense: true,
-                                visualDensity: VisualDensity.compact,
-                                contentPadding: EdgeInsets.zero,
-                                title: Text(
-                                  'Не выключать экран',
-                                  style: kSettingsBodyStyle,
-                                ),
-                                value: keepScreenOn,
-                                activeThumbColor: scheme.primary,
-                                onChanged: (value) async {
-                                  setModalState(() => keepScreenOn = value);
-                                  await appProvider.setKeepScreenOn(value);
-                                },
-                              ),
+                                      SwitchListTile(
+                                        dense: true,
+                                        visualDensity: VisualDensity.compact,
+                                        contentPadding: EdgeInsets.zero,
+                                        title: Text(
+                                          'Не выключать экран',
+                                          style: kSettingsBodyStyle,
+                                        ),
+                                        value: keepScreenOn,
+                                        activeThumbColor: scheme.primary,
+                                        onChanged: (value) async {
+                                          setModalState(
+                                              () => keepScreenOn = value);
+                                          await appProvider
+                                              .setKeepScreenOn(value);
+                                        },
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -483,7 +687,8 @@ void showAppSettingsDialog(BuildContext context) {
         },
       );
     },
-    transitionBuilder: (ctx, animation, secondaryAnimation, child) => FadeTransition(
+    transitionBuilder: (ctx, animation, secondaryAnimation, child) =>
+        FadeTransition(
       opacity: CurvedAnimation(
         parent: animation,
         curve: Curves.easeOutCubic,
@@ -495,10 +700,6 @@ void showAppSettingsDialog(BuildContext context) {
 }
 
 void showAppSupportDialog(BuildContext context) {
-  const supportPayload = 'Автор проекта: Софеин Павел Геннадьевич\n'
-      'Контактная почта: sfpavelg@gmail.com\n'
-      'Версия проекта: ver_28_03_2026';
-
   showDialog<void>(
     context: context,
     builder: (routeContext) {
@@ -512,91 +713,233 @@ void showAppSupportDialog(BuildContext context) {
       );
       final chrome = app.chromeButtonSize;
       final copyIcon = (chrome * 0.5).clamp(18.0, 30.0);
-      return AlertDialog(
-        backgroundColor: scheme.surface,
-        titlePadding: const EdgeInsets.fromLTRB(20, 14, 12, 8),
-        title: Row(
-          children: [
-            Expanded(
-              child: Text(
+      return FutureBuilder<_SupportDialogData>(
+        future: _loadSupportDialogData(),
+        builder: (ctx, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return AlertDialog(
+              backgroundColor: scheme.surface,
+              title: Text(
                 'Техподдержка',
                 style: theme.textTheme.titleLarge
                     ?.copyWith(color: scheme.onSurface),
               ),
-            ),
-            _PopRouteOnce(
-              navigatorContext: routeContext,
-              builder: (c, popOnce) =>
-                  NotebookChromeDialogCloseButton(onPressed: popOnce),
-            ),
-          ],
-        ),
-        content: DefaultTextStyle(
-          style: body,
-          child: SizedBox(
-            width: 360,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+              content: const SizedBox(
+                width: 320,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 10),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              ),
+            );
+          }
+
+          final data = snapshot.data;
+          final currentVersion = data?.packageInfo.version ??
+              _versionNameFromPackageVersion('0.0.0+0');
+          final currentBuild = data?.packageInfo.buildNumber ??
+              _versionCodeFromPackageVersion('0.0.0+0').toString();
+          final currentCode = int.tryParse(currentBuild) ??
+              _versionCodeFromPackageVersion('$currentVersion+$currentBuild');
+
+          final remote = data?.remoteRelease;
+          final hasRemote = remote != null;
+          final hasUpdate = hasRemote && remote.versionCode > currentCode;
+
+          final supportPayload = 'Автор проекта: Софеин Павел Геннадьевич\n'
+              'Контактная почта: sfpavelg@gmail.com\n'
+              'Версия проекта: $currentVersion+$currentBuild';
+
+          return AlertDialog(
+            backgroundColor: scheme.surface,
+            titlePadding: const EdgeInsets.fromLTRB(20, 14, 12, 8),
+            title: Row(
               children: [
-                const Text('Автор проекта:'),
-                const SizedBox(height: 4),
-                Text(
-                  'Софеин Павел Геннадьевич',
-                  style: body.copyWith(fontWeight: FontWeight.w600),
+                Expanded(
+                  child: Text(
+                    'Техподдержка',
+                    style: theme.textTheme.titleLarge
+                        ?.copyWith(color: scheme.onSurface),
+                  ),
                 ),
-                const SizedBox(height: 12),
-                const Text('Контактная почта:'),
-                const SizedBox(height: 4),
-                Text(
-                  'sfpavelg@gmail.com',
-                  style: body.copyWith(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 12),
-                const Text('Версия проекта:'),
-                const SizedBox(height: 4),
-                Text(
-                  'ver_28_03_2026',
-                  style: body.copyWith(fontWeight: FontWeight.w600),
+                _PopRouteOnce(
+                  navigatorContext: routeContext,
+                  builder: (c, popOnce) =>
+                      NotebookChromeDialogCloseButton(onPressed: popOnce),
                 ),
               ],
             ),
-          ),
-        ),
-        actions: [
-          Material(
-            color: NotebookChromeUi.secondaryButtonBackground(routeContext),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-              side: ChromeOutline.side,
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(8),
-              onTap: () async {
-                await Clipboard.setData(
-                  const ClipboardData(text: supportPayload),
-                );
-                if (!routeContext.mounted) return;
-                ScaffoldMessenger.of(routeContext).showSnackBar(
-                  const SnackBar(
-                    content: Text('Данные техподдержки скопированы'),
-                  ),
-                );
-              },
+            content: DefaultTextStyle(
+              style: body,
               child: SizedBox(
-                width: chrome,
-                height: chrome,
-                child: Icon(
-                  Icons.copy_all,
-                  size: copyIcon,
-                  color:
-                      NotebookChromeUi.secondaryButtonForeground(routeContext),
+                width: 420,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Автор проекта:'),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Софеин Павел Геннадьевич',
+                        style: body.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text('Контактная почта:'),
+                      const SizedBox(height: 4),
+                      Text(
+                        'sfpavelg@gmail.com',
+                        style: body.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Версия приложения: $currentVersion+$currentBuild',
+                        style: body.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 8),
+                      ExpansionTile(
+                        tilePadding: EdgeInsets.zero,
+                        childrenPadding:
+                            const EdgeInsets.only(left: 4, right: 4),
+                        title: const Text('История версий'),
+                        subtitle: Text(
+                          data != null && data.changelog.isNotEmpty
+                              ? 'Нажмите, чтобы посмотреть изменения'
+                              : 'Пока нет записей',
+                        ),
+                        children: [
+                          if (data != null && data.changelog.isNotEmpty)
+                            for (final v in data.changelog)
+                              ExpansionTile(
+                                tilePadding: EdgeInsets.zero,
+                                childrenPadding:
+                                    const EdgeInsets.only(left: 6, bottom: 6),
+                                title: Text(v.fullVersion),
+                                subtitle: Text(v.date),
+                                children: [
+                                  for (final ch in v.changes)
+                                    Padding(
+                                      padding: const EdgeInsets.only(bottom: 4),
+                                      child: Text('• $ch'),
+                                    ),
+                                ],
+                              ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Обновление',
+                        style: body.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 6),
+                      if (hasRemote) ...[
+                        Text(
+                          hasUpdate
+                              ? 'Доступна новая версия: ${remote.versionName}+${remote.versionCode}'
+                              : 'Установлена актуальная версия',
+                        ),
+                        if (remote.changes.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          for (final ch in remote.changes) Text('• $ch'),
+                        ],
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            if (hasUpdate)
+                              OutlinedButton.icon(
+                                onPressed: () => unawaited(
+                                  _openSupportUrl(
+                                    routeContext,
+                                    remote.apkUrl,
+                                    errorMessage:
+                                        'Не удалось открыть ссылку APK',
+                                  ),
+                                ),
+                                icon: const Icon(Icons.system_update_alt),
+                                label: const Text('Скачать обновление'),
+                              ),
+                            OutlinedButton.icon(
+                              onPressed: () => unawaited(
+                                _openSupportUrl(
+                                  routeContext,
+                                  _releaseFolderUrl,
+                                  errorMessage:
+                                      'Не удалось открыть папку релизов',
+                                ),
+                              ),
+                              icon: const Icon(Icons.folder_open),
+                              label: const Text('Папка релизов'),
+                            ),
+                          ],
+                        ),
+                      ] else ...[
+                        const Text(
+                          'Автопроверка обновлений пока не настроена. '
+                          'Используйте папку релизов.',
+                        ),
+                        if (data?.remoteError != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            data!.remoteError!,
+                            style: body.copyWith(color: Colors.orange.shade700),
+                          ),
+                        ],
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          onPressed: () => unawaited(
+                            _openSupportUrl(
+                              routeContext,
+                              _releaseFolderUrl,
+                              errorMessage: 'Не удалось открыть папку релизов',
+                            ),
+                          ),
+                          icon: const Icon(Icons.folder_open),
+                          label: const Text('Открыть папку релизов'),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+            actions: [
+              Material(
+                color: NotebookChromeUi.secondaryButtonBackground(routeContext),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  side: ChromeOutline.side,
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () async {
+                    await Clipboard.setData(
+                      ClipboardData(text: supportPayload),
+                    );
+                    if (!routeContext.mounted) return;
+                    ScaffoldMessenger.of(routeContext).showSnackBar(
+                      const SnackBar(
+                        content: Text('Данные техподдержки скопированы'),
+                      ),
+                    );
+                  },
+                  child: SizedBox(
+                    width: chrome,
+                    height: chrome,
+                    child: Icon(
+                      Icons.copy_all,
+                      size: copyIcon,
+                      color: NotebookChromeUi.secondaryButtonForeground(
+                          routeContext),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       );
     },
   );

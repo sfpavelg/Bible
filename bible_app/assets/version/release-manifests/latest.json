@@ -1,0 +1,10 @@
+{
+  "version_name": "1.1.0",
+  "version_code": 2,
+  "apk_url": "https://drive.google.com/uc?export=download&id=FILE_ID_APK",
+  "changes": [
+    "Добавлена история версий в разделе Техподдержка.",
+    "Добавлена базовая проверка новой версии через JSON manifest.",
+    "Улучшена логика карточек в разделе План."
+  ]
+}

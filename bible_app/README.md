@@ -2,12 +2,78 @@
  в c:\Project\Bible создан Flutter‑проект Библия.
 
 ## 🚀 Быстрый старт
+
+1.
+```bash
+# Проверь путь:
+cd "c:\Project\Bible\bible_app"
+```
+2. 
+```bash
+# Посмотреть эмуляторы:
+flutter emulators
+```
+3.
+```bash
+# Если нужен эмулятор, запустить:
+flutter emulators --launch Pixel_XL_API_34
+```
+4.
+```bash
+# Проверить подключенные устройства, эмулятор (например:emulator-5554), или телефон:
+flutter devices
+```
+5.
+```bash
+# Сборка и деплой APK:
+# Готовый файл будет здесь: build/app/outputs/flutter-apk/app-release.apk
+flutter build apk --release
+```
+6.
+```bash
+# Запуск приложения на эмулятор:
+flutter run -d emulator-5554
+# Но лучше переустановка:
+flutter install -d emulator-5554
+```
+7.
+```bash
+# Запуск приложения на маленьком телефоне:
+flutter install -d U10HFCPN228AD
+# Запуск приложения на README:
+flutter install -d 2e2c089
+# Запустить во вкладке Chrome:
+flutter run -d chrome
+flutter run -d chrome --web-port 5000
+```
+
+## 📦 Сборка для Windows
+```bash
+flutter build windows --release
+```
+
+## 📦 Пуш на ГитХаб
+```bash
+cd C:\Project\Bible
+git push origin main
+```
+
+
 # Запуск на Android‑эмуляторе
-Посмотреть эмуляторы: `flutter emulators`
-Запустить эмулятор: `flutter emulators --launch Pixel_XL_API_34`
-Проверить, что устройство появилось: `flutter devices`
+Посмотреть эмуляторы: (`flutter emulators`)
+Запустить эмулятор: (`flutter emulators --launch Pixel_XL_API_34`)
+Проверить, что устройство появилось: (`flutter devices`)
 У тебя оно определяется как emulator-5554 (sdk gphone64 x86 64)
-Переместиться в директорию проекта: `cd "c:\Project\Bible\bible_app"`
+Переместиться в директорию проекта: (`cd "c:\Project\Bible\bible_app"`)
+Запуск приложения на эмулятор: (`flutter run -d emulator-5554`)
+
+Запуск приложения на маленьком телефоне:(`flutter install -d U10HFCPN228AD`)
+Запуск приложения на README:(`flutter install -d 2e2c089`)
+
+
+Сборка и деплой APK (`flutter build apk --release`)
+
+
 
 ## 🎯 Быстрый запуск (используйте Makefile)
 
@@ -19,9 +85,13 @@ flutter pub get
 make run          # На эмуляторе
 make run-web      # В браузере
 
-# Или альтернативные команды:
+# Или альтернативные команды: 
 make run-dev      # Режим разработки на эмуляторе
 make run-release  # Режим релиза на эмуляторе
+
+# Запустить во вкладке Chrome:
+flutter run -d chrome
+flutter run -d chrome --web-port 5000
 ```
 
 Запуск приложения на эмулятор: `flutter run -d emulator-5554`
@@ -163,18 +233,52 @@ upload-keystore.jks
 2) Собери релиз
 
 - APK (проще всего для установки вручную): flutter build apk --release Результат: build/app/outputs/flutter-apk/app-release.apk
+`cd "c:\Project\Bible\bible_app"`
+`flutter build apk --release`
 - AAB (если будешь выкладывать в Google Play): flutter build appbundle --release Результат: build/app/outputs/bundle/release/app-release.aab
 3) Установи на телефон
 
 - Самый простой вариант (если устройство подключено по USB): flutter install -d <id> (где <id> смотри в flutter devices )
+`flutter install -d U10HFCPN228AD`
+`flutter install -d 2e2c089`
 - Либо через adb: adb install -r build/app/outputs/flutter-apk/app-release.apk
 
+диагностика устройства
+cd c:\Project\Bible\bible_app
+flutter run -d U10HFCPN228AD -v
 
-
-# iOS
+### iOS
 
 - Для автономной установки на iPhone нужен macOS + Xcode (на Windows собрать iOS нельзя).
 Если скажешь, Android или iOS , и хочешь ли публикацию в магазин или только себе на устройство , я дам точные команды/настройки под твой сценарий (включая подпись релиза под Google Play).
+
+## Обновления APK через Google Drive (manifest)
+
+Папка в проекте для manifest-файлов:
+`assets/version/release-manifests/`
+
+- Текущий файл для загрузки на Drive:  
+  `assets/version/release-manifests/latest.json`
+- Архив по версии (необязательно, но удобно):  
+  `assets/version/release-manifests/<version+build>/latest.json`  
+  пример: `assets/version/release-manifests/1.1.0+2/latest.json`
+
+Порядок релиза:
+1. Обновить версию в `pubspec.yaml` (`x.y.z+build`).
+2. Собрать APK.
+3. Загрузить APK в папку Drive релизов.
+4. Обновить `assets/version/release-manifests/latest.json`:
+   - `version_name`
+   - `version_code`
+   - `apk_url` (прямая ссылка `https://drive.google.com/uc?export=download&id=FILE_ID_APK`)
+   - `changes`
+5. Скопировать `latest.json` в подпапку версии:
+   `assets/version/release-manifests/<version+build>/latest.json`
+6. Загрузить обновлённый `latest.json` в ту же папку Google Drive, где лежит APK.
+
+Для автопроверки в приложении:
+- в `lib/widgets/app_chrome_dialogs.dart` замените `FILE_ID_JSON` в `_releaseManifestUrl`
+  на ID загруженного в Drive файла `latest.json`.
 
 
 # Как найти приложение на телефоне
@@ -311,4 +415,131 @@ upload-keystore.jks
    - d47ebc8 ver01
   # есть два коммита: ver01 и ver02
 
+"flutter upgrade"
 
+коммиты и пуши
+cd C:\Project\Bible
+git status
+
+Только bible_app:
+git add bible_app
+git commit -m "Краткий заголовок на русском или английском" -m "Что изменили и зачем (необязательно второй абзац)."
+
+Весь репозиторий (если правки не только в bible_app):
+git add -A
+git commit -m "Краткий заголовок" -m "Пояснение."
+
+Проверка последнего коммита:
+git log -1 --oneline
+
+`cd C:\Project\Bible`
+`git push origin main`
+
+
+### Сборка для Windows
+
+cd "c:\Project\Bible\bible_app"
+flutter build windows --release
+
+Если сборка у вас на машине сейчас не прошла: нет подходящего Visual Studio (нужен компилятор C++ для Windows‑десктопа Flutter). Ниже — что сделать, чтобы получить .exe.
+
+1. Установить инструменты
+Установите Visual Studio Community (или Build Tools).
+В установщике отметьте рабочую нагрузку «Разработка классических приложений на C++» (Desktop development with C++).
+
+Да. Скачивай официальный установщик отсюда:
+https://visualstudio.microsoft.com/ru/visual-cpp-build-tools/
+Visual Studio Tools for C++
+Что выбрать в установщике (Visual Studio Installer):
+
+Workload: Desktop development with C++
+И проверь, что в правой панели отмечены компоненты:
+
+MSVC v143 - VS 2022 C++ x64/x86 build tools (или v142 для 2019)
+Windows 10 SDK (или Windows 11 SDK)
+C++ CMake tools for Windows
+
+После установки выполни:
+```bash
+flutter doctor -v
+flutter build windows --release
+```
+$env:CMAKE_GENERATOR = "Visual Studio 17 2022"
+flutter clean
+flutter pub get
+flutter build windows --release -v
+
+
+Открой PowerShell от имени администратора и выполни:
+
+winget install --id Microsoft.VisualStudio.2019.BuildTools -e
+Дальше:
+
+Откроется Visual Studio Installer
+Выбери workload Desktop development with C++
+Проверь компоненты:
+MSVC v142
+Windows 10 SDK
+C++ CMake tools for Windows
+Нажми Install
+Потом в обычном PowerShell:
+
+Причина найдена: все команды завершились с Exit Code: 5007.
+
+Это означает, что команды с --passive/--quiet были запущены не в elevated-сессии с самого старта (инсталлер это прямо пишет).
+
+Да, всё верно понял:
+
+Почему ставим 2019: потому что твой текущий Flutter при сборке Windows вызывает CMake с генератором Visual Studio 16 2019.
+Из-за Flutter ли это: да, из-за связки твоей текущей версии Flutter/инструментов проекта.
+Какая версия сейчас: по твоему flutter doctor -v сейчас Flutter 3.35.7 (кастомный канал [user-branch]), и он ожидает именно toolchain уровня VS2019 для этой сборки.
+Поэтому и нужна 19-я Build Tools с C++ компонентами.
+
+Сделай так:
+
+Закрой текущее окно PowerShell.
+Открой PowerShell → Запуск от имени администратора.
+Выполни одной командой:
+& "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe" modify --installPath "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools" --add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.VC.CMake.Project --add Microsoft.VisualStudio.Component.Windows10SDK.19041 --passive --norestart
+Если 19041 не примется, повтори с 18362:
+
+& "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe" modify --installPath "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools" --add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.VC.CMake.Project --add Microsoft.VisualStudio.Component.Windows10SDK.18362 --passive --norestart
+Потом проверка:
+
+flutter doctor -v
+Если блок Visual Studio станет зеленым без X, сразу запускай сборку.
+
+
+cd C:\Project\Bible\bible_app
+flutter clean
+Remove-Item -Recurse -Force .\build\windows\x64 -ErrorAction SilentlyContinue
+flutter pub get
+flutter build windows --release -v
+Проверка, что пакет нашелся через winget:
+
+winget search Microsoft.VisualStudio.2019.BuildTools
+
+
+Если хочешь, после установки скидывай новый flutter doctor -v — проверю, всё ли закрыто.
+В составе должны быть MSVC, Windows SDK, CMake (обычно ставятся вместе с этой нагрузкой).
+Проверка:
+
+cd c:\Project\Bible\bible_app
+убедиться, что проблемс Visual Studio нет
+flutter doctor -v
+В блоке Windows должно быть без критичных ошибок про Visual Studio.
+
+2. Собрать exe
+cd c:\Project\Bible\bible_app
+подтянуть зависимости проекта
+flutter pub get
+собрать Windows release
+flutter build windows --release
+3. Где лежит программа
+Обычно так:
+
+c:\Project\Bible\bible_app\build\windows\x64\runner\Release\
+
+Там будет bible_app.exe (имя из pubspec.yaml) и рядом DLL и папки данных — для запуска на другом ПК копируйте всю папку Release, а не один только .exe.
+
+Кратко: поставьте Visual Studio с C++ для десктопа, затем flutter build windows --release — готовый запуск — содержимое build\windows\x64\runner\Release\.
