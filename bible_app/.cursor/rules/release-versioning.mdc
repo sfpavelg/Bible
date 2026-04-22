@@ -14,9 +14,11 @@ When user asks to create a commit:
 - Always update release manifest JSON:
   - `assets/version/release-manifests/latest.json`
   - `assets/version/release-manifests/<version+build>/latest.json` (copy for archive)
+- **Стабильные ссылки на Drive:** при обновлении manifest **сразу копируйте `apk_url`** из предыдущего релиза (последняя архивная папка `release-manifests/<предыдущая>/latest.json` или прежний корневой `latest.json`), если там уже не плейсхолдер. При замене файла на диске **ID не меняется** — новый релиз не должен возвращать `FILE_ID_APK` в репозитории, если APK по-прежнему тот же URL. Плейсхолдер допустим только до первого реального ID.
+- **Стиль описаний:** в `changes` (manifest и `changelog.json`) пишите **развёрнутым литературным русским**, так чтобы было ясно, **что тестировать** (экраны, кнопки, сетевые случаи). Краткие сухие тезисы избегать.
 - Keep `version_code` in `assets/version/changelog.json` equal to `build` from `pubspec.yaml`.
 - Keep `version_code` in release manifest JSON equal to `build` from `pubspec.yaml`.
-- Include concise "why" release notes (1-5 bullets).
+- Include concise "why" release notes in `CHANGELOG.md` (можно на русском, с намёком на проверку), 1–6 пунктов.
 - Never modify old version entries except typo fixes.
 
 If user explicitly says "commit without release bump", follow user instruction.

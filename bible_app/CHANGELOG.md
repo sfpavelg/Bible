@@ -4,8 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## 1.1.1+3 - 2026-04-23
 
-- Support: manual "Проверить обновление" only (no check on open); friendlier network errors; UTF-8 manifest decoding.
-- Support: show remote release notes and "Скачать обновление" only when a newer build is available; removed the Drive folder shortcut.
+- Техподдержка: проверка обновлений только по кнопке; manifest в UTF-8; при сбоях сети — понятные сообщения (имеет смысл проверить офлайн и при медленном соединении).
+- Техподдержка: текст релиза и кнопка скачивания APK показываются лишь если на сервере новее текущей сборки; убран переход в папку релизов на Google Drive (проверить сценарий «уже актуально» и «есть обновление»).
 
 ## 1.1.0+2 - 2026-04-22
 
