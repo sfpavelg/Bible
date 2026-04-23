@@ -368,6 +368,11 @@ Future<void> _openApkDownloadUrl(
         canPop: false,
         child: AlertDialog(
           backgroundColor: scheme.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          clipBehavior: Clip.antiAlias,
+          contentPadding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
           content: Text(
             'Работает менеджер установки операционной системы, следуйте командам.',
             textAlign: TextAlign.center,

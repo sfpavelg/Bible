@@ -1223,7 +1223,7 @@ class _BibleScreenState extends State<BibleScreen> {
         return SizedBox.expand(
           child: SafeArea(
             child: Padding(
-              padding: EdgeInsets.fromLTRB(8, topReserved, 8, bottomReserved),
+              padding: EdgeInsets.fromLTRB(0, topReserved, 0, bottomReserved),
               child: Align(
                 alignment: Alignment.topRight,
                 child: Material(
@@ -1233,34 +1233,31 @@ class _BibleScreenState extends State<BibleScreen> {
                     side: ChromeOutline.side,
                   ),
                   clipBehavior: Clip.antiAlias,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 760),
-                    child: _BibleSearchDialog(
-                      appProvider: appProvider,
-                      initialQuery: _searchDraft,
-                      initialResults: _searchResultRows
-                          .map((e) => Map<String, dynamic>.from(e))
-                          .toList(),
-                      initialVz: _searchIncludeVz,
-                      initialNz: _searchIncludeNz,
-                      initialWholeWords: _searchWholeWords,
-                      history: history,
-                      historyKey: _kBibleSearchHistoryKey,
-                      onClosing: (q, results, vz, nz, wholeWords) {
-                        _searchDraft = q;
-                        _searchResultRows = results;
-                        _searchIncludeVz = vz;
-                        _searchIncludeNz = nz;
-                        _searchWholeWords = wholeWords;
-                      },
-                      onPickResult: (book, chapter, verse) async {
-                        Navigator.pop(dialogContext);
-                        await appProvider.changeBookAndChapter(book, chapter);
-                        if (!mounted) return;
-                        _highlightVerseTemporarily(verse);
-                        unawaited(_scrollToVerse(verse));
-                      },
-                    ),
+                  child: _BibleSearchDialog(
+                    appProvider: appProvider,
+                    initialQuery: _searchDraft,
+                    initialResults: _searchResultRows
+                        .map((e) => Map<String, dynamic>.from(e))
+                        .toList(),
+                    initialVz: _searchIncludeVz,
+                    initialNz: _searchIncludeNz,
+                    initialWholeWords: _searchWholeWords,
+                    history: history,
+                    historyKey: _kBibleSearchHistoryKey,
+                    onClosing: (q, results, vz, nz, wholeWords) {
+                      _searchDraft = q;
+                      _searchResultRows = results;
+                      _searchIncludeVz = vz;
+                      _searchIncludeNz = nz;
+                      _searchWholeWords = wholeWords;
+                    },
+                    onPickResult: (book, chapter, verse) async {
+                      Navigator.pop(dialogContext);
+                      await appProvider.changeBookAndChapter(book, chapter);
+                      if (!mounted) return;
+                      _highlightVerseTemporarily(verse);
+                      unawaited(_scrollToVerse(verse));
+                    },
                   ),
                 ),
               ),
@@ -1978,7 +1975,7 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
         widget.appProvider,
         (r['text'] as String?) ?? '',
       );
-      parts.add('**$book $ch:$v** "$text"');
+      parts.add('($book $ch:$v)\n"$text"');
     }
     if (parts.isEmpty) return;
     await _replaceClipboardText(parts.join('\n'));
@@ -2178,28 +2175,39 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                 children: [
                   Row(
                     children: [
-                      TextButton.icon(
-                        onPressed: _runSearch,
-                        style: TextButton.styleFrom(
-                          backgroundColor: padBg,
-                          foregroundColor: fg,
-                          minimumSize: Size(0, chrome),
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 12 * scale,
-                            vertical: 4,
-                          ),
-                          shape: rowShape,
-                        ),
-                        icon: Icon(
-                          Icons.search,
-                          size: (chrome * 0.45).clamp(16.0, 24.0),
-                        ),
-                        label: Text(
-                          'Найти',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: chromeLabel * textScale,
-                            color: fg,
+                      Material(
+                        color: padBg,
+                        shape: rowShape,
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          onTap: _runSearch,
+                          customBorder: rowShape,
+                          child: SizedBox(
+                            height: chrome,
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 12 * scale,
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.search,
+                                    color: fg,
+                                    size: (chrome * 0.45).clamp(16.0, 24.0),
+                                  ),
+                                  SizedBox(width: (chrome * 0.16).clamp(4.0, 8.0)),
+                                  Text(
+                                    'Найти',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: chromeLabel * textScale,
+                                      color: fg,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -2448,15 +2456,18 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                             child: Row(
                               children: [
                                 Expanded(
-                                  child: ListView.separated(
-                                    controller: _resultsScrollController,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 2,
-                                    ),
-                                    itemCount: _results.length,
-                                    separatorBuilder: (_, __) =>
-                                        Divider(height: 1, color: divColor),
-                                    itemBuilder: (context, i) {
+                                  child: ScrollConfiguration(
+                                    behavior: ScrollConfiguration.of(context)
+                                        .copyWith(scrollbars: false),
+                                    child: ListView.separated(
+                                      controller: _resultsScrollController,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 2,
+                                      ),
+                                      itemCount: _results.length,
+                                      separatorBuilder: (_, __) =>
+                                          Divider(height: 1, color: divColor),
+                                      itemBuilder: (context, i) {
                                       final r = _results[i];
                                       final book = r['book'] as String;
                                       final ch = r['chapter'] as int;
@@ -2540,7 +2551,8 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                                           ),
                                         ),
                                       );
-                                    },
+                                      },
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(width: 4),
