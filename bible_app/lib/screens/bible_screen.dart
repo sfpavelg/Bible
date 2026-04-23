@@ -69,6 +69,9 @@ void _showTransientOverlayMessage(
 bool _bibleScreenIsDark(BuildContext context) =>
     Theme.of(context).brightness == Brightness.dark;
 
+bool _scrollPositionHasMetrics(ScrollController c) =>
+    c.hasClients && c.position.hasContentDimensions;
+
 Color _bibleScreenAppBarBg(BuildContext context) => _bibleScreenIsDark(context)
     ? const Color(0xFF37474F)
     : const Color(0xFFB3E5FC);
@@ -106,7 +109,7 @@ TextStyle _favoritesPanelTextStyle(
   return TextStyle(
     fontFamily: app.verseFontFamily,
     fontFamilyFallback: app.verseFontFallback,
-    fontSize: fontSize ?? app.fontSize,
+    fontSize: (fontSize ?? app.fontSize) * app.verseFontSizeScale,
     height: app.lineHeight,
     color: color,
     fontWeight: fontWeight,
@@ -163,7 +166,6 @@ _BibleVerseDisplayPayload _bibleVerseDisplayPayloadFromRaw(
 }
 
 Future<void> _replaceClipboardText(String text) async {
-  await Clipboard.setData(const ClipboardData(text: ''));
   await Clipboard.setData(ClipboardData(text: text));
 }
 
@@ -1215,35 +1217,52 @@ class _BibleScreenState extends State<BibleScreen> {
       barrierColor: Colors.black38,
       transitionDuration: const Duration(milliseconds: 180),
       pageBuilder: (dialogContext, _, __) {
+        final chrome = appProvider.chromeButtonSize;
+        final topReserved = AppProvider.toolbarHeightForChrome(chrome) + 8;
+        final bottomReserved = mainChromeTabBarTotalHeight(dialogContext) + 8;
         return SizedBox.expand(
-          child: Material(
-            color: _bibleScreenAppBarBg(dialogContext),
-            child: SafeArea(
-              child: _BibleSearchDialog(
-                appProvider: appProvider,
-                initialQuery: _searchDraft,
-                initialResults: _searchResultRows
-                    .map((e) => Map<String, dynamic>.from(e))
-                    .toList(),
-                initialVz: _searchIncludeVz,
-                initialNz: _searchIncludeNz,
-                initialWholeWords: _searchWholeWords,
-                history: history,
-                historyKey: _kBibleSearchHistoryKey,
-                onClosing: (q, results, vz, nz, wholeWords) {
-                  _searchDraft = q;
-                  _searchResultRows = results;
-                  _searchIncludeVz = vz;
-                  _searchIncludeNz = nz;
-                  _searchWholeWords = wholeWords;
-                },
-                onPickResult: (book, chapter, verse) async {
-                  Navigator.pop(dialogContext);
-                  await appProvider.changeBookAndChapter(book, chapter);
-                  if (!mounted) return;
-                  _highlightVerseTemporarily(verse);
-                  unawaited(_scrollToVerse(verse));
-                },
+          child: SafeArea(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(8, topReserved, 8, bottomReserved),
+              child: Align(
+                alignment: Alignment.topRight,
+                child: Material(
+                  color: _bibleScreenAppBarBg(dialogContext),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: ChromeOutline.side,
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 760),
+                    child: _BibleSearchDialog(
+                      appProvider: appProvider,
+                      initialQuery: _searchDraft,
+                      initialResults: _searchResultRows
+                          .map((e) => Map<String, dynamic>.from(e))
+                          .toList(),
+                      initialVz: _searchIncludeVz,
+                      initialNz: _searchIncludeNz,
+                      initialWholeWords: _searchWholeWords,
+                      history: history,
+                      historyKey: _kBibleSearchHistoryKey,
+                      onClosing: (q, results, vz, nz, wholeWords) {
+                        _searchDraft = q;
+                        _searchResultRows = results;
+                        _searchIncludeVz = vz;
+                        _searchIncludeNz = nz;
+                        _searchWholeWords = wholeWords;
+                      },
+                      onPickResult: (book, chapter, verse) async {
+                        Navigator.pop(dialogContext);
+                        await appProvider.changeBookAndChapter(book, chapter);
+                        if (!mounted) return;
+                        _highlightVerseTemporarily(verse);
+                        unawaited(_scrollToVerse(verse));
+                      },
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -1632,6 +1651,150 @@ class _BibleDialogCloseButton extends StatelessWidget {
   }
 }
 
+class _BibleRailScrollHandle extends StatefulWidget {
+  const _BibleRailScrollHandle({
+    required this.controller,
+    required this.thumbColor,
+    required this.trackHintColor,
+    required this.thumbSize,
+    this.onScrollAdjusted,
+  });
+
+  final ScrollController controller;
+  final Color thumbColor;
+  final Color trackHintColor;
+  final double thumbSize;
+  final VoidCallback? onScrollAdjusted;
+
+  @override
+  State<_BibleRailScrollHandle> createState() => _BibleRailScrollHandleState();
+}
+
+class _BibleRailScrollHandleState extends State<_BibleRailScrollHandle> {
+  Widget _scrollGripLine(double width) {
+    return Container(
+      width: width,
+      height: 2.5,
+      decoration: BoxDecoration(
+        color: Colors.black,
+        borderRadius: BorderRadius.circular(1.25),
+      ),
+    );
+  }
+
+  Widget _scrollGripLines(double ts) {
+    final gap = (ts * 0.11).clamp(3.0, 6.0);
+    final lineW = (ts * 0.55).clamp(14.0, 28.0);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _scrollGripLine(lineW),
+        SizedBox(height: gap),
+        _scrollGripLine(lineW),
+        SizedBox(height: gap),
+        _scrollGripLine(lineW),
+      ],
+    );
+  }
+
+  void _jumpToLocalY(double localY, double trackH, double ts, double travel) {
+    final c = widget.controller;
+    if (!_scrollPositionHasMetrics(c) || travel <= 0) return;
+    final maxExt = c.position.maxScrollExtent;
+    if (maxExt <= 0) {
+      c.jumpTo(0);
+      return;
+    }
+    final targetTop = (localY - ts / 2).clamp(0.0, travel);
+    final pixels = (targetTop / travel) * maxExt;
+    c.jumpTo(pixels.clamp(0.0, maxExt));
+    widget.onScrollAdjusted?.call();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ts = widget.thumbSize;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final h = constraints.maxHeight;
+        final travel = (h - ts).clamp(0.0, double.infinity);
+        final c = widget.controller;
+        double thumbTop = 0;
+        if (_scrollPositionHasMetrics(c) && travel > 0) {
+          final pos = c.position;
+          final maxExt = pos.maxScrollExtent;
+          if (maxExt > 0) {
+            thumbTop = (pos.pixels / maxExt) * travel;
+            thumbTop = thumbTop.clamp(0.0, travel);
+          }
+        }
+        return SizedBox(
+          width: ts,
+          height: h,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTapDown: (d) =>
+                      _jumpToLocalY(d.localPosition.dy, h, ts, travel),
+                ),
+              ),
+              Center(
+                child: IgnorePointer(
+                  child: Container(
+                    width: 4,
+                    height: (h - 8).clamp(0.0, double.infinity),
+                    margin: const EdgeInsets.symmetric(vertical: 4),
+                    decoration: BoxDecoration(
+                      color: widget.trackHintColor,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 0,
+                top: thumbTop,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onVerticalDragUpdate: (details) {
+                    if (!_scrollPositionHasMetrics(c) || travel <= 0) return;
+                    final pos = c.position;
+                    final maxExt = pos.maxScrollExtent;
+                    if (maxExt <= 0) return;
+                    final delta = details.delta.dy;
+                    final next = pos.pixels + delta * maxExt / travel;
+                    c.jumpTo(next.clamp(0.0, maxExt));
+                    widget.onScrollAdjusted?.call();
+                  },
+                  onVerticalDragEnd: (_) => widget.onScrollAdjusted?.call(),
+                  child: Material(
+                    color: widget.thumbColor,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: ChromeOutline.side,
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: SizedBox(
+                      width: ts,
+                      height: ts,
+                      child: Center(child: _scrollGripLines(ts)),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _BibleSearchDialog extends StatefulWidget {
   const _BibleSearchDialog({
     required this.appProvider,
@@ -1677,6 +1840,7 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
   late List<String> _history;
   bool _hasRunSearch = false;
   final LinkedHashSet<int> _selectedResultIndices = LinkedHashSet<int>();
+  final ScrollController _resultsScrollController = ScrollController();
 
   @override
   void initState() {
@@ -1691,6 +1855,7 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
     _history = List<String>.from(widget.history);
     _hasRunSearch = widget.initialQuery.trim().isNotEmpty ||
         widget.initialResults.isNotEmpty;
+    _resultsScrollController.addListener(_onResultsScroll);
   }
 
   @override
@@ -1704,7 +1869,44 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
     );
     _queryCtrl.dispose();
     _focusNode.dispose();
+    _resultsScrollController
+      ..removeListener(_onResultsScroll)
+      ..dispose();
     super.dispose();
+  }
+
+  void _onResultsScroll() {
+    if (mounted) setState(() {});
+  }
+
+  void _jumpResultsToStart() {
+    HapticFeedback.lightImpact();
+    final c = _resultsScrollController;
+    if (!c.hasClients) return;
+    const target = 0.0;
+    final dist = (c.offset - target).abs();
+    if (dist < 1) return;
+    final ms = (200 + dist * 0.22).clamp(200.0, 1100.0).round();
+    c.animateTo(
+      target,
+      duration: Duration(milliseconds: ms),
+      curve: Curves.easeInOutCubic,
+    );
+  }
+
+  void _jumpResultsToEnd() {
+    HapticFeedback.lightImpact();
+    final c = _resultsScrollController;
+    if (!_scrollPositionHasMetrics(c)) return;
+    final m = c.position.maxScrollExtent;
+    final dist = (m - c.offset).abs();
+    if (dist < 1) return;
+    final ms = (200 + dist * 0.22).clamp(200.0, 1100.0).round();
+    c.animateTo(
+      m,
+      duration: Duration(milliseconds: ms),
+      curve: Curves.easeInOutCubic,
+    );
   }
 
   void _setVz(bool? v) {
@@ -1964,6 +2166,9 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
               final chrome = widget.appProvider.chromeButtonSize;
               final closeIc = (chrome * 0.5).clamp(18.0, 30.0);
               final chromeLabel = (chrome * 0.36).clamp(12.0, 22.0);
+              final railBtnWFirst = chrome.clamp(32.0, 44.0);
+              final railBtnWSecond = chrome.clamp(32.0, 42.0);
+              final railBtnGap = (chrome * 0.07).clamp(2.0, 5.0);
               final rowShape = RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
                 side: ChromeOutline.side,
@@ -1997,6 +2202,25 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                             color: fg,
                           ),
                         ),
+                      ),
+                      SizedBox(width: railBtnGap),
+                      ChromeIconButton(
+                        icon: Icons.vertical_align_top,
+                        tooltip: 'В начало списка',
+                        foregroundColor: fg,
+                        backgroundColor: padBg,
+                        width: railBtnWFirst,
+                        onPressed:
+                            _results.isEmpty ? null : _jumpResultsToStart,
+                      ),
+                      SizedBox(width: railBtnGap),
+                      ChromeIconButton(
+                        icon: Icons.vertical_align_bottom,
+                        tooltip: 'В конец списка',
+                        foregroundColor: fg,
+                        backgroundColor: padBg,
+                        width: railBtnWSecond,
+                        onPressed: _results.isEmpty ? null : _jumpResultsToEnd,
                       ),
                       const Spacer(),
                       Transform.scale(
@@ -2221,96 +2445,122 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                                 width: ChromeOutline.width,
                               ),
                             ),
-                            child: Scrollbar(
-                              child: ListView.separated(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 2),
-                                itemCount: _results.length,
-                                separatorBuilder: (_, __) =>
-                                    Divider(height: 1, color: divColor),
-                                itemBuilder: (context, i) {
-                                  final r = _results[i];
-                                  final book = r['book'] as String;
-                                  final ch = r['chapter'] as int;
-                                  final v = r['verse'] as int;
-                                  final text = _bibleVisibleText(
-                                    widget.appProvider,
-                                    (r['text'] as String?) ?? '',
-                                  );
-                                  final multi =
-                                      _selectedResultIndices.isNotEmpty;
-                                  final picked =
-                                      _selectedResultIndices.contains(i);
-                                  final previewBase =
-                                      widget.appProvider.bibleVerseTextStyle(
-                                    color: verseMuted,
-                                    fontWeight: FontWeight.normal,
-                                  );
-                                  return Material(
-                                    color: picked ? rowHi : Colors.transparent,
-                                    child: InkWell(
-                                      onTap: multi
-                                          ? () {
-                                              setState(() {
-                                                if (_selectedResultIndices
-                                                    .contains(i)) {
-                                                  _selectedResultIndices
-                                                      .remove(i);
-                                                } else {
-                                                  _selectedResultIndices.add(i);
-                                                }
-                                              });
-                                            }
-                                          : () => widget.onPickResult(
-                                                book,
-                                                ch,
-                                                v,
-                                              ),
-                                      onLongPress: () {
-                                        setState(() {
-                                          if (_selectedResultIndices
-                                              .contains(i)) {
-                                            _selectedResultIndices.remove(i);
-                                          } else {
-                                            _selectedResultIndices.add(i);
-                                          }
-                                        });
-                                      },
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 10,
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              '$book $ch:$v',
-                                              style: widget.appProvider
-                                                  .bibleVerseTextStyle(
-                                                color: fg,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Text.rich(
-                                              TextSpan(
-                                                children:
-                                                    _buildSearchPreviewSpans(
-                                                  context,
-                                                  text,
-                                                  previewBase,
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: ListView.separated(
+                                    controller: _resultsScrollController,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 2,
                                     ),
-                                  );
-                                },
-                              ),
+                                    itemCount: _results.length,
+                                    separatorBuilder: (_, __) =>
+                                        Divider(height: 1, color: divColor),
+                                    itemBuilder: (context, i) {
+                                      final r = _results[i];
+                                      final book = r['book'] as String;
+                                      final ch = r['chapter'] as int;
+                                      final v = r['verse'] as int;
+                                      final text = _bibleVisibleText(
+                                        widget.appProvider,
+                                        (r['text'] as String?) ?? '',
+                                      );
+                                      final multi =
+                                          _selectedResultIndices.isNotEmpty;
+                                      final picked =
+                                          _selectedResultIndices.contains(i);
+                                      final previewBase = widget.appProvider
+                                          .bibleVerseTextStyle(
+                                        color: verseMuted,
+                                        fontWeight: FontWeight.normal,
+                                      );
+                                      return Material(
+                                        color: picked
+                                            ? rowHi
+                                            : Colors.transparent,
+                                        child: InkWell(
+                                          onTap: multi
+                                              ? () {
+                                                  setState(() {
+                                                    if (_selectedResultIndices
+                                                        .contains(i)) {
+                                                      _selectedResultIndices
+                                                          .remove(i);
+                                                    } else {
+                                                      _selectedResultIndices
+                                                          .add(i);
+                                                    }
+                                                  });
+                                                }
+                                              : () => widget.onPickResult(
+                                                    book,
+                                                    ch,
+                                                    v,
+                                                  ),
+                                          onLongPress: () {
+                                            setState(() {
+                                              if (_selectedResultIndices
+                                                  .contains(i)) {
+                                                _selectedResultIndices.remove(i);
+                                              } else {
+                                                _selectedResultIndices.add(i);
+                                              }
+                                            });
+                                          },
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 10,
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  '$book $ch:$v',
+                                                  style: widget.appProvider
+                                                      .bibleVerseTextStyle(
+                                                    color: fg,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Text.rich(
+                                                  TextSpan(
+                                                    children:
+                                                        _buildSearchPreviewSpans(
+                                                      context,
+                                                      text,
+                                                      previewBase,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                _BibleRailScrollHandle(
+                                  controller: _resultsScrollController,
+                                  thumbColor: padBg,
+                                  trackHintColor: _bibleScreenIsDark(context)
+                                      ? Colors.blueGrey.shade700
+                                          .withValues(alpha: 0.9)
+                                      : Colors.blue.shade100
+                                          .withValues(alpha: 0.65),
+                                  thumbSize: (widget.appProvider.chromeButtonSize *
+                                          0.68)
+                                      .clamp(26.0, 36.0),
+                                  onScrollAdjusted: () {
+                                    if (mounted) setState(() {});
+                                  },
+                                ),
+                                const SizedBox(width: 4),
+                              ],
                             ),
                           ),
                           if (_selectedResultIndices.isNotEmpty)

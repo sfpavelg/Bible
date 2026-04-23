@@ -269,6 +269,14 @@ class AppProvider with ChangeNotifier {
     return const [];
   }
 
+  /// Серия гарнитур имеет разные метрики (x-height/ширина), поэтому на Windows
+  /// одинаковый кегль может выглядеть "меньше" после переключения на засечки.
+  /// Небольшая компенсация выравнивает визуальный размер между пресетами.
+  double get verseFontSizeScale {
+    if (_verseFontPreset == 'serif') return 1.06;
+    return 1.0;
+  }
+
   TextStyle bibleVerseTextStyle({
     required Color color,
     required FontWeight fontWeight,
@@ -277,7 +285,7 @@ class AppProvider with ChangeNotifier {
       inherit: false,
       fontFamily: verseFontFamily,
       fontFamilyFallback: verseFontFallback,
-      fontSize: _fontSize,
+      fontSize: _fontSize * verseFontSizeScale,
       height: _lineHeight,
       color: color,
       fontWeight: fontWeight,

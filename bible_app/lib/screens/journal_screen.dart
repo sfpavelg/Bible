@@ -1448,7 +1448,10 @@ class _JournalScreenState extends State<JournalScreen>
                                 color: titleColor,
                                 fontWeight: FontWeight.w800,
                               )
-                              .copyWith(fontSize: app.fontSize * 1.12),
+                              .copyWith(
+                                fontSize:
+                                    app.fontSize * app.verseFontSizeScale * 1.12,
+                              ),
                         ),
                         const SizedBox(height: 6),
                         Text(
@@ -1457,7 +1460,10 @@ class _JournalScreenState extends State<JournalScreen>
                           style: app.bibleVerseTextStyle(
                             color: cardMutedFg,
                             fontWeight: FontWeight.w600,
-                          ).copyWith(fontSize: app.fontSize * 0.88),
+                          ).copyWith(
+                            fontSize:
+                                app.fontSize * app.verseFontSizeScale * 0.88,
+                          ),
                         ),
                       ],
                     ),
@@ -1529,7 +1535,8 @@ class _JournalScreenState extends State<JournalScreen>
                   color: titleColor,
                   fontWeight: FontWeight.w700,
                 ).copyWith(
-                  fontSize: (app.fontSize * 0.78).clamp(10.0, 20.0),
+                  fontSize: (app.fontSize * app.verseFontSizeScale * 0.78)
+                      .clamp(10.0, 20.0),
                   height: 1.0,
                 );
                 Widget doneBadge() => Container(
@@ -1582,7 +1589,9 @@ class _JournalScreenState extends State<JournalScreen>
                                                   fontWeight: FontWeight.w800,
                                                 )
                                                 .copyWith(
-                                                  fontSize: app.fontSize * 1.06,
+                                                  fontSize: app.fontSize *
+                                                      app.verseFontSizeScale *
+                                                      1.06,
                                                 ),
                                           ),
                                         ),
@@ -1595,10 +1604,10 @@ class _JournalScreenState extends State<JournalScreen>
                                           color: bodyColor,
                                           fontWeight: FontWeight.w600,
                                         ).copyWith(
-                                          fontSize: (app.fontSize * 0.92).clamp(
-                                            11.0,
-                                            26.0,
-                                          ),
+                                          fontSize: (app.fontSize *
+                                                  app.verseFontSizeScale *
+                                                  0.92)
+                                              .clamp(11.0, 26.0),
                                         ),
                                       ),
                                       ],
@@ -1619,14 +1628,9 @@ class _JournalScreenState extends State<JournalScreen>
                                             final dir = Directionality.of(ctx);
                                             const minInterItemGap = 10.0;
                                             const badgeGap = 8.0;
-                                            final displayBlocks = <String>[
-                                              for (var i = 0;
-                                                  i < readingBlocks.length;
-                                                  i++)
-                                                i < readingBlocks.length - 1
-                                                    ? '${readingBlocks[i]}.'
-                                                    : readingBlocks[i],
-                                            ];
+                                            final displayBlocks = List<String>.from(
+                                              readingBlocks,
+                                            );
                                             var totalWidth = 0.0;
                                             for (final block in displayBlocks) {
                                               final tp = TextPainter(
@@ -1901,7 +1905,9 @@ class _JournalScreenState extends State<JournalScreen>
           textAlign: TextAlign.center,
           style: app
               .bibleVerseTextStyle(color: fg, fontWeight: FontWeight.w700)
-              .copyWith(fontSize: app.fontSize * 0.9),
+              .copyWith(
+                fontSize: app.fontSize * app.verseFontSizeScale * 0.9,
+              ),
         ),
       ),
     );
