@@ -372,9 +372,8 @@ class _NotebookScreenState extends State<NotebookScreen> {
       return;
     }
     editor.insertTextAtCursor(text);
-    await Clipboard.setData(const ClipboardData(text: ''));
     if (!mounted) return;
-    setState(() => _editorClipboardHasText = false);
+    setState(() => _editorClipboardHasText = true);
   }
 
   Future<void> _openRepo() async {

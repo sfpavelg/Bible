@@ -931,11 +931,15 @@ void showAppSupportDialog(BuildContext context) {
                             visualDensity: VisualDensity.compact,
                             childrenPadding:
                                 const EdgeInsets.only(left: 4, right: 4),
-                            title: const Text('История версий'),
+                            title: Text(
+                              'История версий',
+                              style: body,
+                            ),
                             subtitle: Text(
                               data != null && data.changelog.isNotEmpty
                                   ? 'Нажмите, чтобы посмотреть изменения'
                                   : 'Пока нет записей',
+                              style: body,
                             ),
                             children: [
                               if (data != null && data.changelog.isNotEmpty)
@@ -946,14 +950,23 @@ void showAppSupportDialog(BuildContext context) {
                                     visualDensity: VisualDensity.compact,
                                     childrenPadding: const EdgeInsets.only(
                                         left: 6, bottom: 2),
-                                    title: Text(v.fullVersion),
-                                    subtitle: Text(v.date),
+                                    title: Text(
+                                      v.fullVersion,
+                                      style: body,
+                                    ),
+                                    subtitle: Text(
+                                      v.date,
+                                      style: body,
+                                    ),
                                     children: [
                                       for (final ch in v.changes)
                                         Padding(
                                           padding:
                                               const EdgeInsets.only(bottom: 4),
-                                          child: Text('• $ch'),
+                                          child: Text(
+                                            '• $ch',
+                                            style: body,
+                                          ),
                                         ),
                                     ],
                                   ),
@@ -1001,8 +1014,10 @@ void showAppSupportDialog(BuildContext context) {
                           ),
                           const SizedBox(height: 8),
                           if (!hasChecked)
-                            const Text(
-                                'Нажмите кнопку для проверки обновления.')
+                            Text(
+                              'Нажмите кнопку для проверки обновления.',
+                              style: body,
+                            )
                           else if (remoteError != null)
                             Text(
                               remoteError!,
@@ -1056,14 +1071,16 @@ void showAppSupportDialog(BuildContext context) {
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      const Text('Описание обновления'),
+                                      Text(
+                                        'Описание обновления',
+                                        style: body,
+                                      ),
                                       const SizedBox(height: 2),
                                       Text(
                                         'Нажмите, чтобы посмотреть список изменений',
                                         style: body.copyWith(
                                           color: scheme.onSurface
                                               .withValues(alpha: 0.72),
-                                          fontSize: app.fontSize * 0.92,
                                         ),
                                       ),
                                     ],
@@ -1073,7 +1090,10 @@ void showAppSupportDialog(BuildContext context) {
                                       Padding(
                                         padding:
                                             const EdgeInsets.only(bottom: 3),
-                                        child: Text('• $ch'),
+                                        child: Text(
+                                          '• $ch',
+                                          style: body,
+                                        ),
                                       ),
                                   ],
                                 ),
@@ -1296,8 +1316,8 @@ void showAppHelpDialog(BuildContext context) {
                       'скопировать и вставить сюда.',
                     ),
                     Text(
-                      '• После копирования и вставки буфер очищается автоматически — это защищает '
-                      'от случайного повторного нажатия кнопки «Вставить».',
+                      '• После копирования и вставки текст в буфере сохраняется, '
+                      'поэтому его можно вставлять повторно при необходимости.',
                     ),
                     const SizedBox(height: 12),
                     Text(
