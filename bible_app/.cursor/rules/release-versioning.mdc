@@ -22,3 +22,5 @@ When user asks to create a commit:
 - Never modify old version entries except typo fixes.
 
 If user explicitly says "commit without release bump", follow user instruction.
+
+When creating commits, include `README.md` whenever it has relevant changes.

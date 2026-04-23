@@ -49,6 +49,7 @@ flutter run -d chrome --web-port 5000
 
 ## 📦 Сборка для Windows
 ```bash
+# build\windows\x64\runner\Release\bible_app.exe
 flutter build windows --release
 ```
 
