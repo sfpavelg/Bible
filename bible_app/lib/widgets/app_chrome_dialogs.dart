@@ -269,6 +269,57 @@ String _friendlySupportUpdateError(Object e) {
   return 'Не удалось проверить обновление.';
 }
 
+Widget _supportChromeActionButton({
+  required BuildContext context,
+  required String label,
+  required IconData icon,
+  required VoidCallback? onTap,
+}) {
+  final chrome = context.watch<AppProvider>().chromeButtonSize;
+  final fg = NotebookChromeUi.secondaryButtonForeground(context);
+  final iconSize = (chrome * 0.48).clamp(18.0, 30.0);
+  final fontSize = (chrome * 0.32).clamp(12.0, 17.0);
+  return Material(
+    color: NotebookChromeUi.secondaryButtonBackground(context),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(8),
+      side: ChromeOutline.side,
+    ),
+    clipBehavior: Clip.antiAlias,
+    child: InkWell(
+      onTap: onTap,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: chrome),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: (chrome * 0.38).clamp(10.0, 18.0),
+            vertical: (chrome * 0.12).clamp(4.0, 8.0),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: fg, size: iconSize),
+              SizedBox(width: (chrome * 0.2).clamp(6.0, 12.0)),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: fg,
+                    fontWeight: FontWeight.w600,
+                    fontSize: fontSize,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 /// Предупреждение перед установщиком ОС: сначала показываем окно и держим его
 /// на экране ~1.5 с, затем [launchUrl]; иначе в том же кадре открывается менеджер
 /// и диалог не успевает отрисоваться.
@@ -760,19 +811,24 @@ void showAppSupportDialog(BuildContext context) {
       final theme = Theme.of(routeContext);
       final scheme = theme.colorScheme;
       final app = routeContext.watch<AppProvider>();
+      final isDark = theme.brightness == Brightness.dark;
+      final settingsBg =
+          isDark ? const Color(0xFF37474F) : const Color(0xFFE1F5FE);
       final body = theme.textTheme.bodyMedium!.copyWith(
         color: scheme.onSurface,
         fontSize: app.fontSize,
         height: app.lineHeight,
       );
-      final chrome = app.chromeButtonSize;
-      final copyIcon = (chrome * 0.5).clamp(18.0, 30.0);
       return FutureBuilder<_SupportDialogData>(
         future: _loadSupportDialogData(),
         builder: (ctx, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return AlertDialog(
-              backgroundColor: scheme.surface,
+              backgroundColor: settingsBg,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              clipBehavior: Clip.antiAlias,
               title: Text(
                 'Техподдержка',
                 style: theme.textTheme.titleLarge
@@ -813,8 +869,13 @@ void showAppSupportDialog(BuildContext context) {
                   hasRemote && remoteRelease!.versionCode > currentCode;
 
               return AlertDialog(
-                backgroundColor: scheme.surface,
+                backgroundColor: settingsBg,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                clipBehavior: Clip.antiAlias,
                 titlePadding: const EdgeInsets.fromLTRB(20, 14, 12, 8),
+                contentPadding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
                 title: Row(
                   children: [
                     Expanded(
@@ -858,9 +919,11 @@ void showAppSupportDialog(BuildContext context) {
                             'Версия приложения: $currentVersion+$currentBuild',
                             style: body.copyWith(fontWeight: FontWeight.w700),
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 12),
                           ExpansionTile(
                             tilePadding: EdgeInsets.zero,
+                            dense: true,
+                            visualDensity: VisualDensity.compact,
                             childrenPadding:
                                 const EdgeInsets.only(left: 4, right: 4),
                             title: const Text('История версий'),
@@ -874,8 +937,10 @@ void showAppSupportDialog(BuildContext context) {
                                 for (final v in data.changelog)
                                   ExpansionTile(
                                     tilePadding: EdgeInsets.zero,
+                                    dense: true,
+                                    visualDensity: VisualDensity.compact,
                                     childrenPadding: const EdgeInsets.only(
-                                        left: 6, bottom: 6),
+                                        left: 6, bottom: 2),
                                     title: Text(v.fullVersion),
                                     subtitle: Text(v.date),
                                     children: [
@@ -895,8 +960,13 @@ void showAppSupportDialog(BuildContext context) {
                             style: body.copyWith(fontWeight: FontWeight.w700),
                           ),
                           const SizedBox(height: 6),
-                          OutlinedButton.icon(
-                            onPressed: isChecking
+                          _supportChromeActionButton(
+                            context: routeContext,
+                            icon: Icons.sync,
+                            label: isChecking
+                                ? 'Проверяем...'
+                                : 'Проверить обновление',
+                            onTap: isChecking
                                 ? null
                                 : () async {
                                     setModalState(() {
@@ -923,12 +993,6 @@ void showAppSupportDialog(BuildContext context) {
                                       });
                                     }
                                   },
-                            icon: const Icon(Icons.sync),
-                            label: Text(
-                              isChecking
-                                  ? 'Проверяем...'
-                                  : 'Проверить обновление',
-                            ),
                           ),
                           const SizedBox(height: 8),
                           if (!hasChecked)
@@ -945,71 +1009,70 @@ void showAppSupportDialog(BuildContext context) {
                               'Доступна новая версия: ${remoteRelease!.versionName}+${remoteRelease!.versionCode}',
                             ),
                             const SizedBox(height: 8),
-                            OutlinedButton.icon(
-                              onPressed: () => unawaited(
+                            _supportChromeActionButton(
+                              context: routeContext,
+                              icon: Icons.system_update_alt,
+                              label: 'Скачать обновление',
+                              onTap: () => unawaited(
                                 _openApkDownloadUrl(
                                   routeContext,
                                   remoteRelease!.apkUrl,
                                 ),
                               ),
-                              icon: const Icon(Icons.system_update_alt),
-                              label: const Text('Скачать обновление'),
                             ),
                             if (remoteRelease!.changes.isNotEmpty) ...[
                               const SizedBox(height: 6),
-                              InkWell(
-                                onTap: () => setModalState(() {
-                                  remoteChangesExpanded =
-                                      !remoteChangesExpanded;
-                                }),
-                                borderRadius: BorderRadius.circular(8),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 6,
+                              Theme(
+                                data: Theme.of(routeContext).copyWith(
+                                  dividerColor: Colors.transparent,
+                                ),
+                                child: ExpansionTile(
+                                  key: ValueKey(
+                                    'remote_changes_${remoteRelease!.versionCode}',
+                                  ),
+                                  tilePadding: const EdgeInsets.symmetric(
                                     horizontal: 2,
                                   ),
-                                  child: Row(
+                                  childrenPadding: const EdgeInsets.only(
+                                    left: 20,
+                                    right: 2,
+                                    bottom: 2,
+                                  ),
+                                  dense: true,
+                                  visualDensity: VisualDensity.compact,
+                                  maintainState: true,
+                                  initiallyExpanded: remoteChangesExpanded,
+                                  onExpansionChanged: (expanded) {
+                                    setModalState(
+                                      () => remoteChangesExpanded = expanded,
+                                    );
+                                  },
+                                  title: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      Icon(
-                                        remoteChangesExpanded
-                                            ? Icons.expand_less
-                                            : Icons.expand_more,
-                                        color: scheme.onSurface,
-                                      ),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            const Text('Описание обновления'),
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              'Нажмите, чтобы посмотреть список изменений',
-                                              style: body.copyWith(
-                                                color: scheme.onSurface
-                                                    .withValues(alpha: 0.72),
-                                                fontSize: app.fontSize * 0.92,
-                                              ),
-                                            ),
-                                          ],
+                                      const Text('Описание обновления'),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Нажмите, чтобы посмотреть список изменений',
+                                        style: body.copyWith(
+                                          color: scheme.onSurface
+                                              .withValues(alpha: 0.72),
+                                          fontSize: app.fontSize * 0.92,
                                         ),
                                       ),
                                     ],
                                   ),
+                                  children: [
+                                    for (final ch in remoteRelease!.changes)
+                                      Padding(
+                                        padding:
+                                            const EdgeInsets.only(bottom: 3),
+                                        child: Text('• $ch'),
+                                      ),
+                                  ],
                                 ),
                               ),
-                              if (remoteChangesExpanded)
-                                for (final ch in remoteRelease!.changes)
-                                  Padding(
-                                    padding: const EdgeInsets.only(
-                                      left: 28,
-                                      bottom: 4,
-                                      top: 2,
-                                    ),
-                                    child: Text('• $ch'),
-                                  ),
                             ],
                           ] else
                             const Text('Установлена актуальная версия'),
@@ -1018,39 +1081,22 @@ void showAppSupportDialog(BuildContext context) {
                     ),
                   ),
                 ),
+                actionsPadding: const EdgeInsets.fromLTRB(20, 0, 12, 12),
+                buttonPadding: EdgeInsets.zero,
                 actions: [
-                  Material(
-                    color: NotebookChromeUi.secondaryButtonBackground(
-                        routeContext),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      side: ChromeOutline.side,
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(8),
-                      onTap: () async {
-                        await Clipboard.setData(
-                          ClipboardData(text: supportPayload),
-                        );
-                        if (!routeContext.mounted) return;
-                        ScaffoldMessenger.of(routeContext).showSnackBar(
-                          const SnackBar(
-                            content: Text('Данные техподдержки скопированы'),
-                          ),
-                        );
-                      },
-                      child: SizedBox(
-                        width: chrome,
-                        height: chrome,
-                        child: Icon(
-                          Icons.copy_all,
-                          size: copyIcon,
-                          color: NotebookChromeUi.secondaryButtonForeground(
-                              routeContext),
+                  NotebookChromeDialogToolbarIconButton(
+                    icon: Icons.copy_all,
+                    onPressed: () async {
+                      await Clipboard.setData(
+                        ClipboardData(text: supportPayload),
+                      );
+                      if (!routeContext.mounted) return;
+                      ScaffoldMessenger.of(routeContext).showSnackBar(
+                        const SnackBar(
+                          content: Text('Данные техподдержки скопированы'),
                         ),
-                      ),
-                    ),
+                      );
+                    },
                   ),
                 ],
               );
@@ -1075,6 +1121,9 @@ void showAppHelpDialog(BuildContext context) {
       final theme = Theme.of(routeContext);
       final scheme = theme.colorScheme;
       final app = routeContext.watch<AppProvider>();
+      final isDark = theme.brightness == Brightness.dark;
+      final settingsBg =
+          isDark ? const Color(0xFF37474F) : const Color(0xFFE1F5FE);
       final fs = app.fontSize;
       final lh = app.lineHeight;
       final tocStyle = _helpDialogTocStyle.copyWith(
@@ -1090,7 +1139,11 @@ void showAppHelpDialog(BuildContext context) {
       final n = kParallelReadingPlan365.length;
       final helpMaxH = MediaQuery.sizeOf(routeContext).height * 0.65;
       return AlertDialog(
-        backgroundColor: scheme.surface,
+        backgroundColor: settingsBg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        clipBehavior: Clip.antiAlias,
         titlePadding: const EdgeInsets.fromLTRB(20, 14, 12, 8),
         title: Row(
           children: [
