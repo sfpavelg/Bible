@@ -276,11 +276,12 @@ Widget _supportChromeActionButton({
   required VoidCallback? onTap,
 }) {
   final chrome = context.watch<AppProvider>().chromeButtonSize;
+  final scheme = Theme.of(context).colorScheme;
   final fg = NotebookChromeUi.secondaryButtonForeground(context);
   final iconSize = (chrome * 0.48).clamp(18.0, 30.0);
   final fontSize = (chrome * 0.32).clamp(12.0, 17.0);
   return Material(
-    color: NotebookChromeUi.secondaryButtonBackground(context),
+    color: scheme.surfaceContainerHighest.withValues(alpha: 0.75),
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(8),
       side: ChromeOutline.side,
@@ -350,9 +351,13 @@ Future<void> _openApkDownloadUrl(
             ScaffoldMessenger.of(dialogContext).showSnackBar(
               SnackBar(content: Text(errorMessage)),
             );
+            Navigator.of(dialogContext, rootNavigator: true).pop();
           }
-        } finally {
+        } catch (_) {
           if (dialogContext.mounted) {
+            ScaffoldMessenger.of(dialogContext).showSnackBar(
+              SnackBar(content: Text(errorMessage)),
+            );
             Navigator.of(dialogContext, rootNavigator: true).pop();
           }
         }
