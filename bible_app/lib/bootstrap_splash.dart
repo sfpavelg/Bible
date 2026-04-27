@@ -17,15 +17,17 @@ class BootstrapSplash extends StatelessWidget {
     }
     return Scaffold(
       backgroundColor: _bg,
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 48),
-          child: Image.asset(
-            'assets/branding/launch_logo.png',
-            fit: BoxFit.contain,
-            cacheWidth: cacheSide,
-            cacheHeight: cacheSide,
-            filterQuality: FilterQuality.medium,
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 48),
+            child: Image.asset(
+              'assets/branding/launch_logo.png',
+              fit: BoxFit.contain,
+              cacheWidth: cacheSide,
+              cacheHeight: cacheSide,
+              filterQuality: FilterQuality.medium,
+            ),
           ),
         ),
       ),

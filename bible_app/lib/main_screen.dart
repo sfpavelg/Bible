@@ -98,7 +98,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final tabOrder = _mountedTabs.toList()..sort();
+    // Верх не инсетим: AppBar вкладок рисуется под статус-бар (primary),
+    // фон шапки идёт до края; системные иконки — поверх прозрачной панели.
     return SafeArea(
+      top: false,
       child: Scaffold(
         body: Stack(
           fit: StackFit.expand,

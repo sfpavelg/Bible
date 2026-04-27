@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:bible_app/bootstrap_splash.dart';
@@ -8,6 +10,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (!kIsWeb) {
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  }
   final prefs = await SharedPreferences.getInstance();
   final initialBook = prefs.getString('last_book') ?? 'Бытие';
   final initialChapter = prefs.getInt('last_chapter') ?? 1;
@@ -57,6 +62,16 @@ class MyApp extends StatelessWidget {
             theme: ThemeData(
               colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
               useMaterial3: true,
+              appBarTheme: const AppBarTheme(
+                systemOverlayStyle: SystemUiOverlayStyle(
+                  statusBarColor: Colors.transparent,
+                  statusBarIconBrightness: Brightness.dark,
+                  statusBarBrightness: Brightness.light,
+                  systemNavigationBarColor: Colors.transparent,
+                  systemNavigationBarDividerColor: Colors.transparent,
+                  systemNavigationBarIconBrightness: Brightness.dark,
+                ),
+              ),
             ),
             darkTheme: ThemeData(
               useMaterial3: true,
@@ -68,8 +83,37 @@ class MyApp extends StatelessWidget {
                 surface: const Color(0xFF2E323A),
                 surfaceContainerLowest: const Color(0xFF262A32),
               ),
+              appBarTheme: const AppBarTheme(
+                systemOverlayStyle: SystemUiOverlayStyle(
+                  statusBarColor: Colors.transparent,
+                  statusBarIconBrightness: Brightness.light,
+                  statusBarBrightness: Brightness.dark,
+                  systemNavigationBarColor: Colors.transparent,
+                  systemNavigationBarDividerColor: Colors.transparent,
+                  systemNavigationBarIconBrightness: Brightness.light,
+                ),
+              ),
             ),
             themeMode: appProvider.themeMode,
+            builder: (context, child) {
+              final brightness = Theme.of(context).brightness;
+              final lightIcons = brightness == Brightness.dark;
+              final overlay = SystemUiOverlayStyle(
+                statusBarColor: Colors.transparent,
+                systemNavigationBarColor: Colors.transparent,
+                systemNavigationBarDividerColor: Colors.transparent,
+                statusBarIconBrightness:
+                    lightIcons ? Brightness.light : Brightness.dark,
+                statusBarBrightness:
+                    lightIcons ? Brightness.dark : Brightness.light,
+                systemNavigationBarIconBrightness:
+                    lightIcons ? Brightness.light : Brightness.dark,
+              );
+              return AnnotatedRegion<SystemUiOverlayStyle>(
+                value: overlay,
+                child: child ?? const SizedBox.shrink(),
+              );
+            },
             home: appProvider.isLoading
                 ? const BootstrapSplash()
                 : const MainScreen(),
