@@ -189,6 +189,14 @@ class BibleService {
     if (stripMarkup && (hasRawTags || hasTagEntities)) {
       text = stripInlineMarkupTags(text);
     }
+    // Исх 1:1: при скрытии вставки "[всем]" после "со" должна вернуться форма
+    // "с домом", но в режиме Септуагинты сохраняется оригинальное "со [всем]".
+    if (!showSeptuagintText && book == 'Исход' && chapter == 1 && verse == 1) {
+      text = text.replaceAll(
+        RegExp(r'\bсо(\s+домом\s+своим\b)', caseSensitive: false),
+        'с\$1',
+      );
+    }
     return text;
   }
 

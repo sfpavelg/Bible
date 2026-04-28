@@ -376,7 +376,7 @@ Future<void> _openApkDownloadUrl(
           clipBehavior: Clip.antiAlias,
           contentPadding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
           content: Text(
-            'Работает менеджер установки операционной системы, следуйте командам.',
+            'Работает менеджер установки устройства, следуйте командам.',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyLarge?.copyWith(color: scheme.onSurface),
           ),

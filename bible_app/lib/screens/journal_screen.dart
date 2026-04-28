@@ -1745,35 +1745,47 @@ class _JournalScreenState extends State<JournalScreen>
         isDark ? const Color(0xFF81D4FA) : Colors.blue.shade900;
     final unselectedBtn = isDark ? JournalScreen._buttonBgDark : JournalScreen._buttonBgLight;
     final chromeFg = isDark ? Colors.white : JournalScreen._chromeFgLight;
-    await showModalBottomSheet<void>(
+    await showDialog<void>(
       context: context,
-      backgroundColor: sheetBg,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-      ),
       builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'План чтения',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 17,
-                    color: titleColor,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Padding(
-                  padding: const EdgeInsets.all(6),
+        final mq = MediaQuery.of(ctx);
+        final maxDialogHeight = (mq.size.height - mq.padding.vertical - 48)
+            .clamp(280.0, 620.0)
+            .toDouble();
+        return Dialog(
+          backgroundColor: sheetBg,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: 460,
+              maxHeight: maxDialogHeight,
+            ),
+            child: SafeArea(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
                   child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      Text(
+                        'План чтения',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 17,
+                          color: titleColor,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Padding(
+                        padding: const EdgeInsets.all(6),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
                       _planRectButton(
                         label: 'Параллельный',
                         height: chromeHeight,
@@ -1879,10 +1891,13 @@ class _JournalScreenState extends State<JournalScreen>
                           _selectPlanKind(_JournalPlanKind.beginner);
                         },
                       ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
-              ],
+              ),
             ),
           ),
         );
@@ -1992,10 +2007,6 @@ class _JournalScreenState extends State<JournalScreen>
     final tipsStyle = app.bibleVerseTextStyle(
       color: isDark ? Colors.grey.shade300 : Colors.grey.shade800,
       fontWeight: FontWeight.w500,
-    ).copyWith(
-      fontSize:
-          (app.fontSize * app.verseFontSizeScale * 0.82).clamp(10.5, 18.0),
-      height: 1.35,
     );
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
@@ -2126,16 +2137,10 @@ class _JournalScreenState extends State<JournalScreen>
                           Text(
                             quarterTheme,
                             textAlign: TextAlign.center,
-                            style: app
-                                .bibleVerseTextStyle(
-                                  color: titleColor,
-                                  fontWeight: FontWeight.w700,
-                                )
-                                .copyWith(
-                                  fontSize: app.fontSize *
-                                      app.verseFontSizeScale *
-                                      1.12,
-                                ),
+                            style: app.bibleVerseTextStyle(
+                              color: titleColor,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ],
                         const SizedBox(height: 6),
@@ -2145,9 +2150,6 @@ class _JournalScreenState extends State<JournalScreen>
                           style: app.bibleVerseTextStyle(
                             color: cardMutedFg,
                             fontWeight: FontWeight.w600,
-                          ).copyWith(
-                            fontSize:
-                                app.fontSize * app.verseFontSizeScale * 0.88,
                           ),
                         ),
                       ],
@@ -2832,72 +2834,73 @@ class _JournalScreenState extends State<JournalScreen>
               )
             : null,
         leadingWidth: inQuarter ? quarterLeadingSlot : null,
-        title: Row(
-          children: [
-            if (inQuarter) ...[
-              ChromeIconButton(
-                icon: Icons.vertical_align_top,
-                tooltip: 'В начало списка',
-                foregroundColor: chromeFg,
-                backgroundColor: buttonBg,
-                width: quarterIconWFirst,
-                onPressed: _jumpScrollToStart,
-              ),
-              SizedBox(width: quarterIconGap),
-              ChromeIconButton(
-                icon: Icons.vertical_align_bottom,
-                tooltip: 'В конец списка',
-                foregroundColor: chromeFg,
-                backgroundColor: buttonBg,
-                width: quarterIconWSecond,
-                onPressed: _jumpScrollToEnd,
-              ),
-              SizedBox(width: quarterIconGap),
-              Expanded(
-                child: Center(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      '${_openQuarter! + 1} квартал',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: quarterLabelStyle,
+        title: inQuarter
+            ? Row(
+                children: [
+                  ChromeIconButton(
+                    icon: Icons.vertical_align_top,
+                    tooltip: 'В начало списка',
+                    foregroundColor: chromeFg,
+                    backgroundColor: buttonBg,
+                    width: quarterIconWFirst,
+                    onPressed: _jumpScrollToStart,
+                  ),
+                  SizedBox(width: quarterIconGap),
+                  ChromeIconButton(
+                    icon: Icons.vertical_align_bottom,
+                    tooltip: 'В конец списка',
+                    foregroundColor: chromeFg,
+                    backgroundColor: buttonBg,
+                    width: quarterIconWSecond,
+                    onPressed: _jumpScrollToEnd,
+                  ),
+                  SizedBox(width: quarterIconGap),
+                  Expanded(
+                    child: Center(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          '${_openQuarter! + 1} квартал',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: quarterLabelStyle,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
-            ],
-            if (!inQuarter)
-              Padding(
-                padding: const EdgeInsets.only(left: 0, right: 4),
-                child: Material(
-                  color: buttonBg,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    side: ChromeOutline.side,
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(8),
-                    onTap: () => _openPlanKindPicker(chromeSize),
-                    child: SizedBox(
-                      height: chromeSize,
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: (chromeSize * 0.26).clamp(10.0, 20.0),
-                        ),
-                        child: _planKindAppBarTitleOnHub(
-                          chromeFg,
-                          chromeSize,
-                          double.infinity,
+                ],
+              )
+            : Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 0, right: 4),
+                  child: Material(
+                    color: buttonBg,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: ChromeOutline.side,
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () => _openPlanKindPicker(chromeSize),
+                      child: SizedBox(
+                        height: chromeSize,
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: (chromeSize * 0.26).clamp(10.0, 20.0),
+                          ),
+                          child: _planKindAppBarTitleOnHub(
+                            chromeFg,
+                            chromeSize,
+                            double.infinity,
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
               ),
-          ],
-        ),
         actions: [
           Padding(
             padding: EdgeInsets.only(right: overflowRightInset),
