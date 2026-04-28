@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:bible_app/journal/faith_reading_plan_data.dart';
+import 'package:bible_app/journal/love_reading_plan_data.dart';
 import 'package:bible_app/journal/parallel_reading_plan_data.dart';
 import 'package:bible_app/providers/app_provider.dart';
 import 'package:bible_app/widgets/chrome_outline.dart';
@@ -1331,8 +1333,9 @@ void showAppHelpDialog(BuildContext context) {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      '• Сначала показаны четыре квартала года; внутри каждого — подряд все дни '
-                      'этой четверти. Номера дней сквозные, на весь год (1…$n). '
+                      '• Для годовых планов сначала показаны четыре квартала; для тематических («Вера», «Надежда», «Любовь») — по одному кварталу. '
+                      'Число дней в маршруте: «Вера» и «Надежда» — $kFaithPlanDayCount, «Любовь» — $kLovePlanDayCount. '
+                      'Внутри квартала — дни подряд (для годовых планов номера 1…$n по году; для тематических — дни по номерам этого маршрута). '
                       'На экране кварталов в шапке — выбор плана и меню; внутри квартала — прокрутка списка '
                       'и переход к началу или концу перечня.',
                     ),
@@ -1368,6 +1371,17 @@ void showAppHelpDialog(BuildContext context) {
                       'Все книги и главы Библии по каноническому порядку (от Бытия до Откровения) '
                       'равномерно распределены по $n дням. Отметки «прочитано» хранятся отдельно от '
                       'параллельного и хронологического планов.',
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Тематические планы («Вера», «Надежда», «Любовь»)',
+                      style: tocStyle,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'У каждого тематического плана — маршрут из нескольких дней ($kFaithPlanDayCount или $kLovePlanDayCount) с темой и пояснениями к отрывкам: '
+                      'на экране выбора один квартал и блок советов по чтению. В списке дней слева — ссылки на стихи, '
+                      'справа — краткая мысль. Отметки «прочитано» для каждого тематического плана хранятся раздельно и отдельно от остальных планов.',
                     ),
                   ],
                 ),

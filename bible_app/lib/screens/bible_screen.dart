@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:bible_app/models/bible_model.dart';
+import 'package:bible_app/navigation/app_tab_switcher.dart';
 import 'package:bible_app/providers/app_provider.dart';
 import 'package:bible_app/services/bible_service.dart';
 import 'package:bible_app/widgets/app_chrome_overflow_menu.dart';
@@ -528,10 +529,37 @@ class _BibleScreenState extends State<BibleScreen> {
   bool _searchIncludeNz = true;
   bool _searchWholeWords = false;
 
+  VoidCallback? _bibleVerseJumpListener;
+
   @override
   void initState() {
     super.initState();
     unawaited(_loadBookmarks());
+    _bibleVerseJumpListener = () {
+      final r = bibleVerseJumpRequest.value;
+      if (r == null) return;
+      bibleVerseJumpRequest.value = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        unawaited(_consumeBibleVerseJumpFromPlan(r));
+      });
+    };
+    bibleVerseJumpRequest.addListener(_bibleVerseJumpListener!);
+  }
+
+  /// План «Вера» и др.: после смены главы из журнала — подсветка первого стиха, как из поиска.
+  Future<void> _consumeBibleVerseJumpFromPlan(BibleVerseJumpRequest r) async {
+    final app = Provider.of<AppProvider>(context, listen: false);
+    for (var i = 0; i < 80; i++) {
+      if (!mounted) return;
+      if (app.currentBook == r.book && app.currentChapter == r.chapter) {
+        _highlightVerseTemporarily(r.verse);
+        await _scrollToVerse(r.verse);
+        return;
+      }
+      await WidgetsBinding.instance.endOfFrame;
+      await Future<void>.delayed(const Duration(milliseconds: 8));
+    }
   }
 
   Future<void> _loadBookmarks() async {
@@ -673,6 +701,10 @@ class _BibleScreenState extends State<BibleScreen> {
 
   @override
   void dispose() {
+    final lj = _bibleVerseJumpListener;
+    if (lj != null) {
+      bibleVerseJumpRequest.removeListener(lj);
+    }
     _bottomBannerTimer?.cancel();
     _highlightTimer?.cancel();
     _scrollController.dispose();

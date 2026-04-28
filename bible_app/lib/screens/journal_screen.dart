@@ -3,6 +3,11 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:bible_app/journal/chronological_reading_plan_data.dart';
+import 'package:bible_app/journal/faith_reading_plan_data.dart';
+import 'package:bible_app/journal/beginner_reading_plan_data.dart';
+import 'package:bible_app/journal/hope_reading_plan_data.dart';
+import 'package:bible_app/journal/love_reading_plan_data.dart';
+import 'package:bible_app/journal/thematic_reading_plan_models.dart';
 import 'package:bible_app/journal/parallel_reading_plan_data.dart';
 import 'package:bible_app/journal/sequential_reading_plan.dart';
 import 'package:bible_app/models/bible_model.dart';
@@ -16,20 +21,71 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-enum _JournalPlanKind { parallel, chronological, sequential }
+enum _JournalPlanKind {
+  parallel,
+  chronological,
+  sequential,
+  faith,
+  hope,
+  love,
+  beginner,
+}
+
+bool _journalPlanIsThematic(_JournalPlanKind p) =>
+    p == _JournalPlanKind.faith ||
+    p == _JournalPlanKind.hope ||
+    p == _JournalPlanKind.love ||
+    p == _JournalPlanKind.beginner;
+
+List<int> _quarterDayCountsForPlan(_JournalPlanKind p) => switch (p) {
+      _JournalPlanKind.parallel => kJournalPlanQuarterDayCounts,
+      _JournalPlanKind.chronological => kJournalPlanQuarterDayCounts,
+      _JournalPlanKind.sequential => kJournalPlanQuarterDayCounts,
+      _JournalPlanKind.beginner => kBeginnerQuarterDayCounts,
+      _JournalPlanKind.faith => [kFaithPlanDayCount],
+      _JournalPlanKind.hope => [kHopePlanDayCount],
+      _JournalPlanKind.love => [kLovePlanDayCount],
+    };
+
+int _quarterStartDayIndexForPlan(_JournalPlanKind p, int quarterIndex) {
+  var start = 0;
+  final quarterDays = _quarterDayCountsForPlan(p);
+  for (var i = 0; i < quarterIndex && i < quarterDays.length; i++) {
+    start += quarterDays[i];
+  }
+  return start;
+}
+
+bool _planUsesSingleQuarterHub(_JournalPlanKind p) =>
+    _journalPlanIsThematic(p) && _quarterDayCountsForPlan(p).length == 1;
+
+/// Для тематических планов: часть подписи после «:» в листе выбора → «План чтения: …» в шапке.
+String _thematicReadingChromeSuffix(String pickerLabel) {
+  final i = pickerLabel.lastIndexOf(':');
+  if (i < 0 || i >= pickerLabel.length - 1) return pickerLabel.trim();
+  return pickerLabel.substring(i + 1).trim();
+}
 
 class _PlanChapterItem {
   const _PlanChapterItem({
     required this.key,
     required this.book,
     required this.chapter,
+    this.displayLabel,
+    this.startVerse,
   });
 
   final String key;
   final String book;
   final int chapter;
 
-  String get label => '$book $chapter';
+  /// Для плана «Вера»: полная ссылка на стихи; иначе «Книга глава».
+  final String? displayLabel;
+
+  /// Первый стих (тематические планы); иначе null — только глава.
+  final int? startVerse;
+
+  String get label => displayLabel ?? '$book $chapter';
 }
 
 /// Разбиение года на четыре квартала (сумма = 365).
@@ -144,6 +200,9 @@ class _PlanScrollRailState extends State<_PlanScrollRail> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final h = constraints.maxHeight;
+        if (!h.isFinite || h <= 0 || !ts.isFinite || ts <= 0) {
+          return const SizedBox.shrink();
+        }
         final travel = (h - ts).clamp(0.0, double.infinity);
         final c = widget.controller;
         double thumbTop = 0;
@@ -248,17 +307,41 @@ class _JournalScreenState extends State<JournalScreen>
       'journal_plan_scroll_chrono_quarters_v1';
   static const _prefsScrollSequentialQuarters =
       'journal_plan_scroll_sequential_quarters_v1';
+  static const _prefsScrollFaithQuarters =
+      'journal_plan_scroll_faith_quarters_v1';
+  static const _prefsScrollHopeQuarters =
+      'journal_plan_scroll_hope_quarters_v1';
+  static const _prefsScrollLoveQuarters =
+      'journal_plan_scroll_love_quarters_v1';
+  static const _prefsScrollBeginnerQuarters =
+      'journal_plan_scroll_beginner_quarters_v1';
   static const _prefsKeySequential = 'journal_sequential_done_days_v1';
   static const _prefsKeySequentialItems = 'journal_sequential_done_items_v1';
+  static const _prefsKeyFaith = 'journal_faith_done_days_v1';
+  static const _prefsKeyFaithItems = 'journal_faith_done_items_v1';
+  static const _prefsKeyHope = 'journal_hope_done_days_v1';
+  static const _prefsKeyHopeItems = 'journal_hope_done_items_v1';
+  static const _prefsKeyLove = 'journal_love_done_days_v1';
+  static const _prefsKeyLoveItems = 'journal_love_done_items_v1';
+  static const _prefsKeyBeginner = 'journal_beginner_done_days_v1';
+  static const _prefsKeyBeginnerItems = 'journal_beginner_done_items_v1';
   static const _prefsPlanKind = 'journal_plan_kind_v1';
 
   _JournalPlanKind _plan = _JournalPlanKind.parallel;
   Set<int> _parallelDone = {};
   Set<int> _chronologicalDone = {};
   Set<int> _sequentialDone = {};
+  Set<int> _faithDone = {};
+  Set<int> _hopeDone = {};
+  Set<int> _loveDone = {};
+  Set<int> _beginnerDone = {};
   Map<int, Set<String>> _parallelDoneItems = {};
   Map<int, Set<String>> _chronologicalDoneItems = {};
   Map<int, Set<String>> _sequentialDoneItems = {};
+  Map<int, Set<String>> _faithDoneItems = {};
+  Map<int, Set<String>> _hopeDoneItems = {};
+  Map<int, Set<String>> _loveDoneItems = {};
+  Map<int, Set<String>> _beginnerDoneItems = {};
   final bool _loading = false;
   final ScrollController _scrollController = ScrollController();
   Timer? _scrollSaveDebounce;
@@ -282,10 +365,83 @@ class _JournalScreenState extends State<JournalScreen>
           )
           .toList(growable: false);
 
+  late final List<List<_PlanChapterItem>> _faithChapterItemsByDay =
+      kFaithReadingPlanDays
+          .map(
+            (d) => d.rows
+                .map(
+                  (r) => _PlanChapterItem(
+                    key: r.itemKey,
+                    book: r.book,
+                    chapter: r.chapter,
+                    displayLabel: r.refDisplay,
+                    startVerse: r.startVerse,
+                  ),
+                )
+                .toList(growable: false),
+          )
+          .toList(growable: false);
+
+  late final List<List<_PlanChapterItem>> _hopeChapterItemsByDay =
+      kHopeReadingPlanDays
+          .map(
+            (d) => d.rows
+                .map(
+                  (r) => _PlanChapterItem(
+                    key: r.itemKey,
+                    book: r.book,
+                    chapter: r.chapter,
+                    displayLabel: r.refDisplay,
+                    startVerse: r.startVerse,
+                  ),
+                )
+                .toList(growable: false),
+          )
+          .toList(growable: false);
+
+  late final List<List<_PlanChapterItem>> _loveChapterItemsByDay =
+      kLoveReadingPlanDays
+          .map(
+            (d) => d.rows
+                .map(
+                  (r) => _PlanChapterItem(
+                    key: r.itemKey,
+                    book: r.book,
+                    chapter: r.chapter,
+                    displayLabel: r.refDisplay,
+                    startVerse: r.startVerse,
+                  ),
+                )
+                .toList(growable: false),
+          )
+          .toList(growable: false);
+
+  late final List<List<_PlanChapterItem>> _beginnerChapterItemsByDay =
+      kBeginnerReadingPlanDays
+          .map(
+            (d) => d.rows
+                .map(
+                  (r) => _PlanChapterItem(
+                    key: r.itemKey,
+                    book: r.book,
+                    chapter: r.chapter,
+                    displayLabel: r.refDisplay,
+                    startVerse: r.startVerse,
+                  ),
+                )
+                .toList(growable: false),
+          )
+          .toList(growable: false);
+
   /// Позиция прокрутки списка по каждому кварталу (0…3) для каждого типа плана.
   List<double> _scrollQuarterParallel = List<double>.filled(4, 0.0);
   List<double> _scrollQuarterChrono = List<double>.filled(4, 0.0);
   List<double> _scrollQuarterSequential = List<double>.filled(4, 0.0);
+  /// План «Вера»: один квартал — один offset.
+  List<double> _scrollQuarterFaith = <double>[0.0];
+  List<double> _scrollQuarterHope = <double>[0.0];
+  List<double> _scrollQuarterLove = <double>[0.0];
+  List<double> _scrollQuarterBeginner = List<double>.filled(4, 0.0);
 
   /// null — экран с четырьмя кварталами; 0…3 — открыт соответствующий квартал.
   int? _openQuarter;
@@ -333,6 +489,24 @@ class _JournalScreenState extends State<JournalScreen>
       case _JournalPlanKind.sequential:
         _scrollQuarterSequential[q] = offset;
         break;
+      case _JournalPlanKind.faith:
+        if (_scrollQuarterFaith.isNotEmpty) {
+          _scrollQuarterFaith[0] = offset;
+        }
+        break;
+      case _JournalPlanKind.hope:
+        if (_scrollQuarterHope.isNotEmpty) {
+          _scrollQuarterHope[0] = offset;
+        }
+        break;
+      case _JournalPlanKind.love:
+        if (_scrollQuarterLove.isNotEmpty) {
+          _scrollQuarterLove[0] = offset;
+        }
+        break;
+      case _JournalPlanKind.beginner:
+        _scrollQuarterBeginner[q] = offset;
+        break;
     }
   }
 
@@ -353,6 +527,22 @@ class _JournalScreenState extends State<JournalScreen>
     await p.setString(
       _prefsScrollSequentialQuarters,
       jsonEncode(_scrollQuarterSequential),
+    );
+    await p.setString(
+      _prefsScrollFaithQuarters,
+      jsonEncode(_scrollQuarterFaith),
+    );
+    await p.setString(
+      _prefsScrollHopeQuarters,
+      jsonEncode(_scrollQuarterHope),
+    );
+    await p.setString(
+      _prefsScrollLoveQuarters,
+      jsonEncode(_scrollQuarterLove),
+    );
+    await p.setString(
+      _prefsScrollBeginnerQuarters,
+      jsonEncode(_scrollQuarterBeginner),
     );
   }
 
@@ -389,6 +579,25 @@ class _JournalScreenState extends State<JournalScreen>
     }
   }
 
+  List<double> _decodeFaithQuarterScrollList(String? raw) {
+    if (raw == null || raw.isEmpty) {
+      return <double>[0.0];
+    }
+    try {
+      final list = jsonDecode(raw) as List<dynamic>;
+      if (list.isEmpty) return <double>[0.0];
+      final v = list.first;
+      if (v is num) return <double>[v.toDouble()];
+    } catch (_) {}
+    return <double>[0.0];
+  }
+
+  int _dayStartIndexForOpenQuarter() {
+    final q = _openQuarter;
+    if (q == null) return 0;
+    return _quarterStartDayIndexForPlan(_plan, q);
+  }
+
   /// Восстановить прокрутку списка дней квартала из кэша.
   void _restoreListScrollForOpenQuarter() {
     final q = _openQuarter;
@@ -397,6 +606,13 @@ class _JournalScreenState extends State<JournalScreen>
       _JournalPlanKind.parallel => _scrollQuarterParallel[q],
       _JournalPlanKind.chronological => _scrollQuarterChrono[q],
       _JournalPlanKind.sequential => _scrollQuarterSequential[q],
+      _JournalPlanKind.faith =>
+        _scrollQuarterFaith.isNotEmpty ? _scrollQuarterFaith[0] : 0.0,
+      _JournalPlanKind.hope =>
+        _scrollQuarterHope.isNotEmpty ? _scrollQuarterHope[0] : 0.0,
+      _JournalPlanKind.love =>
+        _scrollQuarterLove.isNotEmpty ? _scrollQuarterLove[0] : 0.0,
+      _JournalPlanKind.beginner => _scrollQuarterBeginner[q],
     };
 
     void tryJump(int attempt) {
@@ -447,13 +663,19 @@ class _JournalScreenState extends State<JournalScreen>
   }
 
   int _doneDaysInQuarter(int quarterIndex) {
-    final start = journalQuarterStartDayIndex(quarterIndex);
-    final len = kJournalPlanQuarterDayCounts[quarterIndex];
+    final quarterDays = _quarterDayCountsForPlan(_plan);
+    if (quarterIndex < 0 || quarterIndex >= quarterDays.length) return 0;
+    final start = _quarterStartDayIndexForPlan(_plan, quarterIndex);
+    final len = quarterDays[quarterIndex];
     final end = start + len;
     final done = switch (_plan) {
       _JournalPlanKind.parallel => _parallelDone,
       _JournalPlanKind.chronological => _chronologicalDone,
       _JournalPlanKind.sequential => _sequentialDone,
+      _JournalPlanKind.faith => _faithDone,
+      _JournalPlanKind.hope => _hopeDone,
+      _JournalPlanKind.love => _loveDone,
+      _JournalPlanKind.beginner => _beginnerDone,
     };
     return done.where((i) => i >= start && i < end).length;
   }
@@ -526,6 +748,10 @@ class _JournalScreenState extends State<JournalScreen>
     return switch (raw) {
       'chronological' => _JournalPlanKind.chronological,
       'sequential' => _JournalPlanKind.sequential,
+      'faith' => _JournalPlanKind.faith,
+      'hope' => _JournalPlanKind.hope,
+      'love' => _JournalPlanKind.love,
+      'beginner' => _JournalPlanKind.beginner,
       _ => _JournalPlanKind.parallel,
     };
   }
@@ -534,6 +760,10 @@ class _JournalScreenState extends State<JournalScreen>
         _JournalPlanKind.parallel => 'parallel',
         _JournalPlanKind.chronological => 'chronological',
         _JournalPlanKind.sequential => 'sequential',
+        _JournalPlanKind.faith => 'faith',
+        _JournalPlanKind.hope => 'hope',
+        _JournalPlanKind.love => 'love',
+        _JournalPlanKind.beginner => 'beginner',
       };
 
   void _persistPlanKind(_JournalPlanKind k) {
@@ -556,12 +786,36 @@ class _JournalScreenState extends State<JournalScreen>
       p.getString(_prefsKeySequential),
       kSequentialReadingPlanDayCount,
     );
+    final faith = _decodeIndexSet(
+      p.getString(_prefsKeyFaith),
+      kFaithPlanDayCount,
+    );
+    final hope = _decodeIndexSet(
+      p.getString(_prefsKeyHope),
+      kHopePlanDayCount,
+    );
+    final love = _decodeIndexSet(
+      p.getString(_prefsKeyLove),
+      kLovePlanDayCount,
+    );
+    final beginner = _decodeIndexSet(
+      p.getString(_prefsKeyBeginner),
+      kBeginnerPlanDayCount,
+    );
     final scrollP =
         _decodeQuarterScrollList(p.getString(_prefsScrollParallelQuarters));
     final scrollC =
         _decodeQuarterScrollList(p.getString(_prefsScrollChronoQuarters));
     final scrollS =
         _decodeQuarterScrollList(p.getString(_prefsScrollSequentialQuarters));
+    final scrollF =
+        _decodeFaithQuarterScrollList(p.getString(_prefsScrollFaithQuarters));
+    final scrollH =
+        _decodeFaithQuarterScrollList(p.getString(_prefsScrollHopeQuarters));
+    final scrollL =
+        _decodeFaithQuarterScrollList(p.getString(_prefsScrollLoveQuarters));
+    final scrollB =
+        _decodeQuarterScrollList(p.getString(_prefsScrollBeginnerQuarters));
     final savedPlanKind = _planKindFromPrefs(p.getString(_prefsPlanKind));
     final parallelItems = _decodeDoneItems(
       p.getString(_prefsKeyParallelItems),
@@ -574,6 +828,22 @@ class _JournalScreenState extends State<JournalScreen>
     final sequentialItems = _decodeDoneItems(
       p.getString(_prefsKeySequentialItems),
       kSequentialReadingPlanDayCount,
+    );
+    final faithItems = _decodeDoneItems(
+      p.getString(_prefsKeyFaithItems),
+      kFaithPlanDayCount,
+    );
+    final hopeItems = _decodeDoneItems(
+      p.getString(_prefsKeyHopeItems),
+      kHopePlanDayCount,
+    );
+    final loveItems = _decodeDoneItems(
+      p.getString(_prefsKeyLoveItems),
+      kLovePlanDayCount,
+    );
+    final beginnerItems = _decodeDoneItems(
+      p.getString(_prefsKeyBeginnerItems),
+      kBeginnerPlanDayCount,
     );
     final parallelDoneByItems = <int>{};
     for (final e in parallelItems.entries) {
@@ -605,17 +875,69 @@ class _JournalScreenState extends State<JournalScreen>
         sequentialDoneByItems.add(day);
       }
     }
+    final faithDoneByItems = <int>{};
+    for (final e in faithItems.entries) {
+      final day = e.key;
+      if (day < 0 || day >= _faithChapterItemsByDay.length) continue;
+      final items = _faithChapterItemsByDay[day];
+      final done = e.value;
+      if (items.isNotEmpty && items.every((it) => done.contains(it.key))) {
+        faithDoneByItems.add(day);
+      }
+    }
+    final hopeDoneByItems = <int>{};
+    for (final e in hopeItems.entries) {
+      final day = e.key;
+      if (day < 0 || day >= _hopeChapterItemsByDay.length) continue;
+      final items = _hopeChapterItemsByDay[day];
+      final done = e.value;
+      if (items.isNotEmpty && items.every((it) => done.contains(it.key))) {
+        hopeDoneByItems.add(day);
+      }
+    }
+    final loveDoneByItems = <int>{};
+    for (final e in loveItems.entries) {
+      final day = e.key;
+      if (day < 0 || day >= _loveChapterItemsByDay.length) continue;
+      final items = _loveChapterItemsByDay[day];
+      final done = e.value;
+      if (items.isNotEmpty && items.every((it) => done.contains(it.key))) {
+        loveDoneByItems.add(day);
+      }
+    }
+    final beginnerDoneByItems = <int>{};
+    for (final e in beginnerItems.entries) {
+      final day = e.key;
+      if (day < 0 || day >= _beginnerChapterItemsByDay.length) continue;
+      final items = _beginnerChapterItemsByDay[day];
+      final done = e.value;
+      if (items.isNotEmpty && items.every((it) => done.contains(it.key))) {
+        beginnerDoneByItems.add(day);
+      }
+    }
     if (!mounted) return;
     setState(() {
       _parallelDone = {...parallel, ...parallelDoneByItems};
       _chronologicalDone = {...chrono, ...chronoDoneByItems};
       _sequentialDone = {...sequential, ...sequentialDoneByItems};
+      _faithDone = {...faith, ...faithDoneByItems};
+      _hopeDone = {...hope, ...hopeDoneByItems};
+      _loveDone = {...love, ...loveDoneByItems};
+      _beginnerDone = {...beginner, ...beginnerDoneByItems};
       _parallelDoneItems = parallelItems;
       _chronologicalDoneItems = chronoItems;
       _sequentialDoneItems = sequentialItems;
+      _faithDoneItems = faithItems;
+      _hopeDoneItems = hopeItems;
+      _loveDoneItems = loveItems;
+      _beginnerDoneItems = beginnerItems;
       _scrollQuarterParallel = scrollP;
       _scrollQuarterChrono = scrollC;
       _scrollQuarterSequential = scrollS;
+      _scrollQuarterFaith = scrollF;
+      _scrollQuarterHope = scrollH;
+      _scrollQuarterLove = scrollL;
+      _scrollQuarterBeginner = scrollB;
       _plan = savedPlanKind;
     });
   }
@@ -647,6 +969,46 @@ class _JournalScreenState extends State<JournalScreen>
     await p.setString(
       _prefsKeySequentialItems,
       jsonEncode(_encodeDoneItems(_sequentialDoneItems)),
+    );
+  }
+
+  Future<void> _persistFaith() async {
+    final p = await SharedPreferences.getInstance();
+    final sorted = _faithDone.toList()..sort();
+    await p.setString(_prefsKeyFaith, jsonEncode(sorted));
+    await p.setString(
+      _prefsKeyFaithItems,
+      jsonEncode(_encodeDoneItems(_faithDoneItems)),
+    );
+  }
+
+  Future<void> _persistHope() async {
+    final p = await SharedPreferences.getInstance();
+    final sorted = _hopeDone.toList()..sort();
+    await p.setString(_prefsKeyHope, jsonEncode(sorted));
+    await p.setString(
+      _prefsKeyHopeItems,
+      jsonEncode(_encodeDoneItems(_hopeDoneItems)),
+    );
+  }
+
+  Future<void> _persistLove() async {
+    final p = await SharedPreferences.getInstance();
+    final sorted = _loveDone.toList()..sort();
+    await p.setString(_prefsKeyLove, jsonEncode(sorted));
+    await p.setString(
+      _prefsKeyLoveItems,
+      jsonEncode(_encodeDoneItems(_loveDoneItems)),
+    );
+  }
+
+  Future<void> _persistBeginner() async {
+    final p = await SharedPreferences.getInstance();
+    final sorted = _beginnerDone.toList()..sort();
+    await p.setString(_prefsKeyBeginner, jsonEncode(sorted));
+    await p.setString(
+      _prefsKeyBeginnerItems,
+      jsonEncode(_encodeDoneItems(_beginnerDoneItems)),
     );
   }
 
@@ -699,6 +1061,26 @@ class _JournalScreenState extends State<JournalScreen>
         return _formatChapterItemsAsDisplayLines(
           _sequentialChapterItemsByDay[index],
         );
+      case _JournalPlanKind.faith:
+        return kFaithReadingPlanDays[index]
+            .rows
+            .map((r) => r.refDisplay)
+            .toList(growable: false);
+      case _JournalPlanKind.hope:
+        return kHopeReadingPlanDays[index]
+            .rows
+            .map((r) => r.refDisplay)
+            .toList(growable: false);
+      case _JournalPlanKind.love:
+        return kLoveReadingPlanDays[index]
+            .rows
+            .map((r) => r.refDisplay)
+            .toList(growable: false);
+      case _JournalPlanKind.beginner:
+        return kBeginnerReadingPlanDays[index]
+            .rows
+            .map((r) => r.refDisplay)
+            .toList(growable: false);
     }
   }
 
@@ -793,6 +1175,10 @@ class _JournalScreenState extends State<JournalScreen>
         _chronologicalDoneItems[dayIndex] ?? <String>{},
       _JournalPlanKind.sequential =>
         _sequentialDoneItems[dayIndex] ?? <String>{},
+      _JournalPlanKind.faith => _faithDoneItems[dayIndex] ?? <String>{},
+      _JournalPlanKind.hope => _hopeDoneItems[dayIndex] ?? <String>{},
+      _JournalPlanKind.love => _loveDoneItems[dayIndex] ?? <String>{},
+      _JournalPlanKind.beginner => _beginnerDoneItems[dayIndex] ?? <String>{},
     };
   }
 
@@ -806,6 +1192,10 @@ class _JournalScreenState extends State<JournalScreen>
         _JournalPlanKind.parallel => _parallelDoneItems,
         _JournalPlanKind.chronological => _chronologicalDoneItems,
         _JournalPlanKind.sequential => _sequentialDoneItems,
+        _JournalPlanKind.faith => _faithDoneItems,
+        _JournalPlanKind.hope => _hopeDoneItems,
+        _JournalPlanKind.love => _loveDoneItems,
+        _JournalPlanKind.beginner => _beginnerDoneItems,
       };
       final selected = (map[dayIndex] ?? <String>{}).toSet();
       if (done) {
@@ -824,6 +1214,10 @@ class _JournalScreenState extends State<JournalScreen>
         _JournalPlanKind.parallel => _parallelDone,
         _JournalPlanKind.chronological => _chronologicalDone,
         _JournalPlanKind.sequential => _sequentialDone,
+        _JournalPlanKind.faith => _faithDone,
+        _JournalPlanKind.hope => _hopeDone,
+        _JournalPlanKind.love => _loveDone,
+        _JournalPlanKind.beginner => _beginnerDone,
       };
       if (dayIsDone) {
         doneSet.add(dayIndex);
@@ -841,6 +1235,18 @@ class _JournalScreenState extends State<JournalScreen>
         break;
       case _JournalPlanKind.sequential:
         await _persistSequential();
+        break;
+      case _JournalPlanKind.faith:
+        await _persistFaith();
+        break;
+      case _JournalPlanKind.hope:
+        await _persistHope();
+        break;
+      case _JournalPlanKind.love:
+        await _persistLove();
+        break;
+      case _JournalPlanKind.beginner:
+        await _persistBeginner();
         break;
     }
   }
@@ -997,11 +1403,49 @@ class _JournalScreenState extends State<JournalScreen>
       _JournalPlanKind.chronological =>
         _chronologicalChapterItemsByDay[dayIndex],
       _JournalPlanKind.sequential => _sequentialChapterItemsByDay[dayIndex],
+      _JournalPlanKind.faith => _faithChapterItemsByDay[dayIndex],
+      _JournalPlanKind.hope => _hopeChapterItemsByDay[dayIndex],
+      _JournalPlanKind.love => _loveChapterItemsByDay[dayIndex],
+      _JournalPlanKind.beginner => _beginnerChapterItemsByDay[dayIndex],
     };
   }
 
   List<_PlanChapterItem> _chapterItemsForDay(int dayIndex) =>
       _chapterItemsForDayByPlan(_plan, dayIndex);
+
+  ThematicReadingDay _thematicDayDataForIndex(int dayIndex) {
+    switch (_plan) {
+      case _JournalPlanKind.faith:
+        return kFaithReadingPlanDays[dayIndex];
+      case _JournalPlanKind.hope:
+        return kHopeReadingPlanDays[dayIndex];
+      case _JournalPlanKind.love:
+        return kLoveReadingPlanDays[dayIndex];
+      case _JournalPlanKind.beginner:
+        return kBeginnerReadingPlanDays[dayIndex];
+      case _JournalPlanKind.parallel:
+      case _JournalPlanKind.chronological:
+      case _JournalPlanKind.sequential:
+        throw StateError('not thematic');
+    }
+  }
+
+  String _thematicRowIdea(int dayIndex, int rowIndex) {
+    switch (_plan) {
+      case _JournalPlanKind.faith:
+        return kFaithReadingPlanDays[dayIndex].rows[rowIndex].idea;
+      case _JournalPlanKind.hope:
+        return kHopeReadingPlanDays[dayIndex].rows[rowIndex].idea;
+      case _JournalPlanKind.love:
+        return kLoveReadingPlanDays[dayIndex].rows[rowIndex].idea;
+      case _JournalPlanKind.beginner:
+        return kBeginnerReadingPlanDays[dayIndex].rows[rowIndex].idea;
+      case _JournalPlanKind.parallel:
+      case _JournalPlanKind.chronological:
+      case _JournalPlanKind.sequential:
+        return '';
+    }
+  }
 
   Future<void> _openDayChapterChecklist(int dayIndex) async {
     final app = context.read<AppProvider>();
@@ -1019,6 +1463,10 @@ class _JournalScreenState extends State<JournalScreen>
           builder: (ctx, setModalState) {
             final doneNow = _doneItemsForCurrentPlan(dayIndex);
             return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              clipBehavior: Clip.antiAlias,
               insetPadding:
                   const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
               titlePadding: const EdgeInsets.fromLTRB(20, 14, 12, 8),
@@ -1028,6 +1476,9 @@ class _JournalScreenState extends State<JournalScreen>
                   Expanded(
                     child: Text(
                       'День ${dayIndex + 1}',
+                      style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
+                            color: fg,
+                          ),
                     ),
                   ),
                   ChromeIconButton(
@@ -1041,103 +1492,43 @@ class _JournalScreenState extends State<JournalScreen>
                 ],
               ),
               contentPadding: const EdgeInsets.fromLTRB(0, 4, 12, 10),
-              content: SizedBox(
-                width: 520,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 420),
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    primary: false,
-                    itemCount: items.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 6),
-                    itemBuilder: (_, i) {
-                      final item = items[i];
-                      final checked = doneNow.contains(item.key);
-                      return Material(
-                        color: Colors.transparent,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        clipBehavior: Clip.antiAlias,
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(0, 4, 0, 4),
-                          child: Row(
-                            children: [
-                              SizedBox(
-                                width: 40,
-                                child: Checkbox(
-                                  value: checked,
-                                  onChanged: (v) async {
-                                    await _setChapterDone(
-                                      dayIndex: dayIndex,
-                                      itemKey: item.key,
-                                      done: v ?? false,
-                                    );
-                                    setModalState(() {});
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Material(
-                                  color: isDark
-                                      ? const Color(0xFF455A64)
-                                      : const Color(0xFFE1F5FE),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                    side: const BorderSide(
-                                      color: Colors.black,
-                                      width: ChromeOutline.width,
-                                    ),
-                                  ),
-                                  clipBehavior: Clip.antiAlias,
-                                  child: InkWell(
-                                    onTap: () async {
-                                      final dialogNavigator =
-                                          Navigator.of(dialogContext);
-                                      await app.changeBookAndChapter(
-                                        item.book,
-                                        item.chapter,
-                                      );
-                                      if (!mounted) return;
-                                      dialogNavigator.pop();
-                                      appTabSwitchRequest.value = 0;
-                                    },
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 10,
-                                        horizontal: 10,
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              item.label,
-                                              style: app.bibleVerseTextStyle(
-                                                color: fg,
-                                                fontWeight: FontWeight.w700,
-                                              ),
-                                            ),
-                                          ),
-                                          Icon(
-                                            Icons.open_in_new,
-                                            size: (app.chromeButtonSize * 0.42)
-                                                .clamp(14.0, 24.0),
-                                            color: fg.withValues(alpha: 0.9),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
+              content: LayoutBuilder(
+                builder: (layoutCtx, layoutConstraints) {
+                  final mq = MediaQuery.of(layoutCtx);
+                  final maxContentH = (mq.size.height -
+                          mq.padding.vertical -
+                          mq.viewInsets.vertical -
+                          200)
+                      .clamp(200.0, 600.0);
+                  final dialogW = math.min(
+                    520.0,
+                    layoutConstraints.maxWidth,
+                  );
+                  return ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: dialogW,
+                      maxHeight: maxContentH,
+                    ),
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      primary: false,
+                      physics: const ClampingScrollPhysics(),
+                      itemCount: items.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 6),
+                      itemBuilder: (context, i) => _journalDayDialogChecklistRow(
+                        dayIndex: dayIndex,
+                        itemIndex: i,
+                        item: items[i],
+                        checked: doneNow.contains(items[i].key),
+                        app: app,
+                        fg: fg,
+                        isDark: isDark,
+                        dialogContext: dialogContext,
+                        setModalState: setModalState,
+                      ),
+                    ),
+                  );
+                },
               ),
             );
           },
@@ -1146,35 +1537,203 @@ class _JournalScreenState extends State<JournalScreen>
     );
   }
 
+  Widget _journalDayDialogChecklistRow({
+    required int dayIndex,
+    required int itemIndex,
+    required _PlanChapterItem item,
+    required bool checked,
+    required AppProvider app,
+    required Color fg,
+    required bool isDark,
+    required BuildContext dialogContext,
+    required StateSetter setModalState,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(0, 4, 0, 4),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 40,
+              child: Checkbox(
+                value: checked,
+                onChanged: (v) async {
+                  await _setChapterDone(
+                    dayIndex: dayIndex,
+                    itemKey: item.key,
+                    done: v ?? false,
+                  );
+                  setModalState(() {});
+                },
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Material(
+                color: isDark
+                    ? const Color(0xFF455A64)
+                    : const Color(0xFFE1F5FE),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  side: const BorderSide(
+                    color: Colors.black,
+                    width: ChromeOutline.width,
+                  ),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: () async {
+                    final dialogNavigator = Navigator.of(dialogContext);
+                    await app.changeBookAndChapter(
+                      item.book,
+                      item.chapter,
+                    );
+                    if (!mounted) return;
+                    if (_journalPlanIsThematic(_plan)) {
+                      final v = item.startVerse;
+                      if (v != null) {
+                        bibleVerseJumpRequest.value = BibleVerseJumpRequest(
+                          book: item.book,
+                          chapter: item.chapter,
+                          verse: v,
+                        );
+                      }
+                    }
+                    dialogNavigator.pop();
+                    appTabSwitchRequest.value = 0;
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 10,
+                      horizontal: 10,
+                    ),
+                    child: _journalPlanIsThematic(_plan)
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      item.label,
+                                      style: app.bibleVerseTextStyle(
+                                        color: fg,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                  Icon(
+                                    Icons.open_in_new,
+                                    size: (app.chromeButtonSize * 0.42)
+                                        .clamp(14.0, 24.0),
+                                    color: fg.withValues(alpha: 0.9),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                _thematicRowIdea(dayIndex, itemIndex),
+                                style: app.bibleVerseTextStyle(
+                                  color: fg.withValues(alpha: 0.9),
+                                  fontWeight: FontWeight.w500,
+                                ).copyWith(
+                                  fontSize: (app.fontSize *
+                                          app.verseFontSizeScale *
+                                          0.88)
+                                      .clamp(11.0, 20.0),
+                                  height: 1.35,
+                                ),
+                              ),
+                            ],
+                          )
+                        : Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  item.label,
+                                  style: app.bibleVerseTextStyle(
+                                    color: fg,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              Icon(
+                                Icons.open_in_new,
+                                size: (app.chromeButtonSize * 0.42)
+                                    .clamp(14.0, 24.0),
+                                color: fg.withValues(alpha: 0.9),
+                              ),
+                            ],
+                          ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   int get _planTotal => switch (_plan) {
     _JournalPlanKind.parallel => kParallelReadingPlan365.length,
     _JournalPlanKind.chronological => kChronologicalReadingPlan365.length,
     _JournalPlanKind.sequential => kSequentialReadingPlanDayCount,
+    _JournalPlanKind.faith => kFaithPlanDayCount,
+    _JournalPlanKind.hope => kHopePlanDayCount,
+    _JournalPlanKind.love => kLovePlanDayCount,
+    _JournalPlanKind.beginner => kBeginnerPlanDayCount,
   };
 
   int get _planDoneCount => switch (_plan) {
     _JournalPlanKind.parallel => _parallelDone.length,
     _JournalPlanKind.chronological => _chronologicalDone.length,
     _JournalPlanKind.sequential => _sequentialDone.length,
+    _JournalPlanKind.faith => _faithDone.length,
+    _JournalPlanKind.hope => _hopeDone.length,
+    _JournalPlanKind.love => _loveDone.length,
+    _JournalPlanKind.beginner => _beginnerDone.length,
   };
 
   int _dayCountInOpenQuarter() {
     final q = _openQuarter;
     if (q == null) return 0;
-    return kJournalPlanQuarterDayCounts[q];
+    final quarterDays = _quarterDayCountsForPlan(_plan);
+    if (q < 0 || q >= quarterDays.length) return 0;
+    return quarterDays[q];
   }
 
   void _selectPlanKind(_JournalPlanKind k) {
-    if (k == _plan) return;
+    if (k == _plan) {
+      if (_openQuarter != null) {
+        setState(() => _openQuarter = null);
+      }
+      debugPrint('[JournalPlan] same plan selected: $k, openQuarter=$_openQuarter');
+      return;
+    }
+    debugPrint(
+      '[JournalPlan] switch request: from=$_plan to=$k openQuarter=$_openQuarter',
+    );
     if (_scrollController.hasClients && _openQuarter != null) {
       _applyScrollOffsetToQuarterCache(_scrollController.offset);
       unawaited(_persistScrollQuarterListsToDisk());
     }
-    setState(() => _plan = k);
+    setState(() {
+      _plan = k;
+      // При смене плана всегда возвращаемся на экран кварталов,
+      // чтобы пользователь явно выбирал нужный квартал нового плана.
+      _openQuarter = null;
+    });
+    debugPrint(
+      '[JournalPlan] switched: current=$_plan quarterCount=${_quarterDayCountsForPlan(_plan).length} openQuarter=$_openQuarter',
+    );
     _persistPlanKind(k);
-    if (_openQuarter != null) {
-      _restoreListScrollForOpenQuarter();
-    }
   }
 
   Future<void> _openPlanKindPicker(double chromeHeight) async {
@@ -1259,6 +1818,67 @@ class _JournalScreenState extends State<JournalScreen>
                           }
                         },
                       ),
+                      const SizedBox(height: 8),
+                      _planRectButton(
+                        label: kFaithPlanPickerButtonLabel,
+                        height: chromeHeight,
+                        selected: _plan == _JournalPlanKind.faith,
+                        isDark: isDark,
+                        unselectedBg: unselectedBtn,
+                        chromeFg: chromeFg,
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          if (_plan != _JournalPlanKind.faith) {
+                            _selectPlanKind(_JournalPlanKind.faith);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      _planRectButton(
+                        label: kHopePlanPickerButtonLabel,
+                        height: chromeHeight,
+                        selected: _plan == _JournalPlanKind.hope,
+                        isDark: isDark,
+                        unselectedBg: unselectedBtn,
+                        chromeFg: chromeFg,
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          if (_plan != _JournalPlanKind.hope) {
+                            _selectPlanKind(_JournalPlanKind.hope);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      _planRectButton(
+                        label: kLovePlanPickerButtonLabel,
+                        height: chromeHeight,
+                        selected: _plan == _JournalPlanKind.love,
+                        isDark: isDark,
+                        unselectedBg: unselectedBtn,
+                        chromeFg: chromeFg,
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          if (_plan != _JournalPlanKind.love) {
+                            _selectPlanKind(_JournalPlanKind.love);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      _planRectButton(
+                        label: kBeginnerPlanPickerButtonLabel,
+                        height: chromeHeight,
+                        selected: _plan == _JournalPlanKind.beginner,
+                        isDark: isDark,
+                        unselectedBg: unselectedBtn,
+                        chromeFg: chromeFg,
+                        onTap: () {
+                          debugPrint(
+                            '[JournalPlan] beginner picker tapped, current=$_plan',
+                          );
+                          Navigator.pop(ctx);
+                          _selectPlanKind(_JournalPlanKind.beginner);
+                        },
+                      ),
                     ],
                   ),
                 ),
@@ -1281,6 +1901,14 @@ class _JournalScreenState extends State<JournalScreen>
       _JournalPlanKind.parallel => 'План чтения: параллельный',
       _JournalPlanKind.chronological => 'План чтения: хронология',
       _JournalPlanKind.sequential => 'План чтения: последовательный',
+      _JournalPlanKind.faith =>
+        'План чтения: ${_thematicReadingChromeSuffix(kFaithPlanPickerButtonLabel)}',
+      _JournalPlanKind.hope =>
+        'План чтения: ${_thematicReadingChromeSuffix(kHopePlanPickerButtonLabel)}',
+      _JournalPlanKind.love =>
+        'План чтения: ${_thematicReadingChromeSuffix(kLovePlanPickerButtonLabel)}',
+      _JournalPlanKind.beginner =>
+        'План чтения: ${_thematicReadingChromeSuffix(kBeginnerPlanPickerButtonLabel)}',
     };
     final titleStyle = TextStyle(
       color: chromeFg,
@@ -1299,63 +1927,6 @@ class _JournalScreenState extends State<JournalScreen>
         overflow: TextOverflow.visible,
         style: titleStyle,
       ),
-    );
-  }
-
-  Widget _planKindAppBarTitleInQuarter(
-    BuildContext context,
-    Color chromeFg,
-    double maxWidth,
-  ) {
-    final singleLine = switch (_plan) {
-      _JournalPlanKind.parallel => 'План чтения: параллельный',
-      _JournalPlanKind.chronological => 'План чтения: хронология',
-      _JournalPlanKind.sequential => 'План чтения: последовательный',
-    };
-    final singleStyle = TextStyle(
-      color: chromeFg,
-      fontWeight: FontWeight.normal,
-      fontSize: 25.6,
-      height: 1.02,
-    );
-    final tp = TextPainter(
-      text: TextSpan(text: singleLine, style: singleStyle),
-      maxLines: 1,
-      textDirection: Directionality.of(context),
-    )..layout(maxWidth: double.infinity);
-    if (tp.width <= maxWidth) {
-      return Text(
-        singleLine,
-        maxLines: 1,
-        textAlign: TextAlign.center,
-        softWrap: false,
-        style: singleStyle,
-      );
-    }
-    final line2 = switch (_plan) {
-      _JournalPlanKind.parallel => 'параллельный',
-      _JournalPlanKind.chronological => 'хронология',
-      _JournalPlanKind.sequential => 'последовательный',
-    };
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          'План чтения:',
-          maxLines: 1,
-          textAlign: TextAlign.center,
-          softWrap: false,
-          style: singleStyle,
-        ),
-        Text(
-          line2,
-          maxLines: 1,
-          textAlign: TextAlign.center,
-          softWrap: false,
-          style: singleStyle,
-        ),
-      ],
     );
   }
 
@@ -1409,6 +1980,81 @@ class _JournalScreenState extends State<JournalScreen>
     );
   }
 
+  Widget _buildThematicQuarterSelectionHub(
+    AppProvider app, {
+    required String quarterHubTitle,
+    required String quarterReadingTips,
+    required bool isDark,
+    required Color cardTodoBg,
+    required Color titleColor,
+  }) {
+    const qi = 0;
+    final tipsStyle = app.bibleVerseTextStyle(
+      color: isDark ? Colors.grey.shade300 : Colors.grey.shade800,
+      fontWeight: FontWeight.w500,
+    ).copyWith(
+      fontSize:
+          (app.fontSize * app.verseFontSizeScale * 0.82).clamp(10.5, 18.0),
+      height: 1.35,
+    );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 5),
+          child: Material(
+            color: cardTodoBg,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: ChromeOutline.side,
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => _openQuarterScreen(qi),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          quarterHubTitle,
+                          textAlign: TextAlign.center,
+                          style: app
+                              .bibleVerseTextStyle(
+                                color: titleColor,
+                                fontWeight: FontWeight.w800,
+                              )
+                              .copyWith(
+                                fontSize: app.fontSize *
+                                    app.verseFontSizeScale *
+                                    1.12,
+                              ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      quarterReadingTips,
+                      textAlign: TextAlign.left,
+                      style: tipsStyle,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildQuarterSelectionHub(
     AppProvider app, {
     required bool isDark,
@@ -1416,12 +2062,34 @@ class _JournalScreenState extends State<JournalScreen>
     required Color cardMutedFg,
     required Color titleColor,
   }) {
+    if (_planUsesSingleQuarterHub(_plan)) {
+      final (hubTitle, tips) = switch (_plan) {
+        _JournalPlanKind.faith =>
+          (kFaithQuarterHubTitle, kFaithQuarterReadingTips),
+        _JournalPlanKind.hope =>
+          (kHopeQuarterHubTitle, kHopeQuarterReadingTips),
+        _JournalPlanKind.love =>
+          (kLoveQuarterHubTitle, kLoveQuarterReadingTips),
+        _ => (kFaithQuarterHubTitle, kFaithQuarterReadingTips),
+      };
+      return _buildThematicQuarterSelectionHub(
+        app,
+        quarterHubTitle: hubTitle,
+        quarterReadingTips: tips,
+        isDark: isDark,
+        cardTodoBg: cardTodoBg,
+        titleColor: titleColor,
+      );
+    }
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
       child: Column(
-        children: List.generate(4, (qi) {
+        children: List.generate(_quarterDayCountsForPlan(_plan).length, (qi) {
           final done = _doneDaysInQuarter(qi);
-          final total = kJournalPlanQuarterDayCounts[qi];
+          final total = _quarterDayCountsForPlan(_plan)[qi];
+          final quarterTheme = _plan == _JournalPlanKind.beginner
+              ? kBeginnerQuarterThemes[qi]
+              : null;
           return Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 5),
@@ -1453,6 +2121,23 @@ class _JournalScreenState extends State<JournalScreen>
                                     app.fontSize * app.verseFontSizeScale * 1.12,
                               ),
                         ),
+                        if (quarterTheme != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            quarterTheme,
+                            textAlign: TextAlign.center,
+                            style: app
+                                .bibleVerseTextStyle(
+                                  color: titleColor,
+                                  fontWeight: FontWeight.w700,
+                                )
+                                .copyWith(
+                                  fontSize: app.fontSize *
+                                      app.verseFontSizeScale *
+                                      1.12,
+                                ),
+                          ),
+                        ],
                         const SizedBox(height: 6),
                         Text(
                           'Прочитано $done из $total',
@@ -1473,6 +2158,162 @@ class _JournalScreenState extends State<JournalScreen>
             ),
           );
         }),
+      ),
+    );
+  }
+
+  Widget _buildThematicDayPlanCard(
+    AppProvider app, {
+    required ThematicReadingDay dayData,
+    required int dayIndex,
+    required double lineGap,
+    required Color titleColor,
+    required Color bodyColor,
+    required Color cardDoneBg,
+    required Color cardTodoBg,
+    required bool isDark,
+  }) {
+    final done = _dayDone(dayIndex);
+    final n = dayIndex + 1;
+    final chapterItems = _chapterItemsForDay(dayIndex);
+    final doneItems = _doneItemsForCurrentPlan(dayIndex);
+    final doneCount =
+        chapterItems.where((e) => doneItems.contains(e.key)).length;
+    final dayTitleStyle = app
+        .bibleVerseTextStyle(color: titleColor, fontWeight: FontWeight.w800)
+        .copyWith(
+          fontSize: app.fontSize * app.verseFontSizeScale * 1.06,
+        );
+    final themeLineStyle = app
+        .bibleVerseTextStyle(color: titleColor, fontWeight: FontWeight.w700)
+        .copyWith(
+          fontSize: app.fontSize * app.verseFontSizeScale * 0.95,
+          height: 1.25,
+        );
+    final refStyle = app.bibleVerseTextStyle(
+      color: bodyColor,
+      fontWeight: FontWeight.w700,
+    ).copyWith(
+      fontSize:
+          (app.fontSize * app.verseFontSizeScale * 0.92).clamp(11.0, 22.0),
+      height: 1.25,
+    );
+    final ideaStyle = app.bibleVerseTextStyle(
+      color: bodyColor,
+      fontWeight: FontWeight.w500,
+    ).copyWith(
+      fontSize:
+          (app.fontSize * app.verseFontSizeScale * 0.86).clamp(10.5, 20.0),
+      height: 1.35,
+    );
+    final doneLabelStyle = app.bibleVerseTextStyle(
+      color: titleColor,
+      fontWeight: FontWeight.w700,
+    ).copyWith(
+      fontSize:
+          (app.fontSize * app.verseFontSizeScale * 0.78).clamp(10.0, 20.0),
+      height: 1.0,
+    );
+    Widget doneBadge() => Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: isDark
+                ? const Color(0xFF81D4FA).withValues(alpha: 0.2)
+                : Colors.blue.shade50,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: ChromeOutline.color,
+              width: ChromeOutline.width,
+            ),
+          ),
+          child: Text('Прочитано', style: doneLabelStyle),
+        );
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: done ? cardDoneBg : cardTodoBg,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: ChromeOutline.side,
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () => _openDayChapterChecklist(dayIndex),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 10, 12, 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('День $n', style: dayTitleStyle),
+                          SizedBox(height: (lineGap + 2).clamp(4.0, 14.0)),
+                          Text(dayData.theme, style: themeLineStyle),
+                        ],
+                      ),
+                    ),
+                    Flexible(
+                      child: Text(
+                        chapterItems.isEmpty
+                            ? '—'
+                            : 'Отмечено: $doneCount из ${chapterItems.length}',
+                        textAlign: TextAlign.right,
+                        style: app.bibleVerseTextStyle(
+                          color: bodyColor,
+                          fontWeight: FontWeight.w600,
+                        ).copyWith(
+                          fontSize: (app.fontSize * app.verseFontSizeScale * 0.92)
+                              .clamp(11.0, 26.0),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                for (var i = 0; i < dayData.rows.length; i++) ...[
+                  SizedBox(
+                    height: i == 0
+                        ? (lineGap + 4).clamp(8.0, 16.0)
+                        : (lineGap + 6).clamp(8.0, 14.0),
+                  ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: Text(
+                          dayData.rows[i].refDisplay,
+                          style: refStyle,
+                        ),
+                      ),
+                      SizedBox(width: (lineGap + 4).clamp(6.0, 14.0)),
+                      Expanded(
+                        flex: 3,
+                        child: Text(
+                          dayData.rows[i].idea,
+                          style: ideaStyle,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                if (done) ...[
+                  SizedBox(height: (lineGap + 4).clamp(8.0, 14.0)),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: doneBadge(),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -1516,9 +2357,20 @@ class _JournalScreenState extends State<JournalScreen>
                 padding: const EdgeInsets.fromLTRB(12, 8, 6, 12),
                 itemCount: _dayCountInOpenQuarter(),
                 itemBuilder: (context, localIndex) {
-                  final q = _openQuarter!;
-                  final index =
-                      journalQuarterStartDayIndex(q) + localIndex;
+                  final index = _dayStartIndexForOpenQuarter() + localIndex;
+                  if (_journalPlanIsThematic(_plan)) {
+                    return _buildThematicDayPlanCard(
+                      app,
+                      dayData: _thematicDayDataForIndex(index),
+                      dayIndex: index,
+                      lineGap: lineGap,
+                      titleColor: titleColor,
+                      bodyColor: bodyColor,
+                      cardDoneBg: cardDoneBg,
+                      cardTodoBg: cardTodoBg,
+                      isDark: isDark,
+                    );
+                  }
                   final lines = _linesForDay(index);
                   final done = _dayDone(index);
                   final n = index + 1;
@@ -1892,7 +2744,8 @@ class _JournalScreenState extends State<JournalScreen>
       line = 'Прочитано: $_planDoneCount из $_planTotal';
     } else {
       final dq = _doneDaysInQuarter(q);
-      final tq = kJournalPlanQuarterDayCounts[q];
+      final quarterDays = _quarterDayCountsForPlan(_plan);
+      final tq = q >= 0 && q < quarterDays.length ? quarterDays[q] : 0;
       line = 'Прочитано: $dq из $tq';
     }
     return Material(
@@ -2063,23 +2916,37 @@ class _JournalScreenState extends State<JournalScreen>
           : Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
-                  child: inQuarter
-                      ? _buildPlanListWithRail(
-                          app,
-                          chromeSize,
-                          isDark: isDark,
-                          thumbColor: buttonBg,
-                          trackHintColor: trackHint,
-                        )
-                      : _buildQuarterSelectionHub(
-                          app,
-                          isDark: isDark,
-                          cardTodoBg: hubCardBg,
-                          cardMutedFg: hubMutedFg,
-                          titleColor: hubTitleColor,
-                        ),
-                ),
+                if (inQuarter)
+                  Expanded(
+                    child: _buildPlanListWithRail(
+                      app,
+                      chromeSize,
+                      isDark: isDark,
+                      thumbColor: buttonBg,
+                      trackHintColor: trackHint,
+                    ),
+                  )
+                else if (_planUsesSingleQuarterHub(_plan))
+                  Align(
+                    alignment: Alignment.topCenter,
+                    child: _buildQuarterSelectionHub(
+                      app,
+                      isDark: isDark,
+                      cardTodoBg: hubCardBg,
+                      cardMutedFg: hubMutedFg,
+                      titleColor: hubTitleColor,
+                    ),
+                  )
+                else
+                  Expanded(
+                    child: _buildQuarterSelectionHub(
+                      app,
+                      isDark: isDark,
+                      cardTodoBg: hubCardBg,
+                      cardMutedFg: hubMutedFg,
+                      titleColor: hubTitleColor,
+                    ),
+                  ),
                 _readProgressFooter(app, isDark: isDark),
               ],
             ),

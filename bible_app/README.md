@@ -631,3 +631,45 @@ c:\Project\Bible\bible_app\build\windows\x64\runner\Release\
 Там будет bible_app.exe (имя из pubspec.yaml) и рядом DLL и папки данных — для запуска на другом ПК копируйте всю папку Release, а не один только .exe.
 
 Кратко: поставьте Visual Studio с C++ для десктопа, затем flutter build windows --release — готовый запуск — содержимое build\windows\x64\runner\Release\.
+
+что нужно чтобы сделать сборку для линукс и для айфонов
+
+Для вашего проекта (судя по flutter build windows) это Flutter, значит требования такие:
+
+Linux build
+Нужно:
+
+Linux-хост (или Linux CI) — локально на Windows собрать Linux desktop нельзя нативно.
+Установить Flutter SDK + включить desktop:
+flutter config --enable-linux-desktop
+Поставить toolchain:
+clang, cmake, ninja-build, pkg-config, libgtk-3-dev
+Проверить:
+flutter doctor -v
+Сборка:
+flutter build linux --release
+Результат обычно в build/linux/x64/release/bundle/
+iPhone / iOS build
+Нужно:
+
+Только macOS (обязательно, из-за Xcode).
+Установить:
+Xcode (актуальный), Command Line Tools
+CocoaPods (sudo gem install cocoapods или через Homebrew)
+Flutter SDK
+Принять лицензии и проверить:
+sudo xcodebuild -license accept
+flutter doctor -v
+В проекте:
+flutter build ios --release (без подписи для теста)
+для реального устройства/App Store нужна подпись:
+Apple Developer account
+Bundle ID
+Certificates + Provisioning Profiles
+Настройка в ios/Runner.xcworkspace через Xcode
+Для публикации:
+Archive в Xcode → Upload to App Store Connect
+Если у вас сейчас Windows-машина
+Linux: собирайте в Linux CI (GitHub Actions/GitLab) или на отдельной Linux машине.
+iOS: нужен Mac (локальный, rented Mac cloud, или CI с macOS runner).
+Если хотите, могу сразу дать готовые workflow-файлы CI: отдельно для Linux артефакта и для iOS (build + export/Upload).
