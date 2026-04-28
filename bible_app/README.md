@@ -21,7 +21,7 @@ flutter emulators --launch Pixel_XL_API_34
 4.
 ```bash
 # Проверить подключенные устройства, эмулятор (например:emulator-5554), или телефон:
-flutter devices
+flutter install -d emulator-5554
 ```
 5.
 ```bash
@@ -133,10 +133,10 @@ AAB это если будешь выкладывать в Google Play (тогд
 
 1. Создание ключа (keystore)
 - Открой терминал (например PowerShell или Command Prompt)
-- Перейди в папку с проектом: `cd c:\Project\TraeTest`
+- Перейди в папку с проектом: `cd c:\Project\Bible\bible_app`
 - Создание ключа:
 ```bash
-keytool -genkey -v -keystore c:\Key\TraeTest\upload-keystore.jks -storetype JKS -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+keytool -genkey -v -keystore c:\Key\Bible\upload-keystore.jks -storetype JKS -keyalg RSA -keysize 2048 -validity 10000 -alias upload
 ```
 Запомни пароли (store password и key password)
 Сохрани файл upload-keystore.jks в надежное место
