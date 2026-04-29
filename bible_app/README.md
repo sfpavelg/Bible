@@ -1,6 +1,10 @@
 # 🧮 Flutter Bible
  в c:\Project\Bible создан Flutter‑проект Библия.
 
+## 🔔 Последний релиз
+
+- `1.1.1+15` (2026-04-29): в шапке Плана оставлено только название текущего режима (без префикса «План чтения:»), в Chrome исправлена прокрутка списка дней/флагов мышью и тачпадом, а для `Исход 1:1` добавлена аннотация `[со|с] [всем]`, чтобы в зависимости от режима Септуагинты корректно показывались формы «со ... домом» и «с домом».
+
 ## 🚀 Быстрый старт
 
 1.
@@ -10,31 +14,29 @@ cd "c:\Project\Bible\bible_app"
 ```
 2. 
 ```bash
-# Посмотреть эмуляторы:
-flutter emulators
+# Сборка и деплой APK:
+# Готовый файл будет здесь: build/app/outputs/flutter-apk/app-release.apk
+flutter build apk --release
 ```
 3.
 ```bash
-# Если нужен эмулятор, запустить:
+# Если нужен эмулятор, запустить(запускается 5-30 секунд), запустится emulator-5554:
 flutter emulators --launch Pixel_XL_API_34
 ```
 4.
 ```bash
-# Проверить подключенные устройства, эмулятор (например:emulator-5554), или телефон:
-flutter install -d emulator-5554
+# Проверить подключенные устройства:
+flutter emulators
 ```
 5.
 ```bash
-# Сборка и деплой APK:
-# Готовый файл будет здесь: build/app/outputs/flutter-apk/app-release.apk
-flutter build apk --release
+# Установка (или переустановка) приложения на эмулчтор emulator-5554:
+flutter install -d emulator-5554
 ```
 6.
 ```bash
 # Запуск приложения на эмулятор:
 flutter run -d emulator-5554
-# Но лучше переустановка:
-flutter install -d emulator-5554
 ```
 7.
 ```bash
@@ -673,3 +675,21 @@ Archive в Xcode → Upload to App Store Connect
 Linux: собирайте в Linux CI (GitHub Actions/GitLab) или на отдельной Linux машине.
 iOS: нужен Mac (локальный, rented Mac cloud, или CI с macOS runner).
 Если хотите, могу сразу дать готовые workflow-файлы CI: отдельно для Linux артефакта и для iOS (build + export/Upload).
+
+// Маркировка в исходном тексте
+// "[со|с] [всем] домом своим"
+// Тогда при удалении скобок выбирается правильный вариант
+
+String processWithAnnotations(String text, ReadingMode mode) {
+  if (mode == ReadingMode.withoutSeptuaginta) {
+    // Убираем скобки и выбираем вариант: [вариант1|вариант2]
+    return text
+        .replaceAll(RegExp(r'\[[^\]]*\]'), '') // убрать скобки
+        .replaceAllMapped(RegExp(r'\(([^|]+)\|([^)]+)\)'), (match) {
+          return mode == ReadingMode.withoutSeptuaginta 
+              ? match.group(1)!  // "со"
+              : match.group(2)!; // "с"
+        });
+  }
+  return text;
+}

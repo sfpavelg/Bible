@@ -16,6 +16,7 @@ import 'package:bible_app/providers/app_provider.dart';
 import 'package:bible_app/widgets/app_chrome_overflow_menu.dart';
 import 'package:bible_app/widgets/chrome_outline.dart';
 import 'package:bible_app/widgets/chrome_toolbar_button.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -59,7 +60,7 @@ int _quarterStartDayIndexForPlan(_JournalPlanKind p, int quarterIndex) {
 bool _planUsesSingleQuarterHub(_JournalPlanKind p) =>
     _journalPlanIsThematic(p) && _quarterDayCountsForPlan(p).length == 1;
 
-/// Для тематических планов: часть подписи после «:» в листе выбора → «План чтения: …» в шапке.
+/// Для тематических планов: часть подписи после «:» в листе выбора.
 String _thematicReadingChromeSuffix(String pickerLabel) {
   final i = pickerLabel.lastIndexOf(':');
   if (i < 0 || i >= pickerLabel.length - 1) return pickerLabel.trim();
@@ -1509,22 +1510,34 @@ class _JournalScreenState extends State<JournalScreen>
                       maxWidth: dialogW,
                       maxHeight: maxContentH,
                     ),
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      primary: false,
-                      physics: const ClampingScrollPhysics(),
-                      itemCount: items.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 6),
-                      itemBuilder: (context, i) => _journalDayDialogChecklistRow(
-                        dayIndex: dayIndex,
-                        itemIndex: i,
-                        item: items[i],
-                        checked: doneNow.contains(items[i].key),
-                        app: app,
-                        fg: fg,
-                        isDark: isDark,
-                        dialogContext: dialogContext,
-                        setModalState: setModalState,
+                    child: ScrollConfiguration(
+                      behavior: ScrollConfiguration.of(layoutCtx).copyWith(
+                        dragDevices: {
+                          PointerDeviceKind.touch,
+                          PointerDeviceKind.mouse,
+                          PointerDeviceKind.stylus,
+                          PointerDeviceKind.invertedStylus,
+                          PointerDeviceKind.trackpad,
+                          PointerDeviceKind.unknown,
+                        },
+                      ),
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        primary: false,
+                        physics: const ClampingScrollPhysics(),
+                        itemCount: items.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 6),
+                        itemBuilder: (context, i) => _journalDayDialogChecklistRow(
+                          dayIndex: dayIndex,
+                          itemIndex: i,
+                          item: items[i],
+                          checked: doneNow.contains(items[i].key),
+                          app: app,
+                          fg: fg,
+                          isDark: isDark,
+                          dialogContext: dialogContext,
+                          setModalState: setModalState,
+                        ),
                       ),
                     ),
                   );
@@ -1913,17 +1926,15 @@ class _JournalScreenState extends State<JournalScreen>
     double maxWidth,
   ) {
     final full = switch (_plan) {
-      _JournalPlanKind.parallel => 'План чтения: параллельный',
-      _JournalPlanKind.chronological => 'План чтения: хронология',
-      _JournalPlanKind.sequential => 'План чтения: последовательный',
+      _JournalPlanKind.parallel => 'Параллельный',
+      _JournalPlanKind.chronological => 'Хронология',
+      _JournalPlanKind.sequential => 'Последовательный',
       _JournalPlanKind.faith =>
-        'План чтения: ${_thematicReadingChromeSuffix(kFaithPlanPickerButtonLabel)}',
-      _JournalPlanKind.hope =>
-        'План чтения: ${_thematicReadingChromeSuffix(kHopePlanPickerButtonLabel)}',
-      _JournalPlanKind.love =>
-        'План чтения: ${_thematicReadingChromeSuffix(kLovePlanPickerButtonLabel)}',
+        _thematicReadingChromeSuffix(kFaithPlanPickerButtonLabel),
+      _JournalPlanKind.hope => _thematicReadingChromeSuffix(kHopePlanPickerButtonLabel),
+      _JournalPlanKind.love => _thematicReadingChromeSuffix(kLovePlanPickerButtonLabel),
       _JournalPlanKind.beginner =>
-        'План чтения: ${_thematicReadingChromeSuffix(kBeginnerPlanPickerButtonLabel)}',
+        _thematicReadingChromeSuffix(kBeginnerPlanPickerButtonLabel),
     };
     final titleStyle = TextStyle(
       color: chromeFg,
@@ -2352,7 +2363,17 @@ class _JournalScreenState extends State<JournalScreen>
             },
             child: ScrollConfiguration(
               behavior: ScrollConfiguration.of(context)
-                  .copyWith(scrollbars: false),
+                  .copyWith(
+                    scrollbars: false,
+                    dragDevices: {
+                      PointerDeviceKind.touch,
+                      PointerDeviceKind.mouse,
+                      PointerDeviceKind.stylus,
+                      PointerDeviceKind.invertedStylus,
+                      PointerDeviceKind.trackpad,
+                      PointerDeviceKind.unknown,
+                    },
+                  ),
               child: ListView.builder(
                 controller: _scrollController,
                 primary: false,

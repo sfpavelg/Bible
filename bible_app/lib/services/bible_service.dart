@@ -75,6 +75,9 @@ class BibleService {
   BibleService._internal();
 
   static final RegExp _septuagintBracketChunk = RegExp(r'\[[^\[\]]*\]');
+  static final RegExp _readingModeAlternativeChunk = RegExp(
+    r'\[([^|\[\]]+)\|([^\[\]]+)\]',
+  );
   static final RegExp _inlineNoteTag =
       RegExp(r'<note>.*?</note>', dotAll: true);
   static final Set<String> _alwaysUnwrapSquareBracketVerses = <String>{
@@ -164,6 +167,19 @@ class BibleService {
     return out.trim();
   }
 
+  /// Выбирает вариант из аннотации `[септуагинта|без_септуагинты]`.
+  static String _resolveReadingModeAlternatives(
+    String text, {
+    required bool showSeptuagintText,
+  }) {
+    if (text.isEmpty || !text.contains('[') || !text.contains('|')) return text;
+    return text.replaceAllMapped(_readingModeAlternativeChunk, (m) {
+      final withSeptuagint = (m.group(1) ?? '').trim();
+      final withoutSeptuagint = (m.group(2) ?? '').trim();
+      return showSeptuagintText ? withSeptuagint : withoutSeptuagint;
+    });
+  }
+
   /// Нормализация текста стиха по правилам Септуагинты и служебной разметки.
   static String normalizeVerseTextForDisplay(
     String book,
@@ -176,11 +192,15 @@ class BibleService {
     var text = rawText;
     final hasTagEntities = text.contains('&lt;') || text.contains('&gt;');
     final hasRawTags = text.contains('<') || text.contains('>');
-    final hasSquare = text.contains('[') || text.contains(']');
 
     if (hasTagEntities) {
       text = decodeInlineTagEntities(text);
     }
+    text = _resolveReadingModeAlternatives(
+      text,
+      showSeptuagintText: showSeptuagintText,
+    );
+    final hasSquare = text.contains('[') || text.contains(']');
     if (_isAlwaysUnwrapSquareBrackets(book, chapter, verse)) {
       text = _removeSquareBracketsOnly(text);
     } else if (!showSeptuagintText && hasSquare) {
@@ -188,14 +208,6 @@ class BibleService {
     }
     if (stripMarkup && (hasRawTags || hasTagEntities)) {
       text = stripInlineMarkupTags(text);
-    }
-    // Исх 1:1: при скрытии вставки "[всем]" после "со" должна вернуться форма
-    // "с домом", но в режиме Септуагинты сохраняется оригинальное "со [всем]".
-    if (!showSeptuagintText && book == 'Исход' && chapter == 1 && verse == 1) {
-      text = text.replaceAll(
-        RegExp(r'\bсо(\s+домом\s+своим\b)', caseSensitive: false),
-        'с\$1',
-      );
     }
     return text;
   }
