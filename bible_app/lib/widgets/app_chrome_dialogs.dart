@@ -440,6 +440,7 @@ void showAppSettingsDialog(BuildContext context) {
                 fontSize: (uiFs * 0.92).clamp(12.0, 24.0),
               );
               const kSegIcon = 18.0;
+              const sliderHorizontalPadding = EdgeInsets.symmetric(horizontal: 8);
               final dropdownHeight = chromeBtnSize < kMinInteractiveDimension
                   ? kMinInteractiveDimension
                   : chromeBtnSize;
@@ -462,14 +463,21 @@ void showAppSettingsDialog(BuildContext context) {
                     disabledInactiveTickMarkColor: Colors.grey.shade500,
                   );
 
+              final mediaSize = MediaQuery.sizeOf(consumerContext);
+              final mediaPadding = MediaQuery.paddingOf(consumerContext);
               final panelWidth =
-                  ((MediaQuery.sizeOf(consumerContext).width - 12) * (2 / 3))
-                      .clamp(300.0, 362.5);
-              final topAnchor = MediaQuery.paddingOf(consumerContext).top +
+                  ((mediaSize.width - 12) * (2 / 3)).clamp(300.0, 362.5);
+              final topAnchor = mediaPadding.top +
                   AppProvider.toolbarHeightForChrome(chromeBtnSize);
-              final maxBodyHeight =
-                  (MediaQuery.sizeOf(consumerContext).height - topAnchor - 24)
-                      .clamp(220.0, 640.0);
+              final bottomToolbarReserve =
+                  AppProvider.toolbarHeightForChrome(chromeBtnSize);
+              final maxBodyHeight = (mediaSize.height -
+                      topAnchor -
+                      bottomToolbarReserve -
+                      mediaPadding.bottom -
+                      92)
+                  .clamp(140.0, 640.0)
+                  .toDouble();
 
               return Stack(
                 children: [
@@ -526,7 +534,7 @@ void showAppSettingsDialog(BuildContext context) {
                                         data: sliderDecor(
                                             SliderTheme.of(consumerContext)),
                                         child: Slider(
-                                          padding: EdgeInsets.zero,
+                                          padding: sliderHorizontalPadding,
                                           value: fontSize.clamp(12.0, 28.0),
                                           min: 12.0,
                                           max: 28.0,
@@ -548,7 +556,7 @@ void showAppSettingsDialog(BuildContext context) {
                                         data: sliderDecor(
                                             SliderTheme.of(consumerContext)),
                                         child: Slider(
-                                          padding: EdgeInsets.zero,
+                                          padding: sliderHorizontalPadding,
                                           value: lineHeight.clamp(1.0, 2.2),
                                           min: 1.0,
                                           max: 2.2,
@@ -570,7 +578,7 @@ void showAppSettingsDialog(BuildContext context) {
                                         data: sliderDecor(
                                             SliderTheme.of(consumerContext)),
                                         child: Slider(
-                                          padding: EdgeInsets.zero,
+                                          padding: sliderHorizontalPadding,
                                           value: verseSpacing.clamp(0.0, 28.0),
                                           min: 0.0,
                                           max: 28.0,
@@ -661,7 +669,7 @@ void showAppSettingsDialog(BuildContext context) {
                                         data: sliderDecor(
                                             SliderTheme.of(consumerContext)),
                                         child: Slider(
-                                          padding: EdgeInsets.zero,
+                                          padding: sliderHorizontalPadding,
                                           value: chromeBtnSize.clamp(
                                             AppProvider.chromeButtonSizeMin,
                                             AppProvider.chromeButtonSizeMax,
@@ -864,9 +872,7 @@ void showAppSupportDialog(BuildContext context) {
           final currentCode = int.tryParse(currentBuild) ??
               _versionCodeFromPackageVersion('$currentVersion+$currentBuild');
 
-          final supportPayload = 'Автор проекта: Софеин Павел Геннадьевич\n'
-              'Контактная почта: sfpavelg@gmail.com\n'
-              'Версия проекта: $currentVersion+$currentBuild';
+          const supportPayload = 'februaryidea7@gmail.com';
 
           _SupportRemoteRelease? remoteRelease;
           String? remoteError;
@@ -913,6 +919,13 @@ void showAppSupportDialog(BuildContext context) {
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          const Text('Описание проекта:'),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Текст Синодального перевода Библии с элементами Септуагинты (в [...])',
+                            style: body.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 12),
                           const Text('Автор проекта:'),
                           const SizedBox(height: 4),
                           Text(
@@ -923,7 +936,7 @@ void showAppSupportDialog(BuildContext context) {
                           const Text('Контактная почта:'),
                           const SizedBox(height: 4),
                           Text(
-                            'sfpavelg@gmail.com',
+                            'februaryidea7@gmail.com',
                             style: body.copyWith(fontWeight: FontWeight.w600),
                           ),
                           const SizedBox(height: 12),
@@ -1333,7 +1346,8 @@ void showAppHelpDialog(BuildContext context) {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      '• Для годовых планов сначала показаны четыре квартала; для тематических («Вера», «Надежда», «Любовь») — по одному кварталу. '
+                      '• Для годовых планов сначала показаны четыре квартала; для тематических («Вера», «Надежда», «Любовь») — по одному кварталу; '
+                      'для плана «Для начинающих» — тоже четыре квартала, но с поэтапным маршрутом для новичка. '
                       'Число дней в маршруте: «Вера» и «Надежда» — $kFaithPlanDayCount, «Любовь» — $kLovePlanDayCount. '
                       'Внутри квартала — дни подряд (для годовых планов номера 1…$n по году; для тематических — дни по номерам этого маршрута). '
                       'На экране кварталов в шапке — выбор плана и меню; внутри квартала — прокрутка списка '
@@ -1382,6 +1396,18 @@ void showAppHelpDialog(BuildContext context) {
                       'У каждого тематического плана — маршрут из нескольких дней ($kFaithPlanDayCount или $kLovePlanDayCount) с темой и пояснениями к отрывкам: '
                       'на экране выбора один квартал и блок советов по чтению. В списке дней слева — ссылки на стихи, '
                       'справа — краткая мысль. Отметки «прочитано» для каждого тематического плана хранятся раздельно и отдельно от остальных планов.',
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'План «Для начинающих»',
+                      style: tocStyle,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Этот план разбит на четыре последовательных квартала для плавного входа в чтение: '
+                      '1-й квартал — Евангелие от Иоанна, 2-й — Деяния, 3-й — Римлянам, 4-й — Галатам. '
+                      'Внутри каждого квартала дни идут по порядку, с отдельным прогрессом по дням и кварталам. '
+                      'Отметки «прочитано» в плане «Для начинающих» хранятся отдельно от всех остальных планов.',
                     ),
                   ],
                 ),
