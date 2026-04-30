@@ -2198,6 +2198,7 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
               final railBtnWFirst = chrome.clamp(32.0, 44.0);
               final railBtnWSecond = chrome.clamp(32.0, 42.0);
               final railBtnGap = (chrome * 0.07).clamp(2.0, 5.0);
+              final flagInlineGap = (railBtnGap * 0.5).clamp(1.0, 2.0);
               final rowShape = RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
                 side: ChromeOutline.side,
@@ -2263,44 +2264,66 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                         onPressed: _results.isEmpty ? null : _jumpResultsToEnd,
                       ),
                       const Spacer(),
-                      Transform.scale(
-                        scale: checkboxScale,
-                        child: Checkbox(
-                          value: _vz,
-                          onChanged: _setVz,
-                          visualDensity: VisualDensity.compact,
-                          activeColor: padBg,
-                          checkColor: fg,
-                          side: ChromeOutline.side,
-                        ),
-                      ),
-                      Text(
-                        'ВЗ',
-                        style: TextStyle(
-                          fontSize: chromeLabel * textScale,
-                          fontWeight: FontWeight.w600,
-                          color: fg,
-                        ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Transform.scale(
+                            scale: checkboxScale,
+                            child: Checkbox(
+                              value: _vz,
+                              onChanged: _setVz,
+                              visualDensity: const VisualDensity(
+                                horizontal: -4,
+                                vertical: -4,
+                              ),
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                              activeColor: padBg,
+                              checkColor: fg,
+                              side: ChromeOutline.side,
+                            ),
+                          ),
+                          SizedBox(width: flagInlineGap),
+                          Text(
+                            'ВЗ',
+                            style: TextStyle(
+                              fontSize: chromeLabel * textScale,
+                              fontWeight: FontWeight.w600,
+                              color: fg,
+                            ),
+                          ),
+                        ],
                       ),
                       SizedBox(width: 8 * scale),
-                      Transform.scale(
-                        scale: checkboxScale,
-                        child: Checkbox(
-                          value: _nz,
-                          onChanged: _setNz,
-                          visualDensity: VisualDensity.compact,
-                          activeColor: padBg,
-                          checkColor: fg,
-                          side: ChromeOutline.side,
-                        ),
-                      ),
-                      Text(
-                        'НЗ',
-                        style: TextStyle(
-                          fontSize: chromeLabel * textScale,
-                          fontWeight: FontWeight.w600,
-                          color: fg,
-                        ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Transform.scale(
+                            scale: checkboxScale,
+                            child: Checkbox(
+                              value: _nz,
+                              onChanged: _setNz,
+                              visualDensity: const VisualDensity(
+                                horizontal: -4,
+                                vertical: -4,
+                              ),
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                              activeColor: padBg,
+                              checkColor: fg,
+                              side: ChromeOutline.side,
+                            ),
+                          ),
+                          SizedBox(width: flagInlineGap),
+                          Text(
+                            'НЗ',
+                            style: TextStyle(
+                              fontSize: chromeLabel * textScale,
+                              fontWeight: FontWeight.w600,
+                              color: fg,
+                            ),
+                          ),
+                        ],
                       ),
                       const Spacer(),
                       Material(

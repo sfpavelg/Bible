@@ -693,3 +693,59 @@ String processWithAnnotations(String text, ReadingMode mode) {
   }
   return text;
 }
+
+В Cursor нажмите на аватар/иконку аккаунта и откройте Dashboard / Manage Account.
+Личный кабинет: https://cursor.com/dashboard
+Текущий тариф и смена плана: https://cursor.com/dashboard/billing
+Лимиты/расход: https://cursor.com/dashboard/usage
+Если у вас командный аккаунт (Teams), раздел оплаты обычно в Dashboard как Billing and Invoices, а управление местами (seats) — у админа команды.
+
+Google Play. Ниже самый практичный путь: что нужно подготовить и в каком порядке делать.
+
+Что обязательно нужно
+Google Play Console аккаунт (оплачен и активирован).
+Уникальный applicationId (у вас уже есть, менять нельзя после публикации).
+Подписанный релизный .aab (для Play нужен именно AAB, не APK).
+App signing: Google Play App Signing (рекомендовано; обычно включается при первом релизе).
+Политики и формы: Data safety, App content, возможно Ads declaration.
+Store listing: название, описание, иконка 512x512, feature graphic 1024x500, скриншоты.
+Целевой SDK и актуальные требования Android (target API должен соответствовать текущим правилам Play).
+Политика конфиденциальности (URL), если собираются данные/есть чувствительные разрешения.
+Пошаговый план выпуска
+1) Техническая подготовка
+
+Проверить versionName/versionCode (у вас через pubspec version).
+Собрать appbundle: flutter build appbundle --release.
+Проверить, что сборка без debug-артефактов и с корректной подписью.
+2) Настройка приложения в Play Console
+
+Создать приложение (язык, название, тип app/game, free/paid).
+Заполнить Store Listing (тексты + графика).
+3) Обязательные формы
+
+App access (если нужен логин — дать тестовый).
+Ads declaration.
+Data safety.
+Content rating.
+Target audience / News / COVID (если применимо).
+4) Загрузка релиза
+
+Создать трек (обычно сначала Internal testing).
+Загрузить .aab.
+Добавить release notes.
+Сохранить и пройти pre-launch checks.
+5) Тестирование
+
+Дать доступ тестерам (почты/группа).
+Проверить установку, обновление поверх прошлой версии, критичные экраны.
+6) Продакшен
+
+Перенести проверенный релиз в Production.
+Отправить на review.
+После публикации проверить страницу приложения и crash/ANR в Console.
+Частые блокеры
+Неверный versionCode (не увеличен).
+Нет/невалидная Privacy Policy.
+Незаполненные разделы App content / Data safety.
+Некорректные скриншоты/графика.
+Разрешения в манифесте без обоснования.

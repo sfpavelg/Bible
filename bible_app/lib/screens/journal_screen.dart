@@ -599,6 +599,11 @@ class _JournalScreenState extends State<JournalScreen>
     return _quarterStartDayIndexForPlan(_plan, q);
   }
 
+  int _dayNumberInCurrentQuarter(int absoluteDayIndex) {
+    final start = _dayStartIndexForOpenQuarter();
+    return (absoluteDayIndex - start) + 1;
+  }
+
   /// Восстановить прокрутку списка дней квартала из кэша.
   void _restoreListScrollForOpenQuarter() {
     final q = _openQuarter;
@@ -1476,7 +1481,7 @@ class _JournalScreenState extends State<JournalScreen>
                 children: [
                   Expanded(
                     child: Text(
-                      'День ${dayIndex + 1}',
+                      'День ${_dayNumberInCurrentQuarter(dayIndex)}',
                       style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
                             color: fg,
                           ),
@@ -1561,6 +1566,9 @@ class _JournalScreenState extends State<JournalScreen>
     required BuildContext dialogContext,
     required StateSetter setModalState,
   }) {
+    final baseFontPx = app.fontSize * app.verseFontSizeScale;
+    final linkVerticalPad = (baseFontPx * 0.48).clamp(7.0, 10.0);
+    final linkTextGap = (baseFontPx * 0.24).clamp(3.0, 6.0);
     return Material(
       color: Colors.transparent,
       shape: RoundedRectangleBorder(
@@ -1622,8 +1630,8 @@ class _JournalScreenState extends State<JournalScreen>
                     appTabSwitchRequest.value = 0;
                   },
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 10,
+                    padding: EdgeInsets.symmetric(
+                      vertical: linkVerticalPad,
                       horizontal: 10,
                     ),
                     child: _journalPlanIsThematic(_plan)
@@ -1635,10 +1643,12 @@ class _JournalScreenState extends State<JournalScreen>
                                   Expanded(
                                     child: Text(
                                       item.label,
-                                      style: app.bibleVerseTextStyle(
-                                        color: fg,
-                                        fontWeight: FontWeight.w700,
-                                      ),
+                                      style: app
+                                          .bibleVerseTextStyle(
+                                            color: fg,
+                                            fontWeight: FontWeight.w700,
+                                          )
+                                          .copyWith(height: 1.0),
                                     ),
                                   ),
                                   Icon(
@@ -1649,7 +1659,7 @@ class _JournalScreenState extends State<JournalScreen>
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 6),
+                              SizedBox(height: linkTextGap),
                               Text(
                                 _thematicRowIdea(dayIndex, itemIndex),
                                 style: app.bibleVerseTextStyle(
@@ -1660,7 +1670,7 @@ class _JournalScreenState extends State<JournalScreen>
                                           app.verseFontSizeScale *
                                           0.88)
                                       .clamp(11.0, 20.0),
-                                  height: 1.35,
+                                  height: 1.08,
                                 ),
                               ),
                             ],
@@ -1670,10 +1680,12 @@ class _JournalScreenState extends State<JournalScreen>
                               Expanded(
                                 child: Text(
                                   item.label,
-                                  style: app.bibleVerseTextStyle(
-                                    color: fg,
-                                    fontWeight: FontWeight.w700,
-                                  ),
+                                  style: app
+                                      .bibleVerseTextStyle(
+                                        color: fg,
+                                        fontWeight: FontWeight.w700,
+                                      )
+                                      .copyWith(height: 1.0),
                                 ),
                               ),
                               Icon(
@@ -2126,45 +2138,70 @@ class _JournalScreenState extends State<JournalScreen>
                 child: InkWell(
                   borderRadius: BorderRadius.circular(12),
                   onTap: () => _openQuarterScreen(qi),
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '${qi + 1} квартал',
-                          textAlign: TextAlign.center,
-                          style: app
-                              .bibleVerseTextStyle(
-                                color: titleColor,
-                                fontWeight: FontWeight.w800,
-                              )
-                              .copyWith(
-                                fontSize:
-                                    app.fontSize * app.verseFontSizeScale * 1.12,
-                              ),
-                        ),
-                        if (quarterTheme != null) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            quarterTheme,
-                            textAlign: TextAlign.center,
-                            style: app.bibleVerseTextStyle(
-                              color: titleColor,
-                              fontWeight: FontWeight.w700,
+                  child: LayoutBuilder(
+                    builder: (context, cardConstraints) {
+                      final compactness =
+                          ((150.0 - cardConstraints.maxHeight) / 70.0).clamp(
+                            0.0,
+                            1.0,
+                          );
+                      final quarterLineHeight = (1.06 - compactness * 0.18)
+                          .clamp(0.88, 1.06);
+                      final titleGap = (4.0 - compactness * 1.5).clamp(2.0, 4.0);
+                      final bottomGap = (6.0 - compactness * 2.0).clamp(3.0, 6.0);
+                      final titleFontScale = (1.12 - compactness * 0.12).clamp(
+                        0.98,
+                        1.12,
+                      );
+                      return Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '${qi + 1} квартал',
+                              textAlign: TextAlign.center,
+                              style: app
+                                  .bibleVerseTextStyle(
+                                    color: titleColor,
+                                    fontWeight: FontWeight.w800,
+                                  )
+                                  .copyWith(
+                                    fontSize:
+                                        app.fontSize *
+                                        app.verseFontSizeScale *
+                                        titleFontScale,
+                                    // Для квартальных карточек игнорируем глобальный line-height.
+                                    height: quarterLineHeight,
+                                  ),
                             ),
-                          ),
-                        ],
-                        const SizedBox(height: 6),
-                        Text(
-                          'Прочитано $done из $total',
-                          textAlign: TextAlign.center,
-                          style: app.bibleVerseTextStyle(
-                            color: cardMutedFg,
-                            fontWeight: FontWeight.w600,
-                          ),
+                            if (quarterTheme != null) ...[
+                              SizedBox(height: titleGap),
+                              Text(
+                                quarterTheme,
+                                textAlign: TextAlign.center,
+                                style: app
+                                    .bibleVerseTextStyle(
+                                      color: titleColor,
+                                      fontWeight: FontWeight.w700,
+                                    )
+                                    .copyWith(height: quarterLineHeight),
+                              ),
+                            ],
+                            SizedBox(height: bottomGap),
+                            Text(
+                              'Прочитано $done из $total',
+                              textAlign: TextAlign.center,
+                              style: app
+                                  .bibleVerseTextStyle(
+                                    color: cardMutedFg,
+                                    fontWeight: FontWeight.w600,
+                                  )
+                                  .copyWith(height: quarterLineHeight),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      );
+                    },
                   ),
                 ),
               ),
@@ -2179,7 +2216,6 @@ class _JournalScreenState extends State<JournalScreen>
     AppProvider app, {
     required ThematicReadingDay dayData,
     required int dayIndex,
-    required double lineGap,
     required Color titleColor,
     required Color bodyColor,
     required Color cardDoneBg,
@@ -2187,21 +2223,27 @@ class _JournalScreenState extends State<JournalScreen>
     required bool isDark,
   }) {
     final done = _dayDone(dayIndex);
-    final n = dayIndex + 1;
+    final n = _dayNumberInCurrentQuarter(dayIndex);
     final chapterItems = _chapterItemsForDay(dayIndex);
     final doneItems = _doneItemsForCurrentPlan(dayIndex);
     final doneCount =
         chapterItems.where((e) => doneItems.contains(e.key)).length;
+    final baseFontPx = app.fontSize * app.verseFontSizeScale;
+    final compactGap = (baseFontPx * 0.22).clamp(3.0, 7.0);
+    final rowGapFirst = (baseFontPx * 0.28).clamp(5.0, 10.0);
+    final rowGapNext = (baseFontPx * 0.24).clamp(4.0, 9.0);
+    final rowInnerGap = (baseFontPx * 0.24).clamp(5.0, 11.0);
     final dayTitleStyle = app
         .bibleVerseTextStyle(color: titleColor, fontWeight: FontWeight.w800)
         .copyWith(
           fontSize: app.fontSize * app.verseFontSizeScale * 1.06,
+          height: 1.0,
         );
     final themeLineStyle = app
         .bibleVerseTextStyle(color: titleColor, fontWeight: FontWeight.w700)
         .copyWith(
           fontSize: app.fontSize * app.verseFontSizeScale * 0.95,
-          height: 1.25,
+          height: 1.02,
         );
     final refStyle = app.bibleVerseTextStyle(
       color: bodyColor,
@@ -2209,7 +2251,7 @@ class _JournalScreenState extends State<JournalScreen>
     ).copyWith(
       fontSize:
           (app.fontSize * app.verseFontSizeScale * 0.92).clamp(11.0, 22.0),
-      height: 1.25,
+      height: 1.04,
     );
     final ideaStyle = app.bibleVerseTextStyle(
       color: bodyColor,
@@ -2217,7 +2259,7 @@ class _JournalScreenState extends State<JournalScreen>
     ).copyWith(
       fontSize:
           (app.fontSize * app.verseFontSizeScale * 0.86).clamp(10.5, 20.0),
-      height: 1.35,
+      height: 1.08,
     );
     final doneLabelStyle = app.bibleVerseTextStyle(
       color: titleColor,
@@ -2267,7 +2309,7 @@ class _JournalScreenState extends State<JournalScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('День $n', style: dayTitleStyle),
-                          SizedBox(height: (lineGap + 2).clamp(4.0, 14.0)),
+                          SizedBox(height: compactGap),
                           Text(dayData.theme, style: themeLineStyle),
                         ],
                       ),
@@ -2284,6 +2326,7 @@ class _JournalScreenState extends State<JournalScreen>
                         ).copyWith(
                           fontSize: (app.fontSize * app.verseFontSizeScale * 0.92)
                               .clamp(11.0, 26.0),
+                          height: 1.0,
                         ),
                       ),
                     ),
@@ -2291,9 +2334,7 @@ class _JournalScreenState extends State<JournalScreen>
                 ),
                 for (var i = 0; i < dayData.rows.length; i++) ...[
                   SizedBox(
-                    height: i == 0
-                        ? (lineGap + 4).clamp(8.0, 16.0)
-                        : (lineGap + 6).clamp(8.0, 14.0),
+                    height: i == 0 ? rowGapFirst : rowGapNext,
                   ),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -2305,7 +2346,7 @@ class _JournalScreenState extends State<JournalScreen>
                           style: refStyle,
                         ),
                       ),
-                      SizedBox(width: (lineGap + 4).clamp(6.0, 14.0)),
+                      SizedBox(width: rowInnerGap),
                       Expanded(
                         flex: 3,
                         child: Text(
@@ -2317,7 +2358,7 @@ class _JournalScreenState extends State<JournalScreen>
                   ),
                 ],
                 if (done) ...[
-                  SizedBox(height: (lineGap + 4).clamp(8.0, 14.0)),
+                  SizedBox(height: rowGapNext),
                   Align(
                     alignment: Alignment.centerRight,
                     child: doneBadge(),
@@ -2338,7 +2379,8 @@ class _JournalScreenState extends State<JournalScreen>
     required Color thumbColor,
     required Color trackHintColor,
   }) {
-    final lineGap = (app.verseSpacing * 0.65).clamp(0.0, 12.0);
+    final baseFontPx = app.fontSize * app.verseFontSizeScale;
+    final lineGap = (baseFontPx * 0.32).clamp(2.0, 8.0);
     final titleColor =
         isDark ? const Color(0xFF81D4FA) : Colors.blue.shade900;
     final bodyColor = isDark ? Colors.grey.shade200 : Colors.grey.shade900;
@@ -2386,7 +2428,6 @@ class _JournalScreenState extends State<JournalScreen>
                       app,
                       dayData: _thematicDayDataForIndex(index),
                       dayIndex: index,
-                      lineGap: lineGap,
                       titleColor: titleColor,
                       bodyColor: bodyColor,
                       cardDoneBg: cardDoneBg,
@@ -2396,7 +2437,7 @@ class _JournalScreenState extends State<JournalScreen>
                   }
                   final lines = _linesForDay(index);
                   final done = _dayDone(index);
-                  final n = index + 1;
+                  final n = _dayNumberInCurrentQuarter(index);
                   final chapterItems = _chapterItemsForDay(index);
                   final doneItems = _doneItemsForCurrentPlan(index);
                   final doneCount =
@@ -2405,7 +2446,7 @@ class _JournalScreenState extends State<JournalScreen>
                 final readingsStyle = app.bibleVerseTextStyle(
                   color: bodyColor,
                   fontWeight: done ? FontWeight.w600 : FontWeight.normal,
-                );
+                ).copyWith(height: 1.06);
                 final doneLabelStyle = app.bibleVerseTextStyle(
                   color: titleColor,
                   fontWeight: FontWeight.w700,
@@ -2467,6 +2508,7 @@ class _JournalScreenState extends State<JournalScreen>
                                                   fontSize: app.fontSize *
                                                       app.verseFontSizeScale *
                                                       1.06,
+                                                  height: 1.0,
                                                 ),
                                           ),
                                         ),
@@ -2483,6 +2525,7 @@ class _JournalScreenState extends State<JournalScreen>
                                                   app.verseFontSizeScale *
                                                   0.92)
                                               .clamp(11.0, 26.0),
+                                          height: 1.0,
                                         ),
                                       ),
                                       ],
