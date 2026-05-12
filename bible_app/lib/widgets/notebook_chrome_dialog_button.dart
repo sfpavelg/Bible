@@ -31,7 +31,7 @@ enum NotebookDialogActionStyle {
   danger,
 }
 
-/// Крестик закрытия в заголовке диалогов блокнота (как в Библии / поиске).
+/// Крестик закрытия в заголовке диалогов (настройки, помощь, техподдержка).
 class NotebookChromeDialogCloseButton extends StatelessWidget {
   const NotebookChromeDialogCloseButton({super.key, required this.onPressed});
 
@@ -64,7 +64,7 @@ class NotebookChromeDialogCloseButton extends StatelessWidget {
   }
 }
 
-/// Квадратная кнопка в заголовке диалога блокнота (как [NotebookChromeDialogCloseButton]):
+/// Квадратная кнопка в заголовке диалога блокнота:
 /// та же высота/ширина [AppProvider.chromeButtonSize], обводка и фон хрома.
 /// [onPressed] == null — неактивна (серый значок, без нажатия), как «вверх» в корне Библии.
 class NotebookChromeDialogToolbarIconButton extends StatelessWidget {

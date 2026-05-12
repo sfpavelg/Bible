@@ -391,7 +391,7 @@ void showAppSettingsDialog(BuildContext context) {
 
   showGeneralDialog<void>(
     context: context,
-    barrierDismissible: false,
+    barrierDismissible: true,
     barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
     barrierColor: Colors.black26,
     transitionDuration: const Duration(milliseconds: 160),
@@ -849,10 +849,22 @@ void showAppSupportDialog(BuildContext context) {
                 borderRadius: BorderRadius.circular(12),
               ),
               clipBehavior: Clip.antiAlias,
-              title: Text(
-                'Техподдержка',
-                style: theme.textTheme.titleLarge
-                    ?.copyWith(color: scheme.onSurface),
+              titlePadding: const EdgeInsets.fromLTRB(20, 14, 12, 8),
+              title: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Техподдержка',
+                      style: theme.textTheme.titleLarge
+                          ?.copyWith(color: scheme.onSurface),
+                    ),
+                  ),
+                  _PopRouteOnce(
+                    navigatorContext: routeContext,
+                    builder: (c, popOnce) =>
+                        NotebookChromeDialogCloseButton(onPressed: popOnce),
+                  ),
+                ],
               ),
               content: const SizedBox(
                 width: 320,
@@ -1240,7 +1252,8 @@ void showAppHelpDialog(BuildContext context) {
                       '• «Избранное» в шапке сохраняет выбранные стихи и открывает их перечень.',
                     ),
                     Text(
-                      '• В окнах выбора книги или главы закрыть подсказку можно кнопкой в углу заголовка.',
+                      '• Окна выбора книги, главы, поиска и избранного закрываются '
+                      'системной кнопкой «Назад» или тапом по затемнённой области вокруг окна.',
                     ),
                     const SizedBox(height: 10),
                     Text(
@@ -1249,7 +1262,7 @@ void showAppHelpDialog(BuildContext context) {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '• Введите одно слово или несколько и нажмите «Найти».',
+                      '• Введите одно слово или несколько — поиск выполняется автоматически по мере набора.',
                     ),
                     Text(
                       '• Флажки «ВЗ» и «НЗ» ограничивают поиск Ветхим или Новым Заветом.',

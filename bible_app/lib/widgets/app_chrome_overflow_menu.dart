@@ -72,26 +72,6 @@ class _AppChromeOverflowMenuState extends State<AppChromeOverflowMenu> {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                'Меню',
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w600,
-                                  color: Theme.of(dialogContext)
-                                      .colorScheme
-                                      .onSurface,
-                                ),
-                              ),
-                            ),
-                            NotebookChromeDialogCloseButton(
-                              onPressed: () => Navigator.pop(dialogContext),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
                         InkWell(
                           onTap: () => Navigator.pop(dialogContext, 'settings'),
                           child: chromePopupMenuChoiceTile(

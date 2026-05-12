@@ -334,32 +334,6 @@ class _BibleScreenState extends State<BibleScreen> {
 
   final ScrollController _scrollController = ScrollController();
 
-  Widget _bibleChromeCloseButton(BuildContext context, VoidCallback onPressed) {
-    final app = context.watch<AppProvider>();
-    final chrome = app.chromeButtonSize;
-    final bg = _bibleScreenButtonBg(context);
-    final fg = _bibleScreenChromeFg(context);
-    final iconSize = (chrome * 0.5).clamp(18.0, 30.0);
-    final shape = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(8),
-      side: ChromeOutline.side,
-    );
-    return Material(
-      color: bg,
-      shape: shape,
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onPressed,
-        customBorder: shape,
-        child: SizedBox(
-          width: chrome,
-          height: chrome,
-          child: Icon(Icons.close, color: fg, size: iconSize),
-        ),
-      ),
-    );
-  }
-
   Future<void> _showVerseNoteDialog(String noteText) async {
     if (!mounted) return;
     await showDialog<void>(
@@ -368,20 +342,12 @@ class _BibleScreenState extends State<BibleScreen> {
         insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
         titlePadding: const EdgeInsets.fromLTRB(20, 14, 12, 10),
         contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
-        title: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Text(
-                'Примечание',
-                style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
-                      color: _bibleScreenChromeFg(ctx),
-                      fontWeight: FontWeight.w700,
-                    ),
+        title: Text(
+          'Примечание',
+          style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
+                color: _bibleScreenChromeFg(ctx),
+                fontWeight: FontWeight.w700,
               ),
-            ),
-            _bibleChromeCloseButton(ctx, () => Navigator.pop(ctx)),
-          ],
         ),
         content: Builder(
           builder: (contentContext) {
@@ -528,6 +494,8 @@ class _BibleScreenState extends State<BibleScreen> {
   bool _searchIncludeVz = true;
   bool _searchIncludeNz = true;
   bool _searchWholeWords = false;
+  /// Сохраняется между открытиями диалога поиска (список результатов).
+  double _searchResultsScrollOffset = 0;
 
   VoidCallback? _bibleVerseJumpListener;
 
@@ -1198,7 +1166,7 @@ class _BibleScreenState extends State<BibleScreen> {
                                       ),
                                       const SizedBox(width: 4),
                                       ChromeIconButton(
-                                        icon: Icons.close,
+                                        icon: Icons.highlight_off_outlined,
                                         tooltip: 'Отмена',
                                         foregroundColor: chromeTextColor,
                                         backgroundColor: buttonBg,
@@ -1271,17 +1239,19 @@ class _BibleScreenState extends State<BibleScreen> {
                     initialResults: _searchResultRows
                         .map((e) => Map<String, dynamic>.from(e))
                         .toList(),
+                    initialScrollOffset: _searchResultsScrollOffset,
                     initialVz: _searchIncludeVz,
                     initialNz: _searchIncludeNz,
                     initialWholeWords: _searchWholeWords,
                     history: history,
                     historyKey: _kBibleSearchHistoryKey,
-                    onClosing: (q, results, vz, nz, wholeWords) {
+                    onClosing: (q, results, vz, nz, wholeWords, scrollOffset) {
                       _searchDraft = q;
                       _searchResultRows = results;
                       _searchIncludeVz = vz;
                       _searchIncludeNz = nz;
                       _searchWholeWords = wholeWords;
+                      _searchResultsScrollOffset = scrollOffset;
                     },
                     onPickResult: (book, chapter, verse) async {
                       Navigator.pop(dialogContext);
@@ -1406,22 +1376,12 @@ class _BibleScreenState extends State<BibleScreen> {
                 maxWidth: (w - 16).clamp(280.0, 440.0),
                 maxHeight: maxDialogH,
               ),
-              title: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Выберите главу (${BibleBook.liturgicalDisplayName(selectedBook)})',
-                      style: TextStyle(
-                        fontSize: titleFs,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  _BibleDialogCloseButton(
-                    onPressed: () => Navigator.pop(dialogContext),
-                  ),
-                ],
+              title: Text(
+                'Выберите главу (${BibleBook.liturgicalDisplayName(selectedBook)})',
+                style: TextStyle(
+                  fontSize: titleFs,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               content: ConstrainedBox(
                 constraints: BoxConstraints(
@@ -1511,22 +1471,12 @@ class _BibleScreenState extends State<BibleScreen> {
                 maxWidth: (w - 16).clamp(280.0, 560.0),
                 maxHeight: maxH,
               ),
-              title: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Выберите книгу',
-                      style: TextStyle(
-                        fontSize: titleFs,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  _BibleDialogCloseButton(
-                    onPressed: () => Navigator.pop(dialogContext),
-                  ),
-                ],
+              title: Text(
+                'Выберите книгу',
+                style: TextStyle(
+                  fontSize: titleFs,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               content: SingleChildScrollView(
                 child: Column(
@@ -1637,45 +1587,6 @@ class _BibleScreenState extends State<BibleScreen> {
           },
         );
       },
-    );
-  }
-}
-
-/// Кнопка закрытия диалога выбора книги/главы (как в панели поиска).
-class _BibleDialogCloseButton extends StatelessWidget {
-  const _BibleDialogCloseButton({required this.onPressed});
-
-  final VoidCallback onPressed;
-
-  static const _bg = Color(0xFFE1F5FE);
-  static const _fg = Colors.black;
-
-  @override
-  Widget build(BuildContext context) {
-    final app = context.watch<AppProvider>();
-    final chrome = app.chromeButtonSize;
-    final fs = app.fontSize;
-    // Растёт и с «размером кнопок», и с шрифтом — как остальной диалог.
-    final dim = ((chrome + fs * 2.0) / 2).clamp(40.0, 58.0);
-    final ic = (dim * 0.5).clamp(18.0, 30.0);
-    final corner = (dim * 0.2).clamp(6.0, 12.0);
-    final shape = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(corner),
-      side: ChromeOutline.side,
-    );
-    return Material(
-      color: _bg,
-      shape: shape,
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onPressed,
-        customBorder: shape,
-        child: SizedBox(
-          width: dim,
-          height: dim,
-          child: Icon(Icons.close, color: _fg, size: ic),
-        ),
-      ),
     );
   }
 }
@@ -1829,6 +1740,7 @@ class _BibleSearchDialog extends StatefulWidget {
     required this.appProvider,
     required this.initialQuery,
     required this.initialResults,
+    required this.initialScrollOffset,
     required this.initialVz,
     required this.initialNz,
     required this.initialWholeWords,
@@ -1841,6 +1753,7 @@ class _BibleSearchDialog extends StatefulWidget {
   final AppProvider appProvider;
   final String initialQuery;
   final List<Map<String, dynamic>> initialResults;
+  final double initialScrollOffset;
   final bool initialVz;
   final bool initialNz;
   final bool initialWholeWords;
@@ -1852,6 +1765,7 @@ class _BibleSearchDialog extends StatefulWidget {
     bool vz,
     bool nz,
     bool wholeWords,
+    double resultsScrollOffset,
   ) onClosing;
   final Future<void> Function(String book, int chapter, int verse) onPickResult;
 
@@ -1870,6 +1784,8 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
   bool _hasRunSearch = false;
   final LinkedHashSet<int> _selectedResultIndices = LinkedHashSet<int>();
   final ScrollController _resultsScrollController = ScrollController();
+  late double _trackedResultsScrollOffset;
+  Timer? _searchDebounce;
 
   @override
   void initState() {
@@ -1884,17 +1800,36 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
     _history = List<String>.from(widget.history);
     _hasRunSearch = widget.initialQuery.trim().isNotEmpty ||
         widget.initialResults.isNotEmpty;
+    _trackedResultsScrollOffset =
+        widget.initialScrollOffset < 0 ? 0.0 : widget.initialScrollOffset;
     _resultsScrollController.addListener(_onResultsScroll);
+    if (_trackedResultsScrollOffset > 0 && _results.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _applyRestoredScrollOffset();
+      });
+    }
+  }
+
+  void _applyRestoredScrollOffset() {
+    final c = _resultsScrollController;
+    if (!c.hasClients) return;
+    final max = c.position.maxScrollExtent;
+    final target = _trackedResultsScrollOffset.clamp(0.0, max);
+    c.jumpTo(target);
+    _trackedResultsScrollOffset = target;
   }
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     widget.onClosing(
       _queryCtrl.text,
       _results.map((e) => Map<String, dynamic>.from(e)).toList(),
       _vz,
       _nz,
       _wholeWords,
+      _trackedResultsScrollOffset,
     );
     _queryCtrl.dispose();
     _focusNode.dispose();
@@ -1905,37 +1840,25 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
   }
 
   void _onResultsScroll() {
+    final c = _resultsScrollController;
+    if (c.hasClients) {
+      _trackedResultsScrollOffset = c.offset;
+    }
     if (mounted) setState(() {});
   }
 
-  void _jumpResultsToStart() {
-    HapticFeedback.lightImpact();
-    final c = _resultsScrollController;
-    if (!c.hasClients) return;
-    const target = 0.0;
-    final dist = (c.offset - target).abs();
-    if (dist < 1) return;
-    final ms = (200 + dist * 0.22).clamp(200.0, 1100.0).round();
-    c.animateTo(
-      target,
-      duration: Duration(milliseconds: ms),
-      curve: Curves.easeInOutCubic,
-    );
+  void _maybeRefreshSearch() {
+    if (!mounted) return;
+    if (_queryCtrl.text.trim().isEmpty) return;
+    _runSearch(unfocus: false);
   }
 
-  void _jumpResultsToEnd() {
-    HapticFeedback.lightImpact();
-    final c = _resultsScrollController;
-    if (!_scrollPositionHasMetrics(c)) return;
-    final m = c.position.maxScrollExtent;
-    final dist = (m - c.offset).abs();
-    if (dist < 1) return;
-    final ms = (200 + dist * 0.22).clamp(200.0, 1100.0).round();
-    c.animateTo(
-      m,
-      duration: Duration(milliseconds: ms),
-      curve: Curves.easeInOutCubic,
-    );
+  void _scheduleDebouncedSearch() {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 320), () {
+      if (!mounted) return;
+      _runSearch(unfocus: false);
+    });
   }
 
   void _setVz(bool? v) {
@@ -1948,6 +1871,7 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
       _vz = vz;
       _nz = nz;
     });
+    _maybeRefreshSearch();
   }
 
   void _setNz(bool? v) {
@@ -1960,6 +1884,7 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
       _vz = vz;
       _nz = nz;
     });
+    _maybeRefreshSearch();
   }
 
   Future<void> _persistHistoryIfMatch(String q) async {
@@ -1974,10 +1899,27 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
     if (mounted) setState(() {});
   }
 
-  void _runSearch() {
-    FocusManager.instance.primaryFocus?.unfocus();
+  void _runSearch({bool unfocus = true}) {
+    if (unfocus) {
+      FocusManager.instance.primaryFocus?.unfocus();
+    }
     final q = _queryCtrl.text.trim();
-    if (q.isEmpty) return;
+    if (q.isEmpty) {
+      setState(() {
+        _results = [];
+        _hasRunSearch = false;
+        _selectedResultIndices.clear();
+      });
+      _trackedResultsScrollOffset = 0;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final c = _resultsScrollController;
+        if (c.hasClients) {
+          c.jumpTo(0);
+        }
+      });
+      return;
+    }
     final list = widget.appProvider.searchBible(
       q,
       includeOldTestament: _vz,
@@ -1988,6 +1930,14 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
       _results = list;
       _hasRunSearch = true;
       _selectedResultIndices.clear();
+    });
+    _trackedResultsScrollOffset = 0;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final c = _resultsScrollController;
+      if (c.hasClients) {
+        c.jumpTo(0);
+      }
     });
     if (list.isNotEmpty) {
       unawaited(_persistHistoryIfMatch(q));
@@ -2193,161 +2143,69 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
               final checkboxScale =
                   (0.9 + (scale - 0.76) * 0.25).clamp(0.86, 1.0);
               final chrome = widget.appProvider.chromeButtonSize;
-              final closeIc = (chrome * 0.5).clamp(18.0, 30.0);
               final chromeLabel = (chrome * 0.36).clamp(12.0, 22.0);
-              final railBtnWFirst = chrome.clamp(32.0, 44.0);
-              final railBtnWSecond = chrome.clamp(32.0, 42.0);
-              final railBtnGap = (chrome * 0.07).clamp(2.0, 5.0);
-              final flagInlineGap = (railBtnGap * 0.5).clamp(1.0, 2.0);
-              final rowShape = RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-                side: ChromeOutline.side,
+              final rowLabelStyle = TextStyle(
+                fontSize: chromeLabel * 0.92 * textScale,
+                fontWeight: FontWeight.w600,
+                color: fg,
               );
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Material(
-                        color: padBg,
-                        shape: rowShape,
-                        clipBehavior: Clip.antiAlias,
-                        child: InkWell(
-                          onTap: _runSearch,
-                          customBorder: rowShape,
-                          child: SizedBox(
-                            height: chrome,
-                            child: Padding(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: 12 * scale,
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.search,
-                                    color: fg,
-                                    size: (chrome * 0.45).clamp(16.0, 24.0),
-                                  ),
-                                  SizedBox(width: (chrome * 0.16).clamp(4.0, 8.0)),
-                                  Text(
-                                    'Найти',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: chromeLabel * textScale,
-                                      color: fg,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
+                      Transform.scale(
+                        scale: checkboxScale,
+                        child: Checkbox(
+                          value: _vz,
+                          onChanged: _setVz,
+                          visualDensity: VisualDensity.compact,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                          activeColor: padBg,
+                          checkColor: fg,
+                          side: ChromeOutline.side,
                         ),
                       ),
-                      SizedBox(width: railBtnGap),
-                      ChromeIconButton(
-                        icon: Icons.vertical_align_top,
-                        tooltip: 'В начало списка',
-                        foregroundColor: fg,
-                        backgroundColor: padBg,
-                        width: railBtnWFirst,
-                        onPressed:
-                            _results.isEmpty ? null : _jumpResultsToStart,
-                      ),
-                      SizedBox(width: railBtnGap),
-                      ChromeIconButton(
-                        icon: Icons.vertical_align_bottom,
-                        tooltip: 'В конец списка',
-                        foregroundColor: fg,
-                        backgroundColor: padBg,
-                        width: railBtnWSecond,
-                        onPressed: _results.isEmpty ? null : _jumpResultsToEnd,
-                      ),
-                      const Spacer(),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Transform.scale(
-                            scale: checkboxScale,
-                            child: Checkbox(
-                              value: _vz,
-                              onChanged: _setVz,
-                              visualDensity: const VisualDensity(
-                                horizontal: -4,
-                                vertical: -4,
-                              ),
-                              materialTapTargetSize:
-                                  MaterialTapTargetSize.shrinkWrap,
-                              activeColor: padBg,
-                              checkColor: fg,
-                              side: ChromeOutline.side,
-                            ),
-                          ),
-                          SizedBox(width: flagInlineGap),
-                          Text(
-                            'ВЗ',
-                            style: TextStyle(
-                              fontSize: chromeLabel * textScale,
-                              fontWeight: FontWeight.w600,
-                              color: fg,
-                            ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(width: 8 * scale),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Transform.scale(
-                            scale: checkboxScale,
-                            child: Checkbox(
-                              value: _nz,
-                              onChanged: _setNz,
-                              visualDensity: const VisualDensity(
-                                horizontal: -4,
-                                vertical: -4,
-                              ),
-                              materialTapTargetSize:
-                                  MaterialTapTargetSize.shrinkWrap,
-                              activeColor: padBg,
-                              checkColor: fg,
-                              side: ChromeOutline.side,
-                            ),
-                          ),
-                          SizedBox(width: flagInlineGap),
-                          Text(
-                            'НЗ',
-                            style: TextStyle(
-                              fontSize: chromeLabel * textScale,
-                              fontWeight: FontWeight.w600,
-                              color: fg,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const Spacer(),
-                      Material(
-                        color: padBg,
-                        shape: rowShape,
-                        clipBehavior: Clip.antiAlias,
-                        child: InkWell(
-                          onTap: () => Navigator.pop(context),
-                          customBorder: rowShape,
-                          child: SizedBox(
-                            width: chrome,
-                            height: chrome,
-                            child: Icon(
-                              Icons.close,
-                              color: fg,
-                              size: closeIc,
-                            ),
-                          ),
+                      SizedBox(width: (chrome * 0.1).clamp(4.0, 10.0)),
+                      Expanded(
+                        child: Text(
+                          'Ветхий завет',
+                          style: rowLabelStyle,
                         ),
                       ),
                     ],
                   ),
                   SizedBox(height: 4 * scale),
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Transform.scale(
+                        scale: checkboxScale,
+                        child: Checkbox(
+                          value: _nz,
+                          onChanged: _setNz,
+                          visualDensity: VisualDensity.compact,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                          activeColor: padBg,
+                          checkColor: fg,
+                          side: ChromeOutline.side,
+                        ),
+                      ),
+                      SizedBox(width: (chrome * 0.1).clamp(4.0, 10.0)),
+                      Expanded(
+                        child: Text(
+                          'Новый завет',
+                          style: rowLabelStyle,
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 4 * scale),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Transform.scale(
                         scale: checkboxScale,
@@ -2355,21 +2213,21 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                           value: _wholeWords,
                           onChanged: (v) {
                             setState(() => _wholeWords = v ?? false);
+                            _maybeRefreshSearch();
                           },
                           visualDensity: VisualDensity.compact,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
                           activeColor: padBg,
                           checkColor: fg,
                           side: ChromeOutline.side,
                         ),
                       ),
+                      SizedBox(width: (chrome * 0.1).clamp(4.0, 10.0)),
                       Expanded(
                         child: Text(
                           'Целое слово',
-                          style: TextStyle(
-                            fontSize: chromeLabel * 0.92 * textScale,
-                            fontWeight: FontWeight.w600,
-                            color: fg,
-                          ),
+                          style: rowLabelStyle,
                         ),
                       ),
                     ],
@@ -2382,13 +2240,13 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
           Container(
             decoration: BoxDecoration(
               color: padBg,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(22),
               border: Border.all(
                 color: ChromeOutline.color,
                 width: ChromeOutline.width,
               ),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+            padding: const EdgeInsets.fromLTRB(6, 4, 6, 4),
             child: RawAutocomplete<String>(
               textEditingController: _queryCtrl,
               focusNode: _focusNode,
@@ -2413,26 +2271,95 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                 _queryCtrl.text = s;
                 _queryCtrl.selection =
                     TextSelection.collapsed(offset: s.length);
+                _runSearch(unfocus: false);
               },
               fieldViewBuilder:
                   (context, controller, focusNode, onFieldSubmitted) {
-                return TextField(
-                  controller: controller,
-                  focusNode: focusNode,
-                  style: queryStyle,
-                  cursorColor: fg,
-                  decoration: InputDecoration(
-                    hintText: 'Набери текст',
-                    hintStyle: hintStyle,
-                    isDense: true,
-                    contentPadding: EdgeInsets.symmetric(
-                      vertical: (app.fontSize * 0.45).clamp(8.0, 16.0),
-                    ),
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                  ),
-                  onSubmitted: (_) => _runSearch(),
+                final isDark = _bibleScreenIsDark(context);
+                final fieldFill = isDark
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : Colors.white.withValues(alpha: 0.94);
+                final clearFill = isDark ? Colors.white : Colors.black87;
+                final clearIconColor = isDark ? Colors.black87 : Colors.white;
+                return ListenableBuilder(
+                  listenable: controller,
+                  builder: (ctx, _) {
+                    final trimmed = controller.text.trim();
+                    return TextField(
+                      controller: controller,
+                      focusNode: focusNode,
+                      style: queryStyle,
+                      cursorColor: fg,
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: fieldFill,
+                        hintText: 'Набери текст',
+                        hintStyle: hintStyle,
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 10,
+                          horizontal: 2,
+                        ),
+                        prefixIcon: Icon(
+                          Icons.search,
+                          color: fg.withValues(alpha: 0.45),
+                          size: 22,
+                        ),
+                        prefixIconConstraints: const BoxConstraints(
+                          minWidth: 40,
+                          minHeight: 40,
+                        ),
+                        suffixIcon: trimmed.isEmpty
+                            ? null
+                            : IconButton(
+                                tooltip: 'Очистить',
+                                style: IconButton.styleFrom(
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                icon: Container(
+                                  width: 20,
+                                  height: 20,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: clearFill,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.close,
+                                    size: 11,
+                                    color: clearIconColor,
+                                  ),
+                                ),
+                                onPressed: () {
+                                  controller.clear();
+                                  _scheduleDebouncedSearch();
+                                },
+                              ),
+                        suffixIconConstraints: const BoxConstraints(
+                          minWidth: 40,
+                          minHeight: 40,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: BorderSide.none,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: BorderSide(
+                            color: fg.withValues(alpha: 0.35),
+                            width: 1,
+                          ),
+                        ),
+                      ),
+                      onChanged: (_) => _scheduleDebouncedSearch(),
+                      onSubmitted: (_) => _runSearch(),
+                    );
+                  },
                 );
               },
               optionsViewBuilder: (context, onSelected, options) {
@@ -2650,7 +2577,7 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                                   ),
                                   const SizedBox(width: 4),
                                   ChromeIconButton(
-                                    icon: Icons.close,
+                                    icon: Icons.highlight_off_outlined,
                                     tooltip: 'Отмена',
                                     foregroundColor: fg,
                                     backgroundColor: padBg,
@@ -2821,12 +2748,12 @@ class _BibleBookmarksPanelState extends State<_BibleBookmarksPanel> {
                             style: titleStyle,
                           ),
                         ),
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (hasSelection) ...[
+                        if (hasSelection)
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
                                 ChromeIconButton(
                                   icon: Icons.select_all,
                                   tooltip: _entries.length > 1 &&
@@ -2855,18 +2782,9 @@ class _BibleBookmarksPanelState extends State<_BibleBookmarksPanel> {
                                   backgroundColor: buttonBg,
                                   onPressed: _deleteSelected,
                                 ),
-                                const SizedBox(width: 4),
                               ],
-                              ChromeIconButton(
-                                icon: Icons.close,
-                                tooltip: 'Закрыть',
-                                foregroundColor: fg,
-                                backgroundColor: buttonBg,
-                                onPressed: () => Navigator.pop(context),
-                              ),
-                            ],
+                            ),
                           ),
-                        ),
                       ],
                     );
                   },

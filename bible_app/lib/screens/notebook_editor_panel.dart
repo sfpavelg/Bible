@@ -116,22 +116,6 @@ class NotebookEditorPanelState extends State<NotebookEditorPanel> {
     }
   }
 
-  Future<void> saveNow() async {
-    _debounce?.cancel();
-    try {
-      await widget.repo.writeFile(widget.relativePath, _controller.text);
-      if (mounted) {
-        setState(() => _dirty = false);
-        widget.onDirtyChanged?.call(false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Сохранено')),
-        );
-      }
-    } catch (e) {
-      _showError('Ошибка сохранения: $e');
-    }
-  }
-
   /// Вставляет [text] в текущую позицию курсора (или вместо выделения).
   void insertTextAtCursor(String text) {
     if (text.isEmpty) return;

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:bible_app/notebook/notebook_list_item.dart';
 import 'package:bible_app/notebook/notebook_repository.dart';
@@ -453,6 +454,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
     return !fits;
   }
 
+  /// Перед выходом из редактора — сброс отложенного сохранения и запись на диск.
   Future<void> _closeEditor() async {
     await _editorKey?.currentState?.flushSave();
     if (!mounted) return;
@@ -478,26 +480,27 @@ class _NotebookScreenState extends State<NotebookScreen> {
     final norm = p.posix.normalize(posixRel);
     if (norm == '.' || norm.isEmpty) return '';
     final parts = p.posix.split(norm);
-    return parts.join(' / ');
+    return parts.map(notebookFileDisplayName).join(' / ');
   }
 
   Future<void> _shareNotebookFile(String relativePath) async {
     final repo = _repo;
     if (repo == null) return;
     final name = p.basename(relativePath);
+    final displayName = notebookFileDisplayName(name);
     try {
       final text = await repo.readFile(relativePath);
       if (repo.isFileSystemBacked) {
         final path = await repo.nativeFilePath(relativePath);
         if (path != null && File(path).existsSync()) {
           await Share.shareXFiles(
-            [XFile(path, mimeType: 'text/plain', name: name)],
-            text: name,
+            [XFile(path, mimeType: 'text/plain', name: displayName)],
+            text: displayName,
           );
           return;
         }
       }
-      await Share.share(text, subject: name);
+      await Share.share(text, subject: displayName);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -507,12 +510,44 @@ class _NotebookScreenState extends State<NotebookScreen> {
     }
   }
 
-  String _suggestedCopyFileName(String fileName) {
-    if (fileName.toLowerCase().endsWith('.txt')) {
-      final stem = fileName.substring(0, fileName.length - 4);
-      return '$stem (копия).txt';
-    }
-    return '$fileName (копия)';
+  static const double _notebookAlertDialogRadius = 12;
+  static const double _notebookInputBorderRadius = 10;
+
+  ShapeBorder _notebookAlertDialogShape() => RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(_notebookAlertDialogRadius),
+      );
+
+  /// Скруглённая рамка и стандартная кнопка очистки в конце строки.
+  InputDecoration _notebookDialogTextFieldDecoration(
+    BuildContext context,
+    TextEditingController controller, {
+    String? labelText,
+    String? hintText,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    final r = BorderRadius.circular(_notebookInputBorderRadius);
+    OutlineInputBorder outline(Color color, {double width = 1}) =>
+        OutlineInputBorder(
+          borderRadius: r,
+          borderSide: BorderSide(color: color, width: width),
+        );
+    return InputDecoration(
+      labelText: labelText,
+      hintText: hintText,
+      isDense: true,
+      filled: true,
+      fillColor: scheme.surfaceContainerHighest.withValues(alpha: 0.45),
+      border: outline(scheme.outline),
+      enabledBorder: outline(scheme.outline),
+      focusedBorder: outline(scheme.primary, width: 2),
+      suffixIcon: controller.text.isEmpty
+          ? null
+          : IconButton(
+              tooltip: 'Очистить',
+              icon: const Icon(Icons.clear),
+              onPressed: controller.clear,
+            ),
+    );
   }
 
   /// Имя файла (как ввёл пользователь) или null при отмене.
@@ -526,31 +561,31 @@ class _NotebookScreenState extends State<NotebookScreen> {
       final ok = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(child: Text(title)),
-              NotebookChromeDialogCloseButton(
-                onPressed: () => Navigator.pop(ctx, false),
-              ),
-            ],
-          ),
-          content: TextField(
-            controller: ctrl,
-            decoration: const InputDecoration(
-              labelText: 'Имя файла',
-              hintText: 'например: размышления.txt',
-              border: OutlineInputBorder(),
-            ),
-            inputFormatters: [
-              _NotebookNameLengthFormatter(
-                isFolder: false,
-                onLimitReached: () =>
-                    _showTypingNameLimitWarning(isFolder: false),
-              ),
-            ],
-            autofocus: true,
-            onSubmitted: (_) => Navigator.pop(ctx, true),
+          shape: _notebookAlertDialogShape(),
+          clipBehavior: Clip.antiAlias,
+          title: Text(title),
+          content: ListenableBuilder(
+            listenable: ctrl,
+            builder: (context, _) {
+              return TextField(
+                controller: ctrl,
+                decoration: _notebookDialogTextFieldDecoration(
+                  ctx,
+                  ctrl,
+                  labelText: 'Имя файла',
+                  hintText: 'например: размышления',
+                ),
+                inputFormatters: [
+                  _NotebookNameLengthFormatter(
+                    isFolder: false,
+                    onLimitReached: () =>
+                        _showTypingNameLimitWarning(isFolder: false),
+                  ),
+                ],
+                autofocus: true,
+                onSubmitted: (_) => Navigator.pop(ctx, true),
+              );
+            },
           ),
           actions: [
             SizedBox(
@@ -590,17 +625,9 @@ class _NotebookScreenState extends State<NotebookScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            const Expanded(
-              child: Text('Файл уже существует'),
-            ),
-            NotebookChromeDialogCloseButton(
-              onPressed: () => Navigator.pop(ctx, false),
-            ),
-          ],
-        ),
+        shape: _notebookAlertDialogShape(),
+        clipBehavior: Clip.antiAlias,
+        title: const Text('Файл уже существует'),
         content: const Text(
           'Файл с таким именем уже существует. Перезаписать?',
         ),
@@ -638,7 +665,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
     if (repo == null || item.isFolder) return false;
     final raw = await _promptNotebookFileNameDialog(
       title: 'Копия документа',
-      initialValue: _suggestedCopyFileName(item.name),
+      initialValue: '${_notebookTxtStemForRename(item.name)} (копия)',
       confirmLabel: 'Копировать',
     );
     if (raw == null) return false;
@@ -670,7 +697,11 @@ class _NotebookScreenState extends State<NotebookScreen> {
       await _refresh();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Сохранено: $destName')),
+          SnackBar(
+            content: Text(
+              'Сохранено: ${notebookFileDisplayName(destName)}',
+            ),
+          ),
         );
       }
       return true;
@@ -767,15 +798,9 @@ class _NotebookScreenState extends State<NotebookScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Expanded(child: Text('Удалить ${paths.length} файлов?')),
-            NotebookChromeDialogCloseButton(
-              onPressed: () => Navigator.pop(ctx, false),
-            ),
-          ],
-        ),
+        shape: _notebookAlertDialogShape(),
+        clipBehavior: Clip.antiAlias,
+        title: Text('Удалить ${paths.length} файлов?'),
         content: SizedBox(
           width: double.maxFinite,
           child: ListView(
@@ -783,7 +808,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
             children: [
               for (final rel in paths)
                 Text(
-                  '• ${p.basename(rel)}',
+                  '• ${notebookFileDisplayName(p.basename(rel))}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -851,17 +876,6 @@ class _NotebookScreenState extends State<NotebookScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(6, 6, 6, 2),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  NotebookChromeDialogCloseButton(
-                    onPressed: _closeFileActionsPanel,
-                  ),
-                ],
-              ),
-            ),
             if (!a.isFolder)
               _NotebookChromePanelActionButton(
                 icon: Icons.share_outlined,
@@ -1141,7 +1155,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
       gapAfterLabel: 0,
       contentPadding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
       pathWidget: Text(
-        fileName,
+        notebookFileDisplayName(fileName),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
@@ -1318,29 +1332,30 @@ class _NotebookScreenState extends State<NotebookScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            const Expanded(child: Text('Новая папка')),
-            NotebookChromeDialogCloseButton(
-              onPressed: () => Navigator.pop(ctx, false),
-            ),
-          ],
-        ),
-        content: TextField(
-          controller: ctrl,
-          decoration: const InputDecoration(
-            labelText: 'Имя папки',
-            border: OutlineInputBorder(),
-          ),
-          inputFormatters: [
-            _NotebookNameLengthFormatter(
-              isFolder: true,
-              onLimitReached: () => _showTypingNameLimitWarning(isFolder: true),
-            ),
-          ],
-          autofocus: true,
-          onSubmitted: (_) => Navigator.pop(ctx, true),
+        shape: _notebookAlertDialogShape(),
+        clipBehavior: Clip.antiAlias,
+        title: const Text('Новая папка'),
+        content: ListenableBuilder(
+          listenable: ctrl,
+          builder: (context, _) {
+            return TextField(
+              controller: ctrl,
+              decoration: _notebookDialogTextFieldDecoration(
+                ctx,
+                ctrl,
+                labelText: 'Имя папки',
+              ),
+              inputFormatters: [
+                _NotebookNameLengthFormatter(
+                  isFolder: true,
+                  onLimitReached: () =>
+                      _showTypingNameLimitWarning(isFolder: true),
+                ),
+              ],
+              autofocus: true,
+              onSubmitted: (_) => Navigator.pop(ctx, true),
+            );
+          },
         ),
         actions: [
           SizedBox(
@@ -1475,7 +1490,11 @@ class _NotebookScreenState extends State<NotebookScreen> {
       if (!suppressListRefresh) await _refresh();
       if (mounted && !suppressSuccessSnack) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Перемещено: $base')),
+          SnackBar(
+            content: Text(
+              'Перемещено: ${notebookFileDisplayName(base)}',
+            ),
+          ),
         );
       }
       return true;
@@ -1499,7 +1518,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
         repo: repo,
         sourcePaths: sourcePaths,
         fileCount: sourcePaths.length,
-        primaryFileName: primaryName,
+        primaryFileName: notebookFileDisplayName(primaryName),
         onMoveTo: (destParent) async {
           var allOk = true;
           for (final path in sourcePaths) {
@@ -1539,24 +1558,21 @@ class _NotebookScreenState extends State<NotebookScreen> {
       final ok = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Text(
-                  item.isFolder ? 'Переименовать папку' : 'Переименовать файл',
-                ),
-              ),
-              NotebookChromeDialogCloseButton(
-                onPressed: () => Navigator.pop(ctx, false),
-              ),
-            ],
+          shape: _notebookAlertDialogShape(),
+          clipBehavior: Clip.antiAlias,
+          title: Text(
+            item.isFolder ? 'Переименовать папку' : 'Переименовать файл',
           ),
-          content: item.isFolder
-              ? TextField(
+          content: ListenableBuilder(
+            listenable: ctrl,
+            builder: (context, _) {
+              if (item.isFolder) {
+                return TextField(
                   controller: ctrl,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
+                  decoration: _notebookDialogTextFieldDecoration(
+                    ctx,
+                    ctrl,
+                    labelText: 'Имя папки',
                   ),
                   inputFormatters: [
                     _NotebookNameLengthFormatter(
@@ -1566,41 +1582,27 @@ class _NotebookScreenState extends State<NotebookScreen> {
                     ),
                   ],
                   autofocus: true,
-                )
-              : Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: ctrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Имя файла',
-                          hintText: 'например: размышления',
-                          border: OutlineInputBorder(),
-                        ),
-                        inputFormatters: [
-                          _NotebookNameLengthFormatter(
-                            isFolder: false,
-                            onLimitReached: () =>
-                                _showTypingNameLimitWarning(isFolder: false),
-                          ),
-                        ],
-                        autofocus: true,
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.only(left: 8, bottom: 14),
-                      child: Text(
-                        '.txt',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Theme.of(ctx).colorScheme.onSurface,
-                        ),
-                      ),
-                    ),
-                  ],
+                );
+              }
+              return TextField(
+                controller: ctrl,
+                decoration: _notebookDialogTextFieldDecoration(
+                  ctx,
+                  ctrl,
+                  labelText: 'Имя файла',
+                  hintText: 'например: размышления',
                 ),
+                inputFormatters: [
+                  _NotebookNameLengthFormatter(
+                    isFolder: false,
+                    onLimitReached: () =>
+                        _showTypingNameLimitWarning(isFolder: false),
+                  ),
+                ],
+                autofocus: true,
+              );
+            },
+          ),
           actions: [
             SizedBox(
               width: double.infinity,
@@ -1742,15 +1744,9 @@ class _NotebookScreenState extends State<NotebookScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            const Expanded(child: Text('Удалить?')),
-            NotebookChromeDialogCloseButton(
-              onPressed: () => Navigator.pop(ctx, false),
-            ),
-          ],
-        ),
+        shape: _notebookAlertDialogShape(),
+        clipBehavior: Clip.antiAlias,
+        title: const Text('Удалить?'),
         content: item.isFolder
             ? (folderHasContents
                 ? Text(
@@ -1762,7 +1758,9 @@ class _NotebookScreenState extends State<NotebookScreen> {
                     ),
                   )
                 : Text('Папка «${item.name}» будет удалена.'))
-            : Text('Файл «${item.name}» будет удалён.'),
+            : Text(
+                'Файл «${notebookItemDisplayName(item)}» будет удалён.',
+              ),
         actions: [
           SizedBox(
             width: double.infinity,
@@ -1914,7 +1912,9 @@ class _NotebookScreenState extends State<NotebookScreen> {
         child: ChromeIconButton(
           icon: Icons.arrow_back,
           tooltip: 'Закрыть',
-          onPressed: _closeEditor,
+          onPressed: () async {
+            await _closeEditor();
+          },
           foregroundColor: chromeFg,
           backgroundColor: buttonBg,
         ),
@@ -1954,18 +1954,25 @@ class _NotebookScreenState extends State<NotebookScreen> {
                       ),
                     ),
                     const SizedBox(width: 4),
-                    Opacity(
-                      opacity: _editorClipboardHasText ? 1 : 0.38,
-                      child: ChromeIconButton(
-                        icon: Icons.content_paste,
-                        tooltip: _editorClipboardHasText
-                            ? 'Вставить из буфера'
-                            : 'Буфер пуст',
-                        onPressed: _editorClipboardHasText
-                            ? () => unawaited(_pasteFromClipboardToEditor())
-                            : null,
-                        foregroundColor: chromeFg,
-                        backgroundColor: buttonBg,
+                    Tooltip(
+                      message: _editorClipboardHasText
+                          ? 'Вставить из буфера'
+                          : 'Буфер пуст',
+                      child: IgnorePointer(
+                        ignoring: !_editorClipboardHasText,
+                        child: Opacity(
+                          opacity: _editorClipboardHasText ? 1 : 0.38,
+                          child: ChromeNavTextButton(
+                            label: 'Вставить',
+                            onPressed: () => unawaited(
+                              _pasteFromClipboardToEditor(),
+                            ),
+                            foregroundColor: chromeFg,
+                            backgroundColor: buttonBg,
+                            width: (chrome * 2.85).clamp(78.0, 118.0),
+                            height: chrome,
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 4),
@@ -1975,14 +1982,6 @@ class _NotebookScreenState extends State<NotebookScreen> {
             );
           },
         ),
-        ChromeIconButton(
-          icon: Icons.save_outlined,
-          tooltip: 'Сохранить',
-          onPressed: () => _editorKey?.currentState?.saveNow(),
-          foregroundColor: chromeFg,
-          backgroundColor: buttonBg,
-        ),
-        const SizedBox(width: 4),
         AppChromeOverflowMenu(
           iconColor: chromeFg,
           backgroundColor: buttonBg,
@@ -1998,7 +1997,6 @@ class _NotebookScreenState extends State<NotebookScreen> {
     final app = context.watch<AppProvider>();
     final uiListFontSize = app.fontSize;
     final uiLineHeight = app.lineHeight;
-    final chromeBtnSize = app.chromeButtonSize;
     final listIconSize = (24.0 * uiListFontSize / 16.0).clamp(20.0, 48.0);
     final listCheckVisualSize = (uiListFontSize * 0.72).clamp(9.0, 20.0);
     final listCheckScale = (listCheckVisualSize / 18.0).clamp(0.5, 1.15);
@@ -2028,7 +2026,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
                             repo: _repo!,
                             relativePath: _editingPath!,
                             onDocumentDeleted: () {
-                              _closeEditor();
+                              unawaited(_closeEditor());
                             },
                           ),
                         ),
@@ -2176,7 +2174,9 @@ class _NotebookScreenState extends State<NotebookScreen> {
                                                     const SizedBox(width: 10),
                                                     Expanded(
                                                       child: Text(
-                                                        item.name,
+                                                        notebookItemDisplayName(
+                                                          item,
+                                                        ),
                                                         maxLines: 2,
                                                         overflow: TextOverflow
                                                             .ellipsis,
@@ -2201,27 +2201,55 @@ class _NotebookScreenState extends State<NotebookScreen> {
                                         },
                                       ),
                                     ),
-                                    if (_fileActionsAnchor != null)
+                                    if (_fileActionsAnchor != null) ...[
+                                      Positioned.fill(
+                                        child: IgnorePointer(
+                                          child: ColoredBox(
+                                            color: Colors.black
+                                                .withValues(alpha: 0.32),
+                                          ),
+                                        ),
+                                      ),
+                                      Positioned.fill(
+                                        child: Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.stretch,
+                                          children: [
+                                            SizedBox(
+                                              width: 16 +
+                                                  math.max(
+                                                    listIconSize,
+                                                    _fileBulkSelectionUi
+                                                        ? listCbBox
+                                                        : listIconSize,
+                                                  ) +
+                                                  10,
+                                              child: const IgnorePointer(
+                                                child: SizedBox.expand(),
+                                              ),
+                                            ),
+                                            Expanded(
+                                              child: GestureDetector(
+                                                behavior:
+                                                    HitTestBehavior.opaque,
+                                                onTap: _closeFileActionsPanel,
+                                                child: const SizedBox.expand(),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
                                       Positioned(
                                         top: 4,
                                         right: 6,
                                         child: SafeArea(
                                           left: false,
                                           bottom: false,
-                                          child: TapRegion(
-                                            onTapOutside: (_) {
-                                              // В режиме выбора нескольких .txt тап по строкам
-                                              // списка считается «снаружи» панели — не закрывать,
-                                              // иначе сброс выбора и открытие файла.
-                                              if (!_fileBulkSelectionUi) {
-                                                _closeFileActionsPanel();
-                                              }
-                                            },
-                                            child:
-                                                _buildNotebookFileActionsPanel(),
-                                          ),
+                                          child:
+                                              _buildNotebookFileActionsPanel(),
                                         ),
                                       ),
+                                    ],
                                   ],
                                 ),
                         ),
@@ -2388,7 +2416,7 @@ class _NotebookPathScrollRailState extends State<_NotebookPathScrollRail> {
   }
 }
 
-/// Прямоугольная плашка как [NotebookChromeDialogCloseButton]: высота
+/// Прямоугольная плашка действия в панели блокнота: высота
 /// [AppProvider.chromeButtonSize], скругление 8, подпись и иконка масштабируются с [chrome].
 class _NotebookChromePanelActionButton extends StatelessWidget {
   const _NotebookChromePanelActionButton({
@@ -2794,28 +2822,21 @@ class _NotebookMoveFileDialogState extends State<_NotebookMoveFileDialog> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final app = context.watch<AppProvider>();
     final uiFs = app.fontSize;
-    final chrome = app.chromeButtonSize;
     final rowIcon = (24.0 * uiFs / 16.0).clamp(20.0, 48.0);
     final treePanelBg =
         isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF5F5F5);
     return AlertDialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      clipBehavior: Clip.antiAlias,
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      title: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Text(
-              widget.fileCount > 1
-                  ? 'Переместить выбранные файлы (${widget.fileCount})'
-                  : 'Переместить «${widget.primaryFileName}»',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          NotebookChromeDialogCloseButton(
-            onPressed: () => Navigator.of(context).pop(false),
-          ),
-        ],
+      title: Text(
+        widget.fileCount > 1
+            ? 'Переместить выбранные файлы (${widget.fileCount})'
+            : 'Переместить «${widget.primaryFileName}»',
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
       ),
       content: SizedBox(
         width: double.maxFinite,

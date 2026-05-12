@@ -1462,9 +1462,6 @@ class _JournalScreenState extends State<JournalScreen>
       builder: (dialogContext) {
         final isDark = Theme.of(dialogContext).brightness == Brightness.dark;
         final fg = isDark ? Colors.white : Colors.black87;
-        final buttonBg =
-            isDark ? JournalScreen._buttonBgDark : JournalScreen._buttonBgLight;
-        final chrome = app.chromeButtonSize;
         return StatefulBuilder(
           builder: (ctx, setModalState) {
             final doneNow = _doneItemsForCurrentPlan(dayIndex);
@@ -1476,26 +1473,11 @@ class _JournalScreenState extends State<JournalScreen>
               insetPadding:
                   const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
               titlePadding: const EdgeInsets.fromLTRB(20, 14, 12, 8),
-              title: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: Text(
-                      'День ${_dayNumberInCurrentQuarter(dayIndex)}',
-                      style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
-                            color: fg,
-                          ),
+              title: Text(
+                'День ${_dayNumberInCurrentQuarter(dayIndex)}',
+                style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
+                      color: fg,
                     ),
-                  ),
-                  ChromeIconButton(
-                    icon: Icons.close,
-                    tooltip: 'Закрыть',
-                    foregroundColor: fg,
-                    backgroundColor: buttonBg,
-                    width: chrome,
-                    onPressed: () => Navigator.pop(dialogContext),
-                  ),
-                ],
               ),
               contentPadding: const EdgeInsets.fromLTRB(0, 4, 12, 10),
               content: LayoutBuilder(
