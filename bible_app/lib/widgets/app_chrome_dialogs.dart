@@ -14,39 +14,6 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-/// Снимает один маршрут с навигатора не более одного раза (двойной клик не уводит
-/// со стека экран под диалогом — чёрный экран).
-class _PopRouteOnce extends StatefulWidget {
-  const _PopRouteOnce({
-    required this.navigatorContext,
-    required this.builder,
-  });
-
-  final BuildContext navigatorContext;
-  final Widget Function(BuildContext context, VoidCallback popOnce) builder;
-
-  @override
-  State<_PopRouteOnce> createState() => _PopRouteOnceState();
-}
-
-class _PopRouteOnceState extends State<_PopRouteOnce> {
-  bool _used = false;
-
-  void _popOnce() {
-    if (_used) return;
-    _used = true;
-    final c = widget.navigatorContext;
-    if (c.mounted && Navigator.of(c).canPop()) {
-      Navigator.pop(c);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return widget.builder(context, _popOnce);
-  }
-}
-
 /// Деления на ползунках настроек — короткие вертикальные линии вместо круглых точек.
 class _SettingsSliderVerticalTickMarkShape extends SliderTickMarkShape {
   const _SettingsSliderVerticalTickMarkShape();
@@ -497,22 +464,9 @@ void showAppSettingsDialog(BuildContext context) {
                             mainAxisSize: MainAxisSize.min,
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      'Настройки',
-                                      style: kSettingsTitleStyle,
-                                    ),
-                                  ),
-                                  _PopRouteOnce(
-                                    navigatorContext: modalContext,
-                                    builder: (c, popOnce) =>
-                                        NotebookChromeDialogCloseButton(
-                                      onPressed: popOnce,
-                                    ),
-                                  ),
-                                ],
+                              Text(
+                                'Настройки',
+                                style: kSettingsTitleStyle,
                               ),
                               const SizedBox(height: 6),
                               ConstrainedBox(
@@ -769,7 +723,14 @@ void showAppSettingsDialog(BuildContext context) {
                                           style: kSettingsBodyStyle,
                                         ),
                                         value: showSeptuagintText,
-                                        activeThumbColor: scheme.primary,
+                                        activeTrackColor: scheme.primary,
+                                        activeThumbColor: Colors.white,
+                                        inactiveTrackColor: isDark
+                                            ? Colors.grey.shade700
+                                            : Colors.grey.shade300,
+                                        inactiveThumbColor: isDark
+                                            ? Colors.grey.shade400
+                                            : Colors.grey.shade50,
                                         onChanged: (value) {
                                           setModalState(
                                             () => showSeptuagintText = value,
@@ -787,7 +748,14 @@ void showAppSettingsDialog(BuildContext context) {
                                           style: kSettingsBodyStyle,
                                         ),
                                         value: keepScreenOn,
-                                        activeThumbColor: scheme.primary,
+                                        activeTrackColor: scheme.primary,
+                                        activeThumbColor: Colors.white,
+                                        inactiveTrackColor: isDark
+                                            ? Colors.grey.shade700
+                                            : Colors.grey.shade300,
+                                        inactiveThumbColor: isDark
+                                            ? Colors.grey.shade400
+                                            : Colors.grey.shade50,
                                         onChanged: (value) async {
                                           setModalState(
                                               () => keepScreenOn = value);
@@ -824,110 +792,148 @@ void showAppSettingsDialog(BuildContext context) {
   );
 }
 
-void showAppSupportDialog(BuildContext context) {
-  showDialog<void>(
-    context: context,
-    builder: (routeContext) {
-      final theme = Theme.of(routeContext);
-      final scheme = theme.colorScheme;
-      final app = routeContext.watch<AppProvider>();
-      final isDark = theme.brightness == Brightness.dark;
-      final settingsBg =
-          isDark ? const Color(0xFF37474F) : const Color(0xFFE1F5FE);
-      final body = theme.textTheme.bodyMedium!.copyWith(
-        color: scheme.onSurface,
-        fontSize: app.fontSize,
-        height: app.lineHeight,
-      );
-      return FutureBuilder<_SupportDialogData>(
-        future: _loadSupportDialogData(),
-        builder: (ctx, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return AlertDialog(
-              backgroundColor: settingsBg,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              clipBehavior: Clip.antiAlias,
-              titlePadding: const EdgeInsets.fromLTRB(20, 14, 12, 8),
-              title: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Техподдержка',
-                      style: theme.textTheme.titleLarge
-                          ?.copyWith(color: scheme.onSurface),
-                    ),
-                  ),
-                  _PopRouteOnce(
-                    navigatorContext: routeContext,
-                    builder: (c, popOnce) =>
-                        NotebookChromeDialogCloseButton(onPressed: popOnce),
-                  ),
-                ],
-              ),
-              content: const SizedBox(
-                width: 320,
-                child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 10),
-                  child: Center(child: CircularProgressIndicator()),
-                ),
-              ),
-            );
-          }
+/// Геометрия правой панели хрома — как у окна «Настройки».
+class _ChromePanelLayout {
+  _ChromePanelLayout._(this.panelWidth, this.topAnchor, this.maxBodyHeight);
 
-          final data = snapshot.data;
-          final currentVersion = data?.packageInfo.version ??
-              _versionNameFromPackageVersion('0.0.0+0');
-          final currentBuild = data?.packageInfo.buildNumber ??
-              _versionCodeFromPackageVersion('0.0.0+0').toString();
-          final currentCode = int.tryParse(currentBuild) ??
-              _versionCodeFromPackageVersion('$currentVersion+$currentBuild');
+  factory _ChromePanelLayout.fromContext(
+    BuildContext context,
+    double chromeButtonSize,
+  ) {
+    final mediaSize = MediaQuery.sizeOf(context);
+    final mediaPadding = MediaQuery.paddingOf(context);
+    final panelWidth =
+        ((mediaSize.width - 12) * (2 / 3)).clamp(300.0, 362.5);
+    final topAnchor = mediaPadding.top +
+        AppProvider.toolbarHeightForChrome(chromeButtonSize);
+    final bottomToolbarReserve =
+        AppProvider.toolbarHeightForChrome(chromeButtonSize);
+    final maxBodyHeight = (mediaSize.height -
+            topAnchor -
+            bottomToolbarReserve -
+            mediaPadding.bottom -
+            92)
+        .clamp(140.0, 640.0)
+        .toDouble();
+    return _ChromePanelLayout._(panelWidth, topAnchor, maxBodyHeight);
+  }
 
-          const supportPayload = 'februaryidea7@gmail.com';
+  final double panelWidth;
+  final double topAnchor;
+  final double maxBodyHeight;
+}
 
-          _SupportRemoteRelease? remoteRelease;
-          String? remoteError;
-          var isChecking = false;
-          var hasChecked = false;
-          var remoteChangesExpanded = false;
+TextStyle _chromePanelTitleStyle(ColorScheme scheme, double fontSize) {
+  final uiFs = fontSize.clamp(12.0, 28.0);
+  return TextStyle(
+    fontSize: (uiFs * 1.25).clamp(16.0, 32.0),
+    fontWeight: FontWeight.w600,
+    color: scheme.onSurface,
+  );
+}
 
-          return StatefulBuilder(
-            builder: (modalContext, setModalState) {
-              final hasRemote = remoteRelease != null;
-              final hasUpdate =
-                  hasRemote && remoteRelease!.versionCode > currentCode;
+class _SupportDialogRouteBody extends StatefulWidget {
+  const _SupportDialogRouteBody();
 
-              return AlertDialog(
-                backgroundColor: settingsBg,
-                shape: RoundedRectangleBorder(
+  @override
+  State<_SupportDialogRouteBody> createState() => _SupportDialogRouteBodyState();
+}
+
+class _SupportDialogRouteBodyState extends State<_SupportDialogRouteBody> {
+  late final Future<_SupportDialogData> _dataFuture = _loadSupportDialogData();
+
+  _SupportRemoteRelease? remoteRelease;
+  String? remoteError;
+  bool isChecking = false;
+  bool hasChecked = false;
+  bool remoteChangesExpanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<AppProvider>(
+      builder: (consumerContext, app, _) {
+        final theme = Theme.of(consumerContext);
+        final scheme = theme.colorScheme;
+        final isDark = theme.brightness == Brightness.dark;
+        final settingsBg =
+            isDark ? const Color(0xFF37474F) : const Color(0xFFE1F5FE);
+        final layout =
+            _ChromePanelLayout.fromContext(consumerContext, app.chromeButtonSize);
+        final titleStyle = _chromePanelTitleStyle(scheme, app.fontSize);
+        final body = theme.textTheme.bodyMedium!.copyWith(
+          color: scheme.onSurface,
+          fontSize: app.fontSize,
+          height: app.lineHeight,
+        );
+        final scrollMaxH = (layout.maxBodyHeight - 88).clamp(120.0, 600.0);
+
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned(
+              top: layout.topAnchor,
+              right: 0,
+              child: SizedBox(
+                width: layout.panelWidth,
+                child: Material(
+                  color: settingsBg,
+                  elevation: 10,
                   borderRadius: BorderRadius.circular(12),
-                ),
-                clipBehavior: Clip.antiAlias,
-                titlePadding: const EdgeInsets.fromLTRB(20, 14, 12, 8),
-                contentPadding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
-                title: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Техподдержка',
-                        style: theme.textTheme.titleLarge
-                            ?.copyWith(color: scheme.onSurface),
-                      ),
-                    ),
-                    _PopRouteOnce(
-                      navigatorContext: routeContext,
-                      builder: (c, popOnce) =>
-                          NotebookChromeDialogCloseButton(onPressed: popOnce),
-                    ),
-                  ],
-                ),
-                content: DefaultTextStyle(
-                  style: body,
-                  child: SizedBox(
-                    width: 420,
-                    child: SingleChildScrollView(
-                      child: Column(
+                  clipBehavior: Clip.antiAlias,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+                    child: FutureBuilder<_SupportDialogData>(
+                      future: _dataFuture,
+                      builder: (ctx, snapshot) {
+                        if (snapshot.connectionState != ConnectionState.done) {
+                          return Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text('Техподдержка', style: titleStyle),
+                              const SizedBox(height: 8),
+                              const SizedBox(
+                                height: 180,
+                                child:
+                                    Center(child: CircularProgressIndicator()),
+                              ),
+                            ],
+                          );
+                        }
+
+                        final data = snapshot.data;
+                        final currentVersion = data?.packageInfo.version ??
+                            _versionNameFromPackageVersion('0.0.0+0');
+                        final currentBuild = data?.packageInfo.buildNumber ??
+                            _versionCodeFromPackageVersion('0.0.0+0')
+                                .toString();
+                        final currentCode = int.tryParse(currentBuild) ??
+                            _versionCodeFromPackageVersion(
+                              '$currentVersion+$currentBuild',
+                            );
+
+                        const supportPayload = 'februaryidea7@gmail.com';
+
+                        final hasRemote = remoteRelease != null;
+                        final hasUpdate =
+                            hasRemote && remoteRelease!.versionCode > currentCode;
+
+                        return Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text('Техподдержка', style: titleStyle),
+                            const SizedBox(height: 6),
+                            ConstrainedBox(
+                              constraints:
+                                  BoxConstraints(maxHeight: scrollMaxH),
+                              child: SingleChildScrollView(
+                                child: DefaultTextStyle(
+                                  style: body,
+                                  child: Padding(
+                                    padding:
+                                        const EdgeInsets.fromLTRB(4, 0, 4, 0),
+                                    child: Column(
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -1011,7 +1017,7 @@ void showAppSupportDialog(BuildContext context) {
                           ),
                           const SizedBox(height: 6),
                           _supportChromeActionButton(
-                            context: routeContext,
+                            context: consumerContext,
                             icon: Icons.sync,
                             label: isChecking
                                 ? 'Проверяем...'
@@ -1019,21 +1025,21 @@ void showAppSupportDialog(BuildContext context) {
                             onTap: isChecking
                                 ? null
                                 : () async {
-                                    setModalState(() {
+                                    setState(() {
                                       isChecking = true;
                                       remoteError = null;
                                     });
                                     try {
                                       final remote =
                                           await _fetchSupportRemoteRelease();
-                                      setModalState(() {
+                                      setState(() {
                                         remoteRelease = remote;
                                         hasChecked = true;
                                         isChecking = false;
                                         remoteChangesExpanded = false;
                                       });
                                     } catch (e) {
-                                      setModalState(() {
+                                      setState(() {
                                         remoteRelease = null;
                                         remoteError =
                                             _friendlySupportUpdateError(e);
@@ -1062,12 +1068,12 @@ void showAppSupportDialog(BuildContext context) {
                             ),
                             const SizedBox(height: 8),
                             _supportChromeActionButton(
-                              context: routeContext,
+                              context: consumerContext,
                               icon: Icons.system_update_alt,
                               label: 'Скачать обновление',
                               onTap: () => unawaited(
                                 _openApkDownloadUrl(
-                                  routeContext,
+                                  consumerContext,
                                   remoteRelease!.apkUrl,
                                 ),
                               ),
@@ -1075,7 +1081,7 @@ void showAppSupportDialog(BuildContext context) {
                             if (remoteRelease!.changes.isNotEmpty) ...[
                               const SizedBox(height: 6),
                               Theme(
-                                data: Theme.of(routeContext).copyWith(
+                                data: Theme.of(consumerContext).copyWith(
                                   dividerColor: Colors.transparent,
                                 ),
                                 child: ExpansionTile(
@@ -1095,7 +1101,7 @@ void showAppSupportDialog(BuildContext context) {
                                   maintainState: true,
                                   initiallyExpanded: remoteChangesExpanded,
                                   onExpansionChanged: (expanded) {
-                                    setModalState(
+                                    setState(
                                       () => remoteChangesExpanded = expanded,
                                     );
                                   },
@@ -1134,101 +1140,144 @@ void showAppSupportDialog(BuildContext context) {
                           ] else
                             const Text('Установлена актуальная версия'),
                         ],
-                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: NotebookChromeDialogToolbarIconButton(
+                                  icon: Icons.copy_all,
+                                  onPressed: () async {
+                                    await Clipboard.setData(
+                                      ClipboardData(text: supportPayload),
+                                    );
+                                    if (!consumerContext.mounted) return;
+                                    ScaffoldMessenger.of(consumerContext)
+                                        .showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Данные техподдержки скопированы',
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     ),
                   ),
                 ),
-                actionsPadding: const EdgeInsets.fromLTRB(20, 0, 12, 12),
-                buttonPadding: EdgeInsets.zero,
-                actions: [
-                  NotebookChromeDialogToolbarIconButton(
-                    icon: Icons.copy_all,
-                    onPressed: () async {
-                      await Clipboard.setData(
-                        ClipboardData(text: supportPayload),
-                      );
-                      if (!routeContext.mounted) return;
-                      ScaffoldMessenger.of(routeContext).showSnackBar(
-                        const SnackBar(
-                          content: Text('Данные техподдержки скопированы'),
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              );
-            },
-          );
-        },
-      );
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+void showAppSupportDialog(BuildContext context) {
+  showGeneralDialog<void>(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+    barrierColor: Colors.black26,
+    transitionDuration: const Duration(milliseconds: 160),
+    pageBuilder: (dialogContext, animation, secondaryAnimation) {
+      return const _SupportDialogRouteBody();
     },
+    transitionBuilder: (ctx, animation, secondaryAnimation, child) =>
+        FadeTransition(
+      opacity: CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      ),
+      child: child,
+    ),
   );
 }
 
-/// Заголовки разделов в окне «Помощь» (оглавление).
+/// Заголовки разделов в окне «Инструкция» (оглавление).
 const TextStyle _helpDialogTocStyle = TextStyle(
   fontWeight: FontWeight.bold,
   fontStyle: FontStyle.italic,
 );
 
 void showAppHelpDialog(BuildContext context) {
-  showDialog<void>(
+  showGeneralDialog<void>(
     context: context,
-    builder: (routeContext) {
-      final theme = Theme.of(routeContext);
-      final scheme = theme.colorScheme;
-      final app = routeContext.watch<AppProvider>();
-      final isDark = theme.brightness == Brightness.dark;
-      final settingsBg =
-          isDark ? const Color(0xFF37474F) : const Color(0xFFE1F5FE);
-      final fs = app.fontSize;
-      final lh = app.lineHeight;
-      final tocStyle = _helpDialogTocStyle.copyWith(
-        color: scheme.onSurface,
-        fontSize: (fs * 0.95).clamp(12.0, 26.0),
-        height: lh,
-      );
-      final bodyStyle = theme.textTheme.bodyMedium!.copyWith(
-        color: scheme.onSurface,
-        fontSize: fs,
-        height: lh,
-      );
-      final n = kParallelReadingPlan365.length;
-      final helpMaxH = MediaQuery.sizeOf(routeContext).height * 0.65;
-      return AlertDialog(
-        backgroundColor: settingsBg,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        clipBehavior: Clip.antiAlias,
-        titlePadding: const EdgeInsets.fromLTRB(20, 14, 12, 8),
-        title: Row(
-          children: [
-            Expanded(
-              child: Text(
-                'Помощь',
-                style: theme.textTheme.titleLarge
-                    ?.copyWith(color: scheme.onSurface),
-              ),
-            ),
-            _PopRouteOnce(
-              navigatorContext: routeContext,
-              builder: (c, popOnce) =>
-                  NotebookChromeDialogCloseButton(onPressed: popOnce),
-            ),
-          ],
-        ),
-        content: DefaultTextStyle(
-          style: bodyStyle,
-          child: SizedBox(
-            width: 360,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: helpMaxH),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+    barrierDismissible: true,
+    barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+    barrierColor: Colors.black26,
+    transitionDuration: const Duration(milliseconds: 160),
+    pageBuilder: (dialogContext, animation, secondaryAnimation) {
+      return Consumer<AppProvider>(
+        builder: (consumerContext, app, _) {
+          final theme = Theme.of(consumerContext);
+          final scheme = theme.colorScheme;
+          final isDark = theme.brightness == Brightness.dark;
+          final settingsBg =
+              isDark ? const Color(0xFF37474F) : const Color(0xFFE1F5FE);
+          final fs = app.fontSize;
+          final lh = app.lineHeight;
+          final layout = _ChromePanelLayout.fromContext(
+            consumerContext,
+            app.chromeButtonSize,
+          );
+          final titleStyle = _chromePanelTitleStyle(scheme, app.fontSize);
+          final tocStyle = _helpDialogTocStyle.copyWith(
+            color: scheme.onSurface,
+            fontSize: (fs * 0.95).clamp(12.0, 26.0),
+            height: lh,
+          );
+          final bodyStyle = theme.textTheme.bodyMedium!.copyWith(
+            color: scheme.onSurface,
+            fontSize: fs,
+            height: lh,
+          );
+          final n = kParallelReadingPlan365.length;
+          final scrollMaxH =
+              (layout.maxBodyHeight - 48).clamp(120.0, 600.0).toDouble();
+
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned(
+                top: layout.topAnchor,
+                right: 0,
+                child: SizedBox(
+                  width: layout.panelWidth,
+                  child: Material(
+                    color: settingsBg,
+                    elevation: 10,
+                    borderRadius: BorderRadius.circular(12),
+                    clipBehavior: Clip.antiAlias,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text('Инструкция', style: titleStyle),
+                          const SizedBox(height: 6),
+                          ConstrainedBox(
+                            constraints:
+                                BoxConstraints(maxHeight: scrollMaxH),
+                            child: SingleChildScrollView(
+                              child: DefaultTextStyle(
+                                style: bodyStyle,
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
                     Text(
                       'Библия:',
                       style: tocStyle,
@@ -1297,7 +1346,7 @@ void showAppHelpDialog(BuildContext context) {
                     ),
                     Text(
                       '• Три точки справа в шапке открывают общее меню приложения '
-                      '(настройки, помощь, выход и другое).',
+                      '(настройки, инструкция, выход и другое).',
                     ),
                     Text(
                       '• В настройках можно сменить тему, шрифт и интервалы в Библии, красные буквы, '
@@ -1423,12 +1472,29 @@ void showAppHelpDialog(BuildContext context) {
                       'Отметки «прочитано» в плане «Для начинающих» хранятся отдельно от всех остальных планов.',
                     ),
                   ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-        ),
-      );
+          ],
+        );
+      },
+    );
     },
+    transitionBuilder: (ctx, animation, secondaryAnimation, child) =>
+        FadeTransition(
+      opacity: CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      ),
+      child: child,
+    ),
   );
 }

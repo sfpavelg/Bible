@@ -266,6 +266,13 @@ class NotebookScreen extends StatefulWidget {
   State<NotebookScreen> createState() => _NotebookScreenState();
 }
 
+/// Одна строка плоского списка блокнота с учётом вложенности (раскрытые папки).
+class _NotebookListVisibleRow {
+  const _NotebookListVisibleRow({required this.item, required this.depth});
+  final NotebookListItem item;
+  final int depth;
+}
+
 class _NotebookScreenState extends State<NotebookScreen> {
   static const int _windowsDirectoryPathLimit = 247;
   NotebookRepository? _repo;
@@ -273,6 +280,16 @@ class _NotebookScreenState extends State<NotebookScreen> {
   String? _error;
   String _currentDir = '';
   List<NotebookListItem> _items = [];
+
+  /// Раскрытые в текущем списке папки (полный относительный путь).
+  final Set<String> _expandedNotebookFolders = <String>{};
+
+  /// Кэш детей для раскрытых папок.
+  final Map<String, List<NotebookListItem>> _notebookExpandedChildren =
+      <String, List<NotebookListItem>>{};
+
+  /// Число непосредственных детей папки (один уровень), по пути папки.
+  final Map<String, int> _notebookFolderChildCounts = <String, int>{};
 
   String? _editingPath;
   GlobalKey<NotebookEditorPanelState>? _editorKey;
@@ -298,12 +315,13 @@ class _NotebookScreenState extends State<NotebookScreen> {
   /// Пути выбранных .txt в порядке строк списка (для пакетного переноса).
   List<String> _orderedBulkSelectedFilePaths() {
     if (_bulkSelectedFilePaths.isEmpty) return const [];
-    final ordered = _items
+    final ordered = _buildNotebookVisibleRows()
         .where(
-          (it) =>
-              !it.isFolder && _bulkSelectedFilePaths.contains(it.relativePath),
+          (row) =>
+              !row.item.isFolder &&
+              _bulkSelectedFilePaths.contains(row.item.relativePath),
         )
-        .map((it) => it.relativePath)
+        .map((row) => row.item.relativePath)
         .toList();
     final inList = ordered.toSet();
     final rest = _bulkSelectedFilePaths.difference(inList).toList()..sort();
@@ -428,10 +446,139 @@ class _NotebookScreenState extends State<NotebookScreen> {
           _createFolderBlockedByPathLimit = createFolderBlocked;
         });
       }
+      await _revalidateNotebookExpandedBranches();
+      if (mounted) await _prefetchNotebookFolderCountsForVisibleRows();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Ошибка списка: $e')),
+        );
+      }
+    }
+  }
+
+  void _clearNotebookTreeExpansion() {
+    _expandedNotebookFolders.clear();
+    _notebookExpandedChildren.clear();
+    _notebookFolderChildCounts.clear();
+  }
+
+  static int _compareNotebookListItems(NotebookListItem a, NotebookListItem b) {
+    if (a.isFolder != b.isFolder) return a.isFolder ? -1 : 1;
+    return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+  }
+
+  List<NotebookListItem> _sortedNotebookItems(List<NotebookListItem> items) {
+    final copy = List<NotebookListItem>.from(items);
+    copy.sort(_compareNotebookListItems);
+    return copy;
+  }
+
+  List<_NotebookListVisibleRow> _buildNotebookVisibleRows() {
+    final out = <_NotebookListVisibleRow>[];
+    void walk(List<NotebookListItem> nodes, int depth) {
+      final sorted = _sortedNotebookItems(nodes);
+      for (final node in sorted) {
+        out.add(_NotebookListVisibleRow(item: node, depth: depth));
+        if (node.isFolder &&
+            _expandedNotebookFolders.contains(node.relativePath)) {
+          final kids = _notebookExpandedChildren[node.relativePath];
+          if (kids != null) {
+            walk(kids, depth + 1);
+          }
+        }
+      }
+    }
+
+    walk(_items, 0);
+    return out;
+  }
+
+  void _pruneDescendantNotebookExpansions(String parentPath) {
+    final prefix = '$parentPath/';
+    _expandedNotebookFolders.removeWhere((p) => p.startsWith(prefix));
+    _notebookExpandedChildren.removeWhere((k, _) => k.startsWith(prefix));
+    _notebookFolderChildCounts.removeWhere((k, _) => k.startsWith(prefix));
+  }
+
+  Future<void> _revalidateNotebookExpandedBranches() async {
+    final repo = _repo;
+    if (repo == null || _expandedNotebookFolders.isEmpty) return;
+    final paths = _expandedNotebookFolders.toList();
+    final nextChildren = Map<String, List<NotebookListItem>>.from(
+      _notebookExpandedChildren,
+    );
+    final failed = <String>[];
+    for (final path in paths) {
+      try {
+        final kids = await repo.listDirectory(path);
+        nextChildren[path] = _sortedNotebookItems(kids);
+      } catch (_) {
+        failed.add(path);
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      for (final path in failed) {
+        _expandedNotebookFolders.remove(path);
+        nextChildren.remove(path);
+        _pruneDescendantNotebookExpansions(path);
+      }
+      _notebookExpandedChildren
+        ..clear()
+        ..addAll(nextChildren);
+    });
+  }
+
+  Future<void> _prefetchNotebookFolderCountsForVisibleRows() async {
+    final repo = _repo;
+    if (repo == null) return;
+    final paths = <String>{};
+    for (final row in _buildNotebookVisibleRows()) {
+      if (row.item.isFolder) paths.add(row.item.relativePath);
+    }
+    if (paths.isEmpty) return;
+    final next = <String, int>{};
+    await Future.wait(paths.map((folderPath) async {
+      try {
+        final kids = await repo.listDirectory(folderPath);
+        next[folderPath] = kids.length;
+      } catch (_) {}
+    }));
+    if (!mounted) return;
+    setState(() {
+      for (final e in next.entries) {
+        _notebookFolderChildCounts[e.key] = e.value;
+      }
+      _notebookFolderChildCounts.removeWhere((k, _) => !paths.contains(k));
+    });
+  }
+
+  Future<void> _toggleNotebookFolderExpand(NotebookListItem folder) async {
+    final repo = _repo;
+    if (repo == null || !folder.isFolder) return;
+    final path = folder.relativePath;
+    if (_expandedNotebookFolders.contains(path)) {
+      setState(() {
+        _expandedNotebookFolders.remove(path);
+        _notebookExpandedChildren.remove(path);
+        _pruneDescendantNotebookExpansions(path);
+      });
+      return;
+    }
+    try {
+      final kids = await repo.listDirectory(path);
+      if (!mounted) return;
+      setState(() {
+        _expandedNotebookFolders.add(path);
+        _notebookExpandedChildren[path] = _sortedNotebookItems(kids);
+        _notebookFolderChildCounts[path] = kids.length;
+      });
+      await _prefetchNotebookFolderCountsForVisibleRows();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось раскрыть папку: $e')),
         );
       }
     }
@@ -1031,53 +1178,37 @@ class _NotebookScreenState extends State<NotebookScreen> {
     final activeColor = isDark ? Colors.white : Colors.black87;
     final inactiveColor = isDark ? Colors.white70 : Colors.black54;
 
-    final chips = <Widget>[
-      InkWell(
-        onTap: () {
-          if (_currentDir.isEmpty) return;
-          setState(() => _currentDir = '');
-          unawaited(_refresh());
-          _closeFileActionsPanel();
-        },
-        borderRadius: BorderRadius.circular(6),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-          child: Text(
-            'Корень',
-            style: TextStyle(
-              color: _currentDir.isEmpty ? activeColor : inactiveColor,
-              fontWeight: FontWeight.w600,
-              fontSize: crumbFs,
-              height: 1.2,
-            ),
-          ),
-        ),
-      ),
-    ];
+    final chips = <Widget>[];
 
     for (var i = 0; i < segs.length; i++) {
       final path = segs.sublist(0, i + 1).join('/');
       final isActive = path == _currentDir;
-      chips.add(
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 2),
-          child: Text(
-            '/',
-            style: TextStyle(
-              color: inactiveColor,
-              fontWeight: FontWeight.w600,
-              fontSize: crumbFs,
-              height: 1.2,
+
+      if (i > 0) {
+        chips.add(
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: Text(
+              '/',
+              style: TextStyle(
+                color: inactiveColor,
+                fontWeight: FontWeight.w600,
+                fontSize: crumbFs,
+                height: 1.2,
+              ),
             ),
           ),
-        ),
-      );
+        );
+      }
       chips.add(
         InkWell(
           onTap: isActive
               ? null
               : () {
-                  setState(() => _currentDir = path);
+                  setState(() {
+                    _currentDir = path;
+                    _clearNotebookTreeExpansion();
+                  });
                   unawaited(_refresh());
                   _closeFileActionsPanel();
                 },
@@ -1421,7 +1552,10 @@ class _NotebookScreenState extends State<NotebookScreen> {
     final repo = _repo;
     if (repo == null) return;
     if (item.isFolder) {
-      setState(() => _currentDir = item.relativePath);
+      setState(() {
+        _currentDir = item.relativePath;
+        _clearNotebookTreeExpansion();
+      });
       await _refresh();
       return;
     }
@@ -1434,6 +1568,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
     final parent = p.posix.dirname(_currentDir);
     setState(() {
       _currentDir = parent == '.' ? '' : parent;
+      _clearNotebookTreeExpansion();
     });
     _refresh();
   }
@@ -1720,7 +1855,10 @@ class _NotebookScreenState extends State<NotebookScreen> {
       if (_currentDir == deleted ||
           (prefix.isNotEmpty && _currentDir.startsWith(prefix))) {
         final parent = p.posix.dirname(deleted);
-        setState(() => _currentDir = parent == '.' ? '' : parent);
+        setState(() {
+          _currentDir = parent == '.' ? '' : parent;
+          _clearNotebookTreeExpansion();
+        });
       }
     }
     await _refresh();
@@ -2001,6 +2139,8 @@ class _NotebookScreenState extends State<NotebookScreen> {
     final listCheckVisualSize = (uiListFontSize * 0.72).clamp(9.0, 20.0);
     final listCheckScale = (listCheckVisualSize / 18.0).clamp(0.5, 1.15);
     final listCbBox = (listCheckVisualSize * 2.4).clamp(30.0, 56.0);
+    final notebookVisibleRows = _buildNotebookVisibleRows();
+    final treeIndentStep = (uiListFontSize * 0.55).clamp(10.0, 18.0);
 
     return Scaffold(
       appBar: editing ? _buildEditorAppBar() : _buildListAppBar(),
@@ -2037,7 +2177,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Expanded(
-                          child: _items.isEmpty
+                          child: notebookVisibleRows.isEmpty
                               ? Center(
                                   child: Text(
                                     _currentDir.isEmpty
@@ -2054,13 +2194,16 @@ class _NotebookScreenState extends State<NotebookScreen> {
                                 )
                               : Stack(
                                   clipBehavior: Clip.none,
-                                  alignment: Alignment.topRight,
+                                  alignment: Alignment.centerRight,
                                   children: [
                                     Positioned.fill(
                                       child: ListView.builder(
-                                        itemCount: _items.length,
+                                        itemCount: notebookVisibleRows.length,
                                         itemBuilder: (listContext, i) {
-                                          final item = _items[i];
+                                          final row = notebookVisibleRows[i];
+                                          final item = row.item;
+                                          final depthPad =
+                                              row.depth * treeIndentStep;
                                           final bulk = _fileBulkSelectionUi &&
                                               !item.isFolder;
                                           final sel = _bulkSelectedFilePaths
@@ -2074,129 +2217,253 @@ class _NotebookScreenState extends State<NotebookScreen> {
                                                       .withValues(alpha: 0.45)
                                                   : Colors.amber.shade100)
                                               : null;
+                                          final rowDividerColor = isDark
+                                              ? Colors.white.withValues(
+                                                  alpha: 0.12,
+                                                )
+                                              : Colors.black.withValues(
+                                                  alpha: 0.08,
+                                                );
+                                          final expandedFolder =
+                                              item.isFolder &&
+                                                  _expandedNotebookFolders
+                                                      .contains(
+                                                    item.relativePath,
+                                                  );
+                                          final chevronColor = expandedFolder
+                                              ? (isDark
+                                                  ? Colors.amber.shade400
+                                                  : Colors.amber.shade800)
+                                              : (isDark
+                                                  ? Colors.white38
+                                                  : Colors.black38);
+                                          final countTextStyle = TextStyle(
+                                            fontSize: (uiListFontSize * 0.82)
+                                                .clamp(11.0, 22.0),
+                                            color: isDark
+                                                ? Colors.white54
+                                                : Colors.black45,
+                                            fontFeatures: const [
+                                              FontFeature.tabularFigures(),
+                                            ],
+                                          );
 
                                           void onTap() {
-                                              if (bulk) {
-                                                setState(() {
-                                                  if (sel) {
-                                                    _bulkSelectedFilePaths
-                                                        .remove(
-                                                            item.relativePath);
-                                                  } else {
-                                                    _bulkSelectedFilePaths
-                                                        .add(item.relativePath);
-                                                  }
-                                                });
-                                                return;
-                                              }
-                                              if (_fileActionsAnchor != null &&
-                                                  item.isFolder) {
-                                                _closeFileActionsPanel();
-                                              }
-                                              _openItem(item);
+                                            if (bulk) {
+                                              setState(() {
+                                                if (sel) {
+                                                  _bulkSelectedFilePaths
+                                                      .remove(
+                                                    item.relativePath,
+                                                  );
+                                                } else {
+                                                  _bulkSelectedFilePaths.add(
+                                                    item.relativePath,
+                                                  );
+                                                }
+                                              });
+                                              return;
+                                            }
+                                            if (_fileActionsAnchor != null &&
+                                                item.isFolder) {
+                                              _closeFileActionsPanel();
+                                            }
+                                            _openItem(item);
                                           }
 
-                                          return Material(
-                                            color: tileBg,
-                                            child: InkWell(
-                                              onTap: onTap,
-                                              onLongPress: () =>
-                                                  _openFileActionsPanel(item),
-                                              child: Padding(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                  horizontal: 16,
-                                                  vertical: 2,
-                                                ),
-                                                child: Row(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.end,
-                                                  children: [
-                                                    SizedBox(
-                                                      width: bulk
-                                                          ? listCbBox
-                                                          : listIconSize,
-                                                      height: bulk
-                                                          ? listCbBox
-                                                          : listIconSize,
-                                                      child: bulk
-                                                          ? Align(
-                                                              alignment: Alignment
-                                                                  .bottomCenter,
-                                                              child: SizedBox(
-                                                                width: listCbBox,
-                                                                height: listCbBox,
-                                                                child: Transform
-                                                                    .scale(
-                                                                  scale:
-                                                                      listCheckScale,
+                                          return Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Material(
+                                                color: tileBg,
+                                                child: InkWell(
+                                                  onTap: onTap,
+                                                  onLongPress: () =>
+                                                      _openFileActionsPanel(
+                                                    item,
+                                                  ),
+                                                  child: Padding(
+                                                    padding:
+                                                        EdgeInsets.fromLTRB(
+                                                      16 + depthPad,
+                                                      2,
+                                                      8,
+                                                      2,
+                                                    ),
+                                                    child: Row(
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .center,
+                                                      children: [
+                                                        SizedBox(
+                                                          width: bulk
+                                                              ? listCbBox
+                                                              : listIconSize,
+                                                          height: bulk
+                                                              ? listCbBox
+                                                              : listIconSize,
+                                                          child: bulk
+                                                              ? Align(
                                                                   alignment:
                                                                       Alignment
-                                                                          .bottomCenter,
+                                                                          .center,
                                                                   child:
-                                                                      Checkbox(
-                                                                    value: sel,
-                                                                    onChanged:
-                                                                        (v) {
-                                                                      setState(
-                                                                        () {
-                                                                          if (v ==
-                                                                              true) {
-                                                                            _bulkSelectedFilePaths.add(
-                                                                              item.relativePath,
-                                                                            );
-                                                                          } else {
-                                                                            _bulkSelectedFilePaths.remove(
-                                                                              item.relativePath,
-                                                                            );
-                                                                          }
+                                                                      SizedBox(
+                                                                    width:
+                                                                        listCbBox,
+                                                                    height:
+                                                                        listCbBox,
+                                                                    child: Transform
+                                                                        .scale(
+                                                                      scale:
+                                                                          listCheckScale,
+                                                                      alignment:
+                                                                          Alignment
+                                                                              .center,
+                                                                      child:
+                                                                          Checkbox(
+                                                                        value:
+                                                                            sel,
+                                                                        onChanged:
+                                                                            (v) {
+                                                                          setState(
+                                                                            () {
+                                                                              if (v == true) {
+                                                                                _bulkSelectedFilePaths.add(
+                                                                                  item.relativePath,
+                                                                                );
+                                                                              } else {
+                                                                                _bulkSelectedFilePaths.remove(
+                                                                                  item.relativePath,
+                                                                                );
+                                                                              }
+                                                                            },
+                                                                          );
                                                                         },
-                                                                      );
-                                                                    },
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                                )
+                                                              : Align(
+                                                                  alignment:
+                                                                      Alignment
+                                                                          .center,
+                                                                  child: Icon(
+                                                                    item.isFolder
+                                                                        ? Icons
+                                                                            .folder_outlined
+                                                                        : Icons
+                                                                            .description_outlined,
+                                                                    size:
+                                                                        listIconSize,
                                                                   ),
                                                                 ),
-                                                              ),
-                                                            )
-                                                          : Align(
-                                                              alignment: Alignment
-                                                                  .bottomCenter,
-                                                              child: Icon(
-                                                                item.isFolder
-                                                                    ? Icons
-                                                                        .folder_outlined
-                                                                    : Icons
-                                                                        .description_outlined,
-                                                                size:
-                                                                    listIconSize,
-                                                              ),
-                                                            ),
-                                                    ),
-                                                    const SizedBox(width: 10),
-                                                    Expanded(
-                                                      child: Text(
-                                                        notebookItemDisplayName(
-                                                          item,
                                                         ),
-                                                        maxLines: 2,
-                                                        overflow: TextOverflow
-                                                            .ellipsis,
-                                                        style: TextStyle(
-                                                          fontSize:
-                                                              uiListFontSize,
-                                                          fontWeight:
-                                                              FontWeight.w500,
-                                                          height: uiLineHeight
-                                                              .clamp(
-                                                            1.15,
-                                                            1.45,
+                                                        const SizedBox(
+                                                            width: 10),
+                                                        Expanded(
+                                                          child: Builder(
+                                                            builder: (_) {
+                                                              final label =
+                                                                  Text(
+                                                                notebookItemDisplayName(
+                                                                  item,
+                                                                ),
+                                                                maxLines: 2,
+                                                                overflow:
+                                                                    TextOverflow
+                                                                        .ellipsis,
+                                                                style:
+                                                                    TextStyle(
+                                                                  fontSize:
+                                                                      uiListFontSize,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w500,
+                                                                  height:
+                                                                      uiLineHeight
+                                                                          .clamp(
+                                                                    1.15,
+                                                                    1.45,
+                                                                  ),
+                                                                ),
+                                                              );
+                                                              if (!bulk) {
+                                                                return label;
+                                                              }
+                                                              return GestureDetector(
+                                                                behavior:
+                                                                    HitTestBehavior
+                                                                        .opaque,
+                                                                onTap: onTap,
+                                                                child: Align(
+                                                                  alignment:
+                                                                      Alignment
+                                                                          .centerLeft,
+                                                                  child: label,
+                                                                ),
+                                                              );
+                                                            },
                                                           ),
                                                         ),
-                                                      ),
+                                                        if (item.isFolder &&
+                                                            !bulk) ...[
+                                                          Text(
+                                                            '${_notebookFolderChildCounts[item.relativePath] ?? '…'}',
+                                                            style:
+                                                                countTextStyle,
+                                                          ),
+                                                          const SizedBox(
+                                                              width: 2),
+                                                          IconButton(
+                                                            tooltip:
+                                                                expandedFolder
+                                                                    ? 'Свернуть'
+                                                                    : 'Раскрыть',
+                                                            padding:
+                                                                EdgeInsets.zero,
+                                                            visualDensity:
+                                                                VisualDensity
+                                                                    .compact,
+                                                            constraints:
+                                                                const BoxConstraints(
+                                                              minWidth: 40,
+                                                              minHeight: 40,
+                                                            ),
+                                                            icon: Icon(
+                                                              expandedFolder
+                                                                  ? Icons
+                                                                      .expand_more
+                                                                  : Icons
+                                                                      .chevron_right,
+                                                              size: (listIconSize *
+                                                                      0.9)
+                                                                  .clamp(
+                                                                22.0,
+                                                                40.0,
+                                                              ),
+                                                              color:
+                                                                  chevronColor,
+                                                            ),
+                                                            onPressed: () =>
+                                                                unawaited(
+                                                              _toggleNotebookFolderExpand(
+                                                                item,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ],
                                                     ),
-                                                  ],
+                                                  ),
                                                 ),
                                               ),
-                                            ),
+                                              Divider(
+                                                height: 1,
+                                                thickness: 0.5,
+                                                color: rowDividerColor,
+                                              ),
+                                            ],
                                           );
                                         },
                                       ),
@@ -2240,13 +2507,18 @@ class _NotebookScreenState extends State<NotebookScreen> {
                                         ),
                                       ),
                                       Positioned(
-                                        top: 4,
+                                        top: 0,
+                                        bottom: 0,
                                         right: 6,
                                         child: SafeArea(
                                           left: false,
-                                          bottom: false,
-                                          child:
-                                              _buildNotebookFileActionsPanel(),
+                                          top: false,
+                                          bottom: true,
+                                          child: Align(
+                                            alignment: Alignment.centerRight,
+                                            child:
+                                                _buildNotebookFileActionsPanel(),
+                                          ),
                                         ),
                                       ),
                                     ],

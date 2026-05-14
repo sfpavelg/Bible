@@ -2140,8 +2140,6 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
             builder: (context, constraints) {
               final scale = (constraints.maxWidth / 420).clamp(0.76, 1.0);
               final textScale = scale;
-              final checkboxScale =
-                  (0.9 + (scale - 0.76) * 0.25).clamp(0.86, 1.0);
               final chrome = widget.appProvider.chromeButtonSize;
               final chromeLabel = (chrome * 0.36).clamp(12.0, 22.0);
               final rowLabelStyle = TextStyle(
@@ -2149,85 +2147,143 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                 fontWeight: FontWeight.w600,
                 color: fg,
               );
+              final isDark = _bibleScreenIsDark(context);
+              final segTrack = isDark
+                  ? const Color(0xFF37474F)
+                  : Colors.grey.shade200;
+              final segActive = isDark
+                  ? const Color(0xFF81D4FA)
+                  : Colors.blue.shade700;
+              final segActiveFg =
+                  isDark ? Colors.black87 : Colors.white;
+              final segInactiveFg =
+                  isDark ? Colors.white70 : Colors.blue.shade800;
+              final segPadV = (chrome * 0.22).clamp(9.0, 14.0);
+              final segFont = (chromeLabel * 0.88 * textScale)
+                  .clamp(11.0, 18.0);
+              final segRadius = BorderRadius.circular(999);
+
+              Widget testamentSegment({
+                required String label,
+                required bool selected,
+                required VoidCallback onTap,
+              }) {
+                return Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: onTap,
+                    borderRadius: segRadius,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 160),
+                      curve: Curves.easeOutCubic,
+                      padding: EdgeInsets.symmetric(
+                        vertical: segPadV,
+                        horizontal: (chrome * 0.12).clamp(6.0, 12.0),
+                      ),
+                      decoration: BoxDecoration(
+                        color: selected ? segActive : Colors.transparent,
+                        borderRadius: segRadius,
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        label,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: segFont,
+                          fontWeight: FontWeight.w600,
+                          color:
+                              selected ? segActiveFg : segInactiveFg,
+                          height: 1.1,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }
+
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Transform.scale(
-                        scale: checkboxScale,
-                        child: Checkbox(
-                          value: _vz,
-                          onChanged: _setVz,
-                          visualDensity: VisualDensity.compact,
-                          materialTapTargetSize:
-                              MaterialTapTargetSize.shrinkWrap,
-                          activeColor: padBg,
-                          checkColor: fg,
-                          side: ChromeOutline.side,
-                        ),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: segTrack,
+                      borderRadius: segRadius,
+                      border: Border.all(
+                        color: ChromeOutline.color,
+                        width: ChromeOutline.width,
                       ),
-                      SizedBox(width: (chrome * 0.1).clamp(4.0, 10.0)),
-                      Expanded(
-                        child: Text(
-                          'Ветхий завет',
-                          style: rowLabelStyle,
-                        ),
+                    ),
+                    child: Padding(
+                      padding: EdgeInsets.all((3 * scale).clamp(2.5, 4.0)),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: testamentSegment(
+                              label: 'Ветхий завет',
+                              selected: _vz,
+                              onTap: () => _setVz(!_vz),
+                            ),
+                          ),
+                          SizedBox(
+                            height: (chrome * 0.55).clamp(26.0, 40.0),
+                            child: VerticalDivider(
+                              width: 1,
+                              thickness: 1,
+                              color: divColor,
+                            ),
+                          ),
+                          Expanded(
+                            child: testamentSegment(
+                              label: 'Новый завет',
+                              selected: _nz,
+                              onTap: () => _setNz(!_nz),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-                  SizedBox(height: 4 * scale),
+                  SizedBox(height: (8 * scale).clamp(6.0, 12.0)),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Transform.scale(
-                        scale: checkboxScale,
-                        child: Checkbox(
-                          value: _nz,
-                          onChanged: _setNz,
-                          visualDensity: VisualDensity.compact,
-                          materialTapTargetSize:
-                              MaterialTapTargetSize.shrinkWrap,
-                          activeColor: padBg,
-                          checkColor: fg,
-                          side: ChromeOutline.side,
-                        ),
-                      ),
-                      SizedBox(width: (chrome * 0.1).clamp(4.0, 10.0)),
-                      Expanded(
-                        child: Text(
-                          'Новый завет',
-                          style: rowLabelStyle,
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 4 * scale),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Transform.scale(
-                        scale: checkboxScale,
-                        child: Checkbox(
-                          value: _wholeWords,
-                          onChanged: (v) {
-                            setState(() => _wholeWords = v ?? false);
-                            _maybeRefreshSearch();
-                          },
-                          visualDensity: VisualDensity.compact,
-                          materialTapTargetSize:
-                              MaterialTapTargetSize.shrinkWrap,
-                          activeColor: padBg,
-                          checkColor: fg,
-                          side: ChromeOutline.side,
-                        ),
-                      ),
-                      SizedBox(width: (chrome * 0.1).clamp(4.0, 10.0)),
                       Expanded(
                         child: Text(
                           'Целое слово',
                           style: rowLabelStyle,
+                        ),
+                      ),
+                      SwitchTheme(
+                        data: SwitchThemeData(
+                          thumbColor: WidgetStateProperty.resolveWith((s) {
+                            if (s.contains(WidgetState.selected)) {
+                              return Colors.white;
+                            }
+                            return segActive;
+                          }),
+                          trackColor: WidgetStateProperty.resolveWith((s) {
+                            if (s.contains(WidgetState.selected)) {
+                              return Theme.of(context)
+                                  .colorScheme
+                                  .primary;
+                            }
+                            return isDark
+                                ? Colors.grey.shade700
+                                : Colors.grey.shade300;
+                          }),
+                          trackOutlineColor:
+                              WidgetStateProperty.all(Colors.transparent),
+                        ),
+                        child: Switch.adaptive(
+                          value: _wholeWords,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                          onChanged: (v) {
+                            setState(() => _wholeWords = v);
+                            _maybeRefreshSearch();
+                          },
                         ),
                       ),
                     ],
@@ -2281,6 +2337,14 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                     : Colors.white.withValues(alpha: 0.94);
                 final clearFill = isDark ? Colors.white : Colors.black87;
                 final clearIconColor = isDark ? Colors.black87 : Colors.white;
+                final fs = queryStyle.fontSize ?? 16.0;
+                final strutH = fs * (queryStyle.height ?? 1.35);
+                final iconSize = (fs * 1.05).clamp(22.0, 36.0);
+                final iconSlotW = (iconSize + 22).clamp(46.0, 58.0);
+                final vertPad = (strutH * 0.2).clamp(10.0, 22.0);
+                final iconSlotH = (strutH + vertPad * 2).clamp(44.0, 72.0);
+                final clearCircle = (fs * 1.22).clamp(26.0, 40.0);
+                final clearGlyph = (fs * 0.52).clamp(13.0, 22.0);
                 return ListenableBuilder(
                   listenable: controller,
                   builder: (ctx, _) {
@@ -2295,50 +2359,74 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                         fillColor: fieldFill,
                         hintText: 'Набери текст',
                         hintStyle: hintStyle,
-                        isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(
-                          vertical: 10,
-                          horizontal: 2,
+                        isDense: fs < 22,
+                        contentPadding: EdgeInsets.fromLTRB(
+                          2,
+                          vertPad,
+                          2,
+                          vertPad,
                         ),
-                        prefixIcon: Icon(
-                          Icons.search,
-                          color: fg.withValues(alpha: 0.45),
-                          size: 22,
+                        prefixIcon: SizedBox(
+                          width: iconSlotW,
+                          height: iconSlotH,
+                          child: Center(
+                            child: Icon(
+                              Icons.search,
+                              color: fg.withValues(alpha: 0.45),
+                              size: iconSize,
+                            ),
+                          ),
                         ),
-                        prefixIconConstraints: const BoxConstraints(
-                          minWidth: 40,
-                          minHeight: 40,
+                        prefixIconConstraints: BoxConstraints(
+                          minWidth: iconSlotW,
+                          maxWidth: iconSlotW,
+                          minHeight: iconSlotH,
+                          maxHeight: iconSlotH,
                         ),
                         suffixIcon: trimmed.isEmpty
                             ? null
-                            : IconButton(
-                                tooltip: 'Очистить',
-                                style: IconButton.styleFrom(
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                ),
-                                icon: Container(
-                                  width: 20,
-                                  height: 20,
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(
-                                    color: clearFill,
-                                    shape: BoxShape.circle,
+                            : SizedBox(
+                                width: iconSlotW,
+                                height: iconSlotH,
+                                child: Center(
+                                  child: IconButton(
+                                    tooltip: 'Очистить',
+                                    padding: EdgeInsets.zero,
+                                    constraints: BoxConstraints.tightFor(
+                                      width: clearCircle + 8,
+                                      height: iconSlotH,
+                                    ),
+                                    style: IconButton.styleFrom(
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                    icon: Container(
+                                      width: clearCircle,
+                                      height: clearCircle,
+                                      alignment: Alignment.center,
+                                      decoration: BoxDecoration(
+                                        color: clearFill,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        Icons.close,
+                                        size: clearGlyph,
+                                        color: clearIconColor,
+                                      ),
+                                    ),
+                                    onPressed: () {
+                                      controller.clear();
+                                      _scheduleDebouncedSearch();
+                                    },
                                   ),
-                                  child: Icon(
-                                    Icons.close,
-                                    size: 11,
-                                    color: clearIconColor,
-                                  ),
                                 ),
-                                onPressed: () {
-                                  controller.clear();
-                                  _scheduleDebouncedSearch();
-                                },
                               ),
-                        suffixIconConstraints: const BoxConstraints(
-                          minWidth: 40,
-                          minHeight: 40,
+                        suffixIconConstraints: BoxConstraints(
+                          minWidth: iconSlotW,
+                          maxWidth: iconSlotW,
+                          minHeight: iconSlotH,
+                          maxHeight: iconSlotH,
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(18),
