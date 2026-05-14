@@ -5,6 +5,7 @@ import 'package:bible_app/screens/notebook_screen.dart';
 import 'package:bible_app/screens/journal_screen.dart';
 import 'package:bible_app/providers/app_provider.dart';
 import 'package:bible_app/navigation/app_tab_switcher.dart';
+import 'package:bible_app/theme/bible_light_palette.dart';
 import 'package:bible_app/widgets/main_chrome_tab_bar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -98,26 +99,36 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final tabOrder = _mountedTabs.toList()..sort();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     // Верх не инсетим: AppBar вкладок рисуется под статус-бар (primary),
     // фон шапки идёт до края; системные иконки — поверх прозрачной панели.
-    return SafeArea(
-      top: false,
-      child: Scaffold(
-        body: Stack(
-          fit: StackFit.expand,
-          children: [
-            for (final i in tabOrder)
-              Offstage(
-                offstage: _selectedIndex != i,
-                child: _tabBody(i),
-              ),
-          ],
-        ),
-        bottomNavigationBar: MainChromeTabBar(
-          currentIndex: _selectedIndex,
-          onChanged: _onItemTapped,
-        ),
+    final scaffold = Scaffold(
+      backgroundColor: isDark ? null : Colors.transparent,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          for (final i in tabOrder)
+            Offstage(
+              offstage: _selectedIndex != i,
+              child: _tabBody(i),
+            ),
+        ],
       ),
+      bottomNavigationBar: MainChromeTabBar(
+        currentIndex: _selectedIndex,
+        onChanged: _onItemTapped,
+      ),
+    );
+
+    final shell = SafeArea(top: false, child: scaffold);
+
+    if (isDark) return shell;
+
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: BibleLightPalette.screenGradient,
+      ),
+      child: shell,
     );
   }
 }

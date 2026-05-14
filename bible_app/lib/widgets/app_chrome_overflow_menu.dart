@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:bible_app/providers/app_provider.dart';
+import 'package:bible_app/theme/bible_light_palette.dart';
 import 'package:bible_app/utils/app_exit.dart';
 import 'package:bible_app/widgets/app_chrome_dialogs.dart';
 import 'package:bible_app/widgets/chrome_outline.dart';
@@ -14,9 +15,10 @@ import 'package:provider/provider.dart';
 class AppChromeOverflowMenu extends StatefulWidget {
   const AppChromeOverflowMenu({
     super.key,
-    this.iconColor = Colors.black,
-    this.backgroundColor = const Color(0xFFE1F5FE),
+    this.iconColor = BibleLightPalette.iconActive,
+    this.backgroundColor = BibleLightPalette.chromePillFill,
     this.tileWidth,
+    this.shapeSide,
   });
 
   /// Иконка и фон **квадратной кнопки** «⋯» (как у ChromeIconButton).
@@ -25,6 +27,9 @@ class AppChromeOverflowMenu extends StatefulWidget {
 
   /// Ширина кнопки «⋯»; по умолчанию [AppProvider.chromeButtonSize].
   final double? tileWidth;
+
+  /// Обводка кнопки; по умолчанию [ChromeOutline.side].
+  final BorderSide? shapeSide;
 
   @override
   State<AppChromeOverflowMenu> createState() => _AppChromeOverflowMenuState();
@@ -38,9 +43,7 @@ class _AppChromeOverflowMenuState extends State<AppChromeOverflowMenu> {
     // Контент начинается ниже закруглённой нижней кромки AppBar.
     // Привязываем меню к верхней кромке области текста, чтобы исключить наезд.
     final topAnchor = safeTop + toolbarH + 24;
-    final panelBg = Theme.of(context).brightness == Brightness.dark
-        ? const Color(0xFF37474F)
-        : const Color(0xFFE1F5FE);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final value = await showGeneralDialog<String>(
       context: context,
@@ -61,56 +64,117 @@ class _AppChromeOverflowMenuState extends State<AppChromeOverflowMenu> {
               top: topAnchor,
               right: 0,
               child: IntrinsicWidth(
-                child: Material(
-                  color: panelBg,
-                  elevation: 10,
-                  borderRadius: BorderRadius.circular(12),
-                  clipBehavior: Clip.antiAlias,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        InkWell(
-                          onTap: () => Navigator.pop(dialogContext, 'settings'),
-                          child: chromePopupMenuChoiceTile(
-                            context: dialogContext,
-                            label: 'Настройки',
-                            icon: Icons.settings_outlined,
+                child: isDark
+                    ? Material(
+                        color: const Color(0xFF37474F),
+                        elevation: 10,
+                        borderRadius: BorderRadius.circular(12),
+                        clipBehavior: Clip.antiAlias,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              InkWell(
+                                onTap: () =>
+                                    Navigator.pop(dialogContext, 'settings'),
+                                child: chromePopupMenuChoiceTile(
+                                  context: dialogContext,
+                                  label: 'Настройки',
+                                  icon: Icons.settings_outlined,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              InkWell(
+                                onTap: () =>
+                                    Navigator.pop(dialogContext, 'support'),
+                                child: chromePopupMenuChoiceTile(
+                                  context: dialogContext,
+                                  label: 'Техподдержка',
+                                  icon: Icons.support_agent_outlined,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              InkWell(
+                                onTap: () =>
+                                    Navigator.pop(dialogContext, 'help'),
+                                child: chromePopupMenuChoiceTile(
+                                  context: dialogContext,
+                                  label: 'Инструкция',
+                                  icon: Icons.help_outline_rounded,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              InkWell(
+                                onTap: () =>
+                                    Navigator.pop(dialogContext, 'exit'),
+                                child: chromePopupMenuChoiceTile(
+                                  context: dialogContext,
+                                  label: 'Выход',
+                                  icon: Icons.logout_rounded,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        InkWell(
-                          onTap: () => Navigator.pop(dialogContext, 'support'),
-                          child: chromePopupMenuChoiceTile(
-                            context: dialogContext,
-                            label: 'Техподдержка',
-                            icon: Icons.support_agent_outlined,
+                      )
+                    : ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: DecoratedBox(
+                          decoration: BibleLightPalette.lightPanelShellDecoration(
+                            radius: 12,
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                InkWell(
+                                  onTap: () => Navigator.pop(
+                                      dialogContext, 'settings'),
+                                  child: chromePopupMenuChoiceTile(
+                                    context: dialogContext,
+                                    label: 'Настройки',
+                                    icon: Icons.settings_outlined,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                InkWell(
+                                  onTap: () => Navigator.pop(
+                                      dialogContext, 'support'),
+                                  child: chromePopupMenuChoiceTile(
+                                    context: dialogContext,
+                                    label: 'Техподдержка',
+                                    icon: Icons.support_agent_outlined,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                InkWell(
+                                  onTap: () =>
+                                      Navigator.pop(dialogContext, 'help'),
+                                  child: chromePopupMenuChoiceTile(
+                                    context: dialogContext,
+                                    label: 'Инструкция',
+                                    icon: Icons.help_outline_rounded,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                InkWell(
+                                  onTap: () =>
+                                      Navigator.pop(dialogContext, 'exit'),
+                                  child: chromePopupMenuChoiceTile(
+                                    context: dialogContext,
+                                    label: 'Выход',
+                                    icon: Icons.logout_rounded,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        InkWell(
-                          onTap: () => Navigator.pop(dialogContext, 'help'),
-                          child: chromePopupMenuChoiceTile(
-                            context: dialogContext,
-                            label: 'Помощь',
-                            icon: Icons.help_outline_rounded,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        InkWell(
-                          onTap: () => Navigator.pop(dialogContext, 'exit'),
-                          child: chromePopupMenuChoiceTile(
-                            context: dialogContext,
-                            label: 'Выход',
-                            icon: Icons.logout_rounded,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                      ),
               ),
             ),
           ],
@@ -143,7 +207,7 @@ class _AppChromeOverflowMenuState extends State<AppChromeOverflowMenu> {
           color: widget.backgroundColor,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(corner),
-            side: ChromeOutline.side,
+            side: widget.shapeSide ?? ChromeOutline.side,
           ),
           clipBehavior: Clip.antiAlias,
           child: SizedBox(
@@ -179,8 +243,13 @@ Widget chromePopupMenuChoiceTile({
   final hPad = (chrome * 0.30).clamp(10.0, 16.0);
   final vPad = (chrome * 0.18).clamp(7.0, 11.0);
   final minHeight = (chrome * 0.96).clamp(42.0, 62.0);
+  final isDark = Theme.of(context).brightness == Brightness.dark;
   final inner = NotebookChromeUi.secondaryButtonBackground(context);
   final fg = NotebookChromeUi.secondaryButtonForeground(context);
+  final borderColor =
+      isDark ? ChromeOutline.color : BibleLightPalette.chromePillOutlineColor;
+  final borderWidth = isDark ? ChromeOutline.width : 1.2;
+  final iconColor = isDark ? fg : BibleLightPalette.iconActive;
   return Material(
     color: Colors.transparent,
     borderRadius: BorderRadius.circular(10),
@@ -191,8 +260,8 @@ Widget chromePopupMenuChoiceTile({
           color: inner,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: ChromeOutline.color,
-            width: ChromeOutline.width,
+            color: borderColor,
+            width: borderWidth,
           ),
         ),
         child: ConstrainedBox(
@@ -212,7 +281,7 @@ Widget chromePopupMenuChoiceTile({
                   ),
                 ),
                 SizedBox(width: textIconGap),
-                Icon(icon, color: fg, size: iconSize),
+                Icon(icon, color: iconColor, size: iconSize),
               ],
             ),
           ),

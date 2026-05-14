@@ -17,6 +17,7 @@ class ChromeIconButton extends StatelessWidget {
     required this.backgroundColor,
     this.circular = false,
     this.width,
+    this.outlineSide,
   });
 
   final IconData icon;
@@ -31,6 +32,9 @@ class ChromeIconButton extends StatelessWidget {
   /// Если null — квадрат [chromeButtonSize] × [chromeButtonSize].
   final double? width;
 
+  /// Если задано — обводка вместо стандартной [ChromeOutline] (например, светлая тема Библии).
+  final BorderSide? outlineSide;
+
   @override
   Widget build(BuildContext context) {
     final height = context.watch<AppProvider>().chromeButtonSize;
@@ -39,17 +43,22 @@ class ChromeIconButton extends StatelessWidget {
     final useCircle = circular && (w - height).abs() < 0.5;
     final corner = (math.min(w, height) * 0.22).clamp(4.0, 12.0);
     final disabled = onPressed == null;
-    final outlineSide = disabled
+    final outlineSideResolved = outlineSide != null
         ? BorderSide(
-            color: ChromeOutline.color.withValues(alpha: 0.35),
-            width: ChromeOutline.width,
+            color: outlineSide!.color.withValues(alpha: disabled ? 0.45 : 1.0),
+            width: outlineSide!.width,
           )
-        : ChromeOutline.side;
+        : (disabled
+            ? BorderSide(
+                color: ChromeOutline.color.withValues(alpha: 0.35),
+                width: ChromeOutline.width,
+              )
+            : ChromeOutline.side);
     final ShapeBorder shapeBorder = useCircle
-        ? CircleBorder(side: outlineSide)
+        ? CircleBorder(side: outlineSideResolved)
         : RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(corner),
-            side: outlineSide,
+            side: outlineSideResolved,
           );
     final core = Material(
       color: backgroundColor,
@@ -86,6 +95,7 @@ class ChromeNavTextButton extends StatelessWidget {
     required this.backgroundColor,
     required this.width,
     required this.height,
+    this.outlineSide,
   });
 
   final String label;
@@ -94,6 +104,9 @@ class ChromeNavTextButton extends StatelessWidget {
   final Color backgroundColor;
   final double width;
   final double height;
+
+  /// Если null — [ChromeOutline.side].
+  final BorderSide? outlineSide;
 
   @override
   Widget build(BuildContext context) {
@@ -109,7 +122,7 @@ class ChromeNavTextButton extends StatelessWidget {
       color: backgroundColor,
       shape: RoundedRectangleBorder(
         borderRadius: radius,
-        side: ChromeOutline.side,
+        side: outlineSide ?? ChromeOutline.side,
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(

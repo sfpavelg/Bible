@@ -7,6 +7,7 @@ import 'package:bible_app/notebook/notebook_repository.dart';
 import 'package:bible_app/notebook/notebook_repository_factory.dart';
 import 'package:bible_app/screens/notebook_editor_panel.dart';
 import 'package:bible_app/providers/app_provider.dart';
+import 'package:bible_app/theme/bible_light_palette.dart';
 import 'package:bible_app/widgets/app_chrome_overflow_menu.dart';
 import 'package:bible_app/widgets/chrome_outline.dart';
 import 'package:bible_app/widgets/chrome_toolbar_button.dart';
@@ -328,11 +329,8 @@ class _NotebookScreenState extends State<NotebookScreen> {
     return [...ordered, ...rest];
   }
 
-  static const _appBarBgLight = Color(0xFFB3E5FC);
-  static const _buttonBgLight = Color(0xFFE1F5FE);
   static const _appBarBgDark = Color(0xFF37474F);
   static const _buttonBgDark = Color(0xFF455A64);
-  static const _chromeFgLight = Colors.black;
 
   @override
   void initState() {
@@ -672,26 +670,42 @@ class _NotebookScreenState extends State<NotebookScreen> {
     String? hintText,
   }) {
     final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final r = BorderRadius.circular(_notebookInputBorderRadius);
     OutlineInputBorder outline(Color color, {double width = 1}) =>
         OutlineInputBorder(
           borderRadius: r,
           borderSide: BorderSide(color: color, width: width),
         );
+    final outlineIdle =
+        isDark ? scheme.outline : BibleLightPalette.border;
+    final outlineFocus =
+        isDark ? scheme.primary : BibleLightPalette.primary;
     return InputDecoration(
       labelText: labelText,
       hintText: hintText,
       isDense: true,
       filled: true,
-      fillColor: scheme.surfaceContainerHighest.withValues(alpha: 0.45),
-      border: outline(scheme.outline),
-      enabledBorder: outline(scheme.outline),
-      focusedBorder: outline(scheme.primary, width: 2),
+      fillColor: isDark
+          ? scheme.surfaceContainerHighest.withValues(alpha: 0.45)
+          : BibleLightPalette.activeBg,
+      labelStyle: TextStyle(
+        color: isDark ? scheme.onSurfaceVariant : BibleLightPalette.secondaryText,
+      ),
+      hintStyle: TextStyle(
+        color: isDark ? scheme.onSurfaceVariant : BibleLightPalette.secondaryText,
+      ),
+      border: outline(outlineIdle),
+      enabledBorder: outline(outlineIdle),
+      focusedBorder: outline(outlineFocus, width: 2),
       suffixIcon: controller.text.isEmpty
           ? null
           : IconButton(
               tooltip: 'Очистить',
-              icon: const Icon(Icons.clear),
+              icon: Icon(
+                Icons.clear,
+                color: isDark ? scheme.onSurface : BibleLightPalette.iconActive,
+              ),
               onPressed: controller.clear,
             ),
     );
@@ -1015,7 +1029,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
     return Material(
       elevation: 8,
       borderRadius: BorderRadius.circular(12),
-      color: isDark ? _appBarBgDark : Colors.white,
+      color: isDark ? _appBarBgDark : BibleLightPalette.topBarBg,
       clipBehavior: Clip.antiAlias,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: halfScreen),
@@ -1037,7 +1051,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: isDark ? Colors.white : Colors.black87,
+                    color: isDark ? Colors.white : BibleLightPalette.primaryText,
                     fontWeight: FontWeight.w600,
                     fontSize: 15,
                   ),
@@ -1121,9 +1135,11 @@ class _NotebookScreenState extends State<NotebookScreen> {
     double gapAfterLabel = 4,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final barBg = isDark ? const Color(0xFF455A64) : const Color(0xFFE1F5FE);
-    final labelColor = isDark ? Colors.white70 : Colors.black54;
-    final valueColor = isDark ? Colors.white : Colors.black87;
+    final barBg = isDark ? const Color(0xFF455A64) : BibleLightPalette.topBarBg;
+    final labelColor =
+        isDark ? Colors.white70 : BibleLightPalette.secondaryText;
+    final valueColor =
+        isDark ? Colors.white : BibleLightPalette.primaryText;
     final fs = context.watch<AppProvider>().fontSize;
     final labelSize = (fs * 0.88).clamp(11.0, 32.0);
     final valueSize = fs.clamp(12.0, 40.0);
@@ -1133,8 +1149,15 @@ class _NotebookScreenState extends State<NotebookScreen> {
         top: false,
         child: Container(
           width: double.infinity,
-          decoration: const BoxDecoration(
-            border: Border(top: BorderSide(color: Color(0x44000000), width: 1)),
+          decoration: BoxDecoration(
+            border: Border(
+              top: BorderSide(
+                color: isDark
+                    ? const Color(0x44000000)
+                    : BibleLightPalette.border,
+                width: 1,
+              ),
+            ),
           ),
           padding: contentPadding,
           child: Column(
@@ -1175,8 +1198,10 @@ class _NotebookScreenState extends State<NotebookScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final segs = _notebookMoveDialogPathSegments(_currentDir);
     final crumbFs = fs.clamp(12.0, 40.0);
-    final activeColor = isDark ? Colors.white : Colors.black87;
-    final inactiveColor = isDark ? Colors.white70 : Colors.black54;
+    final activeColor =
+        isDark ? Colors.white : BibleLightPalette.primaryText;
+    final inactiveColor =
+        isDark ? Colors.white70 : BibleLightPalette.secondaryText;
 
     final chips = <Widget>[];
 
@@ -1234,11 +1259,12 @@ class _NotebookScreenState extends State<NotebookScreen> {
     final railSize = (app.chromeButtonSize * 0.68).clamp(26.0, 36.0);
     final railTrack = isDark
         ? Colors.blueGrey.shade700.withValues(alpha: 0.9)
-        : Colors.blue.shade100.withValues(alpha: 0.75);
-    final railThumb = isDark ? _buttonBgDark : _buttonBgLight;
+        : BibleLightPalette.activeBg;
+    final railThumb =
+        isDark ? _buttonBgDark : BibleLightPalette.chromePillFill;
     final railBg = isDark
         ? const Color(0xFF263238)
-        : const Color(0xFFE1F5FE);
+        : BibleLightPalette.topBarBg;
     WidgetsBinding.instance
         .addPostFrameCallback((_) => _recomputeFolderPathOverflow());
     return SizedBox(
@@ -1275,7 +1301,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
 
   Widget _buildEditorDocumentFooter() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final valueColor = isDark ? Colors.white : Colors.black87;
+    final valueColor = isDark ? Colors.white : BibleLightPalette.primaryText;
     final fs = context.watch<AppProvider>().fontSize;
     final valueSize = fs.clamp(12.0, 40.0);
     final fileName = p.posix.basename(_editingPath ?? '');
@@ -1938,8 +1964,9 @@ class _NotebookScreenState extends State<NotebookScreen> {
     required IconData icon,
     required String tooltip,
     required VoidCallback? onPressed,
-    required Color chromeFg,
+    required Color iconFg,
     required Color buttonBg,
+    BorderSide? outlineSide,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2),
@@ -1947,8 +1974,9 @@ class _NotebookScreenState extends State<NotebookScreen> {
         icon: icon,
         tooltip: tooltip,
         onPressed: onPressed,
-        foregroundColor: chromeFg,
+        foregroundColor: iconFg,
         backgroundColor: buttonBg,
+        outlineSide: outlineSide,
       ),
     );
   }
@@ -1958,13 +1986,19 @@ class _NotebookScreenState extends State<NotebookScreen> {
     final toolbarH = AppProvider.toolbarHeightForChrome(chrome);
     final rightInset = (chrome * 0.12).clamp(4.0, 10.0);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final appBarBg = isDark ? _appBarBgDark : _appBarBgLight;
-    final buttonBg = isDark ? _buttonBgDark : _buttonBgLight;
-    final chromeFg = isDark ? Colors.white : _chromeFgLight;
+    final appBarBg = isDark ? _appBarBgDark : Colors.transparent;
+    final buttonBg =
+        isDark ? _buttonBgDark : BibleLightPalette.chromePillFill;
+    final chromeFg =
+        isDark ? Colors.white : BibleLightPalette.primaryText;
+    final chromeIconFg =
+        isDark ? Colors.white : BibleLightPalette.iconActive;
+    final lightOutline =
+        isDark ? null : BibleLightPalette.chromePillOutlineSide;
     final leadingSlotWidth = (chrome + 8).clamp(52.0, 90.0);
     return AppBar(
       backgroundColor: appBarBg,
-      surfaceTintColor: appBarBg,
+      surfaceTintColor: isDark ? appBarBg : Colors.transparent,
       foregroundColor: chromeFg,
       elevation: 0,
       scrolledUnderElevation: 0,
@@ -1985,8 +2019,9 @@ class _NotebookScreenState extends State<NotebookScreen> {
                 icon: Icons.arrow_back,
                 tooltip: 'Назад',
                 onPressed: _goUp,
-                foregroundColor: chromeFg,
+                foregroundColor: chromeIconFg,
                 backgroundColor: buttonBg,
+                outlineSide: lightOutline,
               ),
       ),
       titleSpacing: 8,
@@ -2001,15 +2036,17 @@ class _NotebookScreenState extends State<NotebookScreen> {
                   : 'Новая папка',
               onPressed:
                   _createFolderBlockedByPathLimit ? null : _createFolder,
-              chromeFg: chromeFg,
+              iconFg: chromeIconFg,
               buttonBg: buttonBg,
+              outlineSide: lightOutline,
             ),
             _chromeIconButton(
               icon: Icons.note_add_outlined,
               tooltip: 'Новый документ',
               onPressed: _createDocument,
-              chromeFg: chromeFg,
+              iconFg: chromeIconFg,
               buttonBg: buttonBg,
+              outlineSide: lightOutline,
             ),
           ],
         ),
@@ -2018,8 +2055,9 @@ class _NotebookScreenState extends State<NotebookScreen> {
         Padding(
           padding: EdgeInsets.only(right: rightInset),
           child: AppChromeOverflowMenu(
-            iconColor: chromeFg,
+            iconColor: chromeIconFg,
             backgroundColor: buttonBg,
+            shapeSide: lightOutline,
           ),
         ),
       ],
@@ -2031,12 +2069,18 @@ class _NotebookScreenState extends State<NotebookScreen> {
     final toolbarH = AppProvider.toolbarHeightForChrome(chrome);
     final rightInset = (chrome * 0.12).clamp(4.0, 10.0);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final appBarBg = isDark ? _appBarBgDark : _appBarBgLight;
-    final buttonBg = isDark ? _buttonBgDark : _buttonBgLight;
-    final chromeFg = isDark ? Colors.white : _chromeFgLight;
+    final appBarBg = isDark ? _appBarBgDark : Colors.transparent;
+    final buttonBg =
+        isDark ? _buttonBgDark : BibleLightPalette.chromePillFill;
+    final chromeFg =
+        isDark ? Colors.white : BibleLightPalette.primaryText;
+    final chromeIconFg =
+        isDark ? Colors.white : BibleLightPalette.iconActive;
+    final lightOutline =
+        isDark ? null : BibleLightPalette.chromePillOutlineSide;
     return AppBar(
       backgroundColor: appBarBg,
-      surfaceTintColor: appBarBg,
+      surfaceTintColor: isDark ? appBarBg : Colors.transparent,
       foregroundColor: chromeFg,
       elevation: 0,
       scrolledUnderElevation: 0,
@@ -2053,8 +2097,9 @@ class _NotebookScreenState extends State<NotebookScreen> {
           onPressed: () async {
             await _closeEditor();
           },
-          foregroundColor: chromeFg,
+          foregroundColor: chromeIconFg,
           backgroundColor: buttonBg,
+          outlineSide: lightOutline,
         ),
       ),
       title: const SizedBox.shrink(),
@@ -2076,8 +2121,9 @@ class _NotebookScreenState extends State<NotebookScreen> {
                         icon: Icons.undo,
                         tooltip: 'Шаг назад',
                         onPressed: v.canUndo ? () => uc.undo() : null,
-                        foregroundColor: chromeFg,
+                        foregroundColor: chromeIconFg,
                         backgroundColor: buttonBg,
+                        outlineSide: lightOutline,
                       ),
                     ),
                     const SizedBox(width: 4),
@@ -2087,8 +2133,9 @@ class _NotebookScreenState extends State<NotebookScreen> {
                         icon: Icons.redo,
                         tooltip: 'Шаг вперёд',
                         onPressed: v.canRedo ? () => uc.redo() : null,
-                        foregroundColor: chromeFg,
+                        foregroundColor: chromeIconFg,
                         backgroundColor: buttonBg,
+                        outlineSide: lightOutline,
                       ),
                     ),
                     const SizedBox(width: 4),
@@ -2105,8 +2152,9 @@ class _NotebookScreenState extends State<NotebookScreen> {
                             onPressed: () => unawaited(
                               _pasteFromClipboardToEditor(),
                             ),
-                            foregroundColor: chromeFg,
+                            foregroundColor: chromeIconFg,
                             backgroundColor: buttonBg,
+                            outlineSide: lightOutline,
                             width: (chrome * 2.85).clamp(78.0, 118.0),
                             height: chrome,
                           ),
@@ -2121,8 +2169,9 @@ class _NotebookScreenState extends State<NotebookScreen> {
           },
         ),
         AppChromeOverflowMenu(
-          iconColor: chromeFg,
+          iconColor: chromeIconFg,
           backgroundColor: buttonBg,
+          shapeSide: lightOutline,
         ),
         SizedBox(width: rightInset),
       ],
@@ -2143,6 +2192,10 @@ class _NotebookScreenState extends State<NotebookScreen> {
     final treeIndentStep = (uiListFontSize * 0.55).clamp(10.0, 18.0);
 
     return Scaffold(
+      backgroundColor:
+          Theme.of(context).brightness == Brightness.light
+              ? Colors.transparent
+              : null,
       appBar: editing ? _buildEditorAppBar() : _buildListAppBar(),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -2185,7 +2238,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
                                         : 'Папка пуста.',
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
-                                      color: Colors.grey.shade700,
+                                      color: BibleLightPalette.secondaryText,
                                       fontSize: (uiListFontSize * 0.95)
                                           .clamp(13.0, 28.0),
                                       height: 1.35,
@@ -2215,15 +2268,13 @@ class _NotebookScreenState extends State<NotebookScreen> {
                                               ? (isDark
                                                   ? Colors.blueGrey.shade700
                                                       .withValues(alpha: 0.45)
-                                                  : Colors.amber.shade100)
+                                                  : BibleLightPalette.selectedBg)
                                               : null;
                                           final rowDividerColor = isDark
                                               ? Colors.white.withValues(
                                                   alpha: 0.12,
                                                 )
-                                              : Colors.black.withValues(
-                                                  alpha: 0.08,
-                                                );
+                                              : BibleLightPalette.cardDivider;
                                           final expandedFolder =
                                               item.isFolder &&
                                                   _expandedNotebookFolders
@@ -2233,16 +2284,16 @@ class _NotebookScreenState extends State<NotebookScreen> {
                                           final chevronColor = expandedFolder
                                               ? (isDark
                                                   ? Colors.amber.shade400
-                                                  : Colors.amber.shade800)
+                                                  : BibleLightPalette.primary)
                                               : (isDark
                                                   ? Colors.white38
-                                                  : Colors.black38);
+                                                  : BibleLightPalette.iconInactive);
                                           final countTextStyle = TextStyle(
                                             fontSize: (uiListFontSize * 0.82)
                                                 .clamp(11.0, 22.0),
                                             color: isDark
                                                 ? Colors.white54
-                                                : Colors.black45,
+                                                : BibleLightPalette.secondaryText,
                                             fontFeatures: const [
                                               FontFeature.tabularFigures(),
                                             ],
@@ -2658,7 +2709,9 @@ class _NotebookPathScrollRailState extends State<_NotebookPathScrollRail> {
                     color: widget.thumbColor,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
-                      side: ChromeOutline.side,
+                      side: Theme.of(context).brightness == Brightness.dark
+                          ? ChromeOutline.side
+                          : BibleLightPalette.chromePillOutlineSide,
                     ),
                     clipBehavior: Clip.antiAlias,
                     child: SizedBox(
@@ -2710,12 +2763,19 @@ class _NotebookChromePanelActionButton extends StatelessWidget {
     final fontSize = (chrome * 0.34).clamp(12.0, 16.0);
     final hPad = (chrome * 0.28).clamp(8.0, 14.0);
     final gap = (chrome * 0.18).clamp(8.0, 12.0);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final shape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(8),
-      side: ChromeOutline.side,
+      side: isDark
+          ? ChromeOutline.side
+          : BibleLightPalette.chromePillOutlineSide,
     );
-    final rowBg = NotebookChromeUi.secondaryButtonBackground(context);
-    final rowFg = NotebookChromeUi.secondaryButtonForeground(context);
+    final rowBg = isDark
+        ? NotebookChromeUi.secondaryButtonBackground(context)
+        : BibleLightPalette.chromePillFill;
+    final rowFg = isDark
+        ? NotebookChromeUi.secondaryButtonForeground(context)
+        : BibleLightPalette.primaryText;
     return Padding(
       padding: padding,
       child: SizedBox(
@@ -2834,7 +2894,7 @@ class _NotebookMoveFileDialogState extends State<_NotebookMoveFileDialog> {
   }
 
   Widget _moveYouAreHereChip(bool isDark, double uiFs) {
-    final fg = isDark ? const Color(0xFF90CAF9) : Colors.blue.shade800;
+    final fg = isDark ? const Color(0xFF90CAF9) : BibleLightPalette.primary;
     final fill = fg.withValues(alpha: isDark ? 0.16 : 0.11);
     return Container(
       padding: EdgeInsets.symmetric(
@@ -3096,7 +3156,7 @@ class _NotebookMoveFileDialogState extends State<_NotebookMoveFileDialog> {
     final uiFs = app.fontSize;
     final rowIcon = (24.0 * uiFs / 16.0).clamp(20.0, 48.0);
     final treePanelBg =
-        isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF5F5F5);
+        isDark ? const Color(0xFF2A2A2A) : BibleLightPalette.disabledBg;
     return AlertDialog(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
@@ -3123,7 +3183,9 @@ class _NotebookMoveFileDialogState extends State<_NotebookMoveFileDialog> {
                   color: treePanelBg,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: ChromeOutline.color,
+                    color: isDark
+                        ? ChromeOutline.color
+                        : BibleLightPalette.border,
                     width: ChromeOutline.width,
                   ),
                 ),

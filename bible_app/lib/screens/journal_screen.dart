@@ -13,6 +13,7 @@ import 'package:bible_app/journal/sequential_reading_plan.dart';
 import 'package:bible_app/models/bible_model.dart';
 import 'package:bible_app/navigation/app_tab_switcher.dart';
 import 'package:bible_app/providers/app_provider.dart';
+import 'package:bible_app/theme/bible_light_palette.dart';
 import 'package:bible_app/widgets/app_chrome_overflow_menu.dart';
 import 'package:bible_app/widgets/chrome_outline.dart';
 import 'package:bible_app/widgets/chrome_toolbar_button.dart';
@@ -65,6 +66,60 @@ String _thematicReadingChromeSuffix(String pickerLabel) {
   final i = pickerLabel.lastIndexOf(':');
   if (i < 0 || i >= pickerLabel.length - 1) return pickerLabel.trim();
   return pickerLabel.substring(i + 1).trim();
+}
+
+/// «День N» в одну строку; при нехватке ширины — «ДN» (без переноса по слогам).
+String _journalPlanDayHeadingForWidth({
+  required int dayNumber,
+  required TextStyle style,
+  required double maxWidth,
+  required TextDirection textDirection,
+}) {
+  final full = 'День $dayNumber';
+  final short = 'Д$dayNumber';
+  bool fitsOneLine(String text) {
+    final tp = TextPainter(
+      text: TextSpan(text: text, style: style),
+      maxLines: 1,
+      textDirection: textDirection,
+    )..layout(maxWidth: maxWidth);
+    return !tp.didExceedMaxLines;
+  }
+  if (fitsOneLine(full)) return full;
+  return short;
+}
+
+Widget _journalPlanDayHeadingWidget({
+  required BuildContext context,
+  required int dayNumber,
+  required TextStyle style,
+  double? fallbackMaxWidth,
+}) {
+  return LayoutBuilder(
+    builder: (ctx, c) {
+      final dir = Directionality.of(ctx);
+      var maxW = c.maxWidth;
+      if (!maxW.isFinite || maxW <= 0) {
+        maxW = fallbackMaxWidth ??
+            (MediaQuery.sizeOf(ctx).width > 0
+                ? (MediaQuery.sizeOf(ctx).width - 48).clamp(120.0, 520.0)
+                : 280.0);
+      }
+      final label = _journalPlanDayHeadingForWidth(
+        dayNumber: dayNumber,
+        style: style,
+        maxWidth: maxW,
+        textDirection: dir,
+      );
+      return Text(
+        label,
+        style: style,
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.clip,
+      );
+    },
+  );
 }
 
 class _PlanChapterItem {
@@ -262,7 +317,9 @@ class _PlanScrollRailState extends State<_PlanScrollRail> {
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
-                      side: ChromeOutline.side,
+                      side: Theme.of(context).brightness == Brightness.dark
+                          ? ChromeOutline.side
+                          : BibleLightPalette.chromePillOutlineSide,
                     ),
                     clipBehavior: Clip.antiAlias,
                     child: SizedBox(
@@ -284,12 +341,9 @@ class _PlanScrollRailState extends State<_PlanScrollRail> {
 class JournalScreen extends StatefulWidget {
   const JournalScreen({super.key});
 
-  static const _appBarBgLight = Color(0xFFB3E5FC);
-  static const _buttonBgLight = Color(0xFFE1F5FE);
   /// Как на экране Библии и нижней навигации.
   static const _appBarBgDark = Color(0xFF37474F);
   static const _buttonBgDark = Color(0xFF455A64);
-  static const _chromeFgLight = Colors.black;
 
   @override
   State<JournalScreen> createState() => _JournalScreenState();
@@ -1473,11 +1527,24 @@ class _JournalScreenState extends State<JournalScreen>
               insetPadding:
                   const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
               titlePadding: const EdgeInsets.fromLTRB(20, 14, 12, 8),
-              title: Text(
-                'День ${_dayNumberInCurrentQuarter(dayIndex)}',
-                style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
-                      color: fg,
-                    ),
+              title: Builder(
+                builder: (titleCtx) {
+                  final titleStyle =
+                      Theme.of(titleCtx).textTheme.titleLarge?.copyWith(
+                            color: fg,
+                          ) ??
+                          TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w600,
+                            color: fg,
+                          );
+                  return _journalPlanDayHeadingWidget(
+                    context: titleCtx,
+                    dayNumber: _dayNumberInCurrentQuarter(dayIndex),
+                    style: titleStyle,
+                    fallbackMaxWidth: MediaQuery.sizeOf(titleCtx).width - 80,
+                  );
+                },
               ),
               contentPadding: const EdgeInsets.fromLTRB(0, 4, 12, 10),
               content: LayoutBuilder(
@@ -1581,13 +1648,15 @@ class _JournalScreenState extends State<JournalScreen>
               child: Material(
                 color: isDark
                     ? const Color(0xFF455A64)
-                    : const Color(0xFFE1F5FE),
+                    : BibleLightPalette.chromePillFill,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
-                  side: const BorderSide(
-                    color: Colors.black,
-                    width: ChromeOutline.width,
-                  ),
+                  side: isDark
+                      ? const BorderSide(
+                          color: Colors.black,
+                          width: ChromeOutline.width,
+                        )
+                      : BibleLightPalette.chromePillOutlineSide,
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: InkWell(
@@ -1747,11 +1816,13 @@ class _JournalScreenState extends State<JournalScreen>
     HapticFeedback.lightImpact();
     if (!mounted) return;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final sheetBg = isDark ? const Color(0xFF263238) : Colors.white;
+    final sheetBg = isDark ? const Color(0xFF263238) : BibleLightPalette.topBarBg;
     final titleColor =
-        isDark ? const Color(0xFF81D4FA) : Colors.blue.shade900;
-    final unselectedBtn = isDark ? JournalScreen._buttonBgDark : JournalScreen._buttonBgLight;
-    final chromeFg = isDark ? Colors.white : JournalScreen._chromeFgLight;
+        isDark ? const Color(0xFF81D4FA) : BibleLightPalette.primary;
+    final unselectedBtn =
+        isDark ? JournalScreen._buttonBgDark : BibleLightPalette.chromePillFill;
+    final chromeFg =
+        isDark ? Colors.white : BibleLightPalette.primaryText;
     await showDialog<void>(
       context: context,
       builder: (ctx) {
@@ -1960,17 +2031,19 @@ class _JournalScreenState extends State<JournalScreen>
     required VoidCallback onTap,
   }) {
     final bg = selected
-        ? (isDark ? const Color(0xFF81D4FA) : Colors.blue)
+        ? (isDark ? const Color(0xFF81D4FA) : BibleLightPalette.primary)
         : unselectedBg;
     final fg = selected
         ? (isDark ? const Color(0xFF263238) : Colors.white)
         : chromeFg;
     final fontSize = (height * 0.30).clamp(11.0, 15.0);
+    final outline =
+        isDark ? ChromeOutline.side : BibleLightPalette.chromePillOutlineSide;
     return Material(
       color: bg,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
-        side: ChromeOutline.side,
+        side: outline,
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -2010,7 +2083,9 @@ class _JournalScreenState extends State<JournalScreen>
   }) {
     const qi = 0;
     final tipsStyle = app.bibleVerseTextStyle(
-      color: isDark ? Colors.grey.shade300 : Colors.grey.shade800,
+      color: isDark
+          ? Colors.grey.shade300
+          : BibleLightPalette.secondaryText,
       fontWeight: FontWeight.w500,
     );
     return Padding(
@@ -2024,7 +2099,9 @@ class _JournalScreenState extends State<JournalScreen>
             elevation: 0,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
-              side: ChromeOutline.side,
+              side: isDark
+                  ? ChromeOutline.side
+                  : BibleLightPalette.chromePillOutlineSide,
             ),
             clipBehavior: Clip.antiAlias,
             child: InkWell(
@@ -2036,24 +2113,20 @@ class _JournalScreenState extends State<JournalScreen>
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Center(
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          quarterHubTitle,
-                          textAlign: TextAlign.center,
-                          style: app
-                              .bibleVerseTextStyle(
-                                color: titleColor,
-                                fontWeight: FontWeight.w800,
-                              )
-                              .copyWith(
-                                fontSize: app.fontSize *
-                                    app.verseFontSizeScale *
-                                    1.12,
-                              ),
-                        ),
-                      ),
+                    Text(
+                      quarterHubTitle,
+                      textAlign: TextAlign.center,
+                      style: app
+                          .bibleVerseTextStyle(
+                            color: titleColor,
+                            fontWeight: FontWeight.w800,
+                          )
+                          .copyWith(
+                            fontSize: app.fontSize *
+                                app.verseFontSizeScale *
+                                1.12,
+                            height: 1.08,
+                          ),
                     ),
                     const SizedBox(height: 12),
                     Text(
@@ -2114,7 +2187,9 @@ class _JournalScreenState extends State<JournalScreen>
                 elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
-                  side: ChromeOutline.side,
+                  side: isDark
+                      ? ChromeOutline.side
+                      : BibleLightPalette.chromePillOutlineSide,
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: InkWell(
@@ -2256,10 +2331,12 @@ class _JournalScreenState extends State<JournalScreen>
           decoration: BoxDecoration(
             color: isDark
                 ? const Color(0xFF81D4FA).withValues(alpha: 0.2)
-                : Colors.blue.shade50,
+                : BibleLightPalette.activeBg,
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
-              color: ChromeOutline.color,
+              color: isDark
+                  ? ChromeOutline.color
+                  : BibleLightPalette.chromePillOutlineColor,
               width: ChromeOutline.width,
             ),
           ),
@@ -2273,7 +2350,9 @@ class _JournalScreenState extends State<JournalScreen>
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(10),
-          side: ChromeOutline.side,
+          side: isDark
+              ? ChromeOutline.side
+              : BibleLightPalette.chromePillOutlineSide,
         ),
         child: InkWell(
           borderRadius: BorderRadius.circular(10),
@@ -2290,7 +2369,11 @@ class _JournalScreenState extends State<JournalScreen>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('День $n', style: dayTitleStyle),
+                          _journalPlanDayHeadingWidget(
+                            context: context,
+                            dayNumber: n,
+                            style: dayTitleStyle,
+                          ),
                           SizedBox(height: compactGap),
                           Text(dayData.theme, style: themeLineStyle),
                         ],
@@ -2364,14 +2447,17 @@ class _JournalScreenState extends State<JournalScreen>
     final baseFontPx = app.fontSize * app.verseFontSizeScale;
     final lineGap = (baseFontPx * 0.32).clamp(2.0, 8.0);
     final titleColor =
-        isDark ? const Color(0xFF81D4FA) : Colors.blue.shade900;
-    final bodyColor = isDark ? Colors.grey.shade200 : Colors.grey.shade900;
+        isDark ? const Color(0xFF81D4FA) : BibleLightPalette.primary;
+    final bodyColor =
+        isDark ? Colors.grey.shade200 : BibleLightPalette.primaryText;
     final cardDoneBg = isDark
         ? Colors.amber.shade900.withValues(alpha: 0.42)
-        : Colors.amber.shade50;
-    final cardTodoBg = isDark ? const Color(0xFF37474F) : Colors.white;
+        : BibleLightPalette.activeBg;
+    final cardTodoBg =
+        isDark ? const Color(0xFF37474F) : BibleLightPalette.cardFillPrimary;
     final railSize = (chromeSize * 0.68).clamp(26.0, 36.0);
-    final railBg = isDark ? const Color(0xFF263238) : const Color(0xFFE1F5FE);
+    final railBg =
+        isDark ? const Color(0xFF263238) : BibleLightPalette.topBarBg;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2445,10 +2531,12 @@ class _JournalScreenState extends State<JournalScreen>
                       decoration: BoxDecoration(
                         color: isDark
                             ? const Color(0xFF81D4FA).withValues(alpha: 0.2)
-                            : Colors.blue.shade50,
+                            : BibleLightPalette.activeBg,
                         borderRadius: BorderRadius.circular(999),
                         border: Border.all(
-                          color: ChromeOutline.color,
+                          color: isDark
+                              ? ChromeOutline.color
+                              : BibleLightPalette.chromePillOutlineColor,
                           width: ChromeOutline.width,
                         ),
                       ),
@@ -2461,7 +2549,9 @@ class _JournalScreenState extends State<JournalScreen>
                       elevation: 0,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
-                        side: ChromeOutline.side,
+                        side: isDark
+                            ? ChromeOutline.side
+                            : BibleLightPalette.chromePillOutlineSide,
                       ),
                       child: InkWell(
                         borderRadius: BorderRadius.circular(10),
@@ -2479,8 +2569,10 @@ class _JournalScreenState extends State<JournalScreen>
                                     crossAxisAlignment: CrossAxisAlignment.center,
                                       children: [
                                         Expanded(
-                                          child: Text(
-                                            'День $n',
+                                          child:
+                                              _journalPlanDayHeadingWidget(
+                                            context: context,
+                                            dayNumber: n,
                                             style: app
                                                 .bibleVerseTextStyle(
                                                   color: titleColor,
@@ -2784,8 +2876,8 @@ class _JournalScreenState extends State<JournalScreen>
   }
 
   Widget _readProgressFooter(AppProvider app, {required bool isDark}) {
-    final bg = isDark ? JournalScreen._buttonBgDark : JournalScreen._buttonBgLight;
-    final fg = isDark ? const Color(0xFF81D4FA) : Colors.blue.shade900;
+    final bg = isDark ? JournalScreen._buttonBgDark : BibleLightPalette.topBarBg;
+    final fg = isDark ? const Color(0xFF81D4FA) : BibleLightPalette.primary;
     final String line;
     final q = _openQuarter;
     if (q == null) {
@@ -2820,18 +2912,24 @@ class _JournalScreenState extends State<JournalScreen>
     final chromeSize = app.chromeButtonSize;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final appBarBg =
-        isDark ? JournalScreen._appBarBgDark : JournalScreen._appBarBgLight;
+        isDark ? JournalScreen._appBarBgDark : Colors.transparent;
     final buttonBg =
-        isDark ? JournalScreen._buttonBgDark : JournalScreen._buttonBgLight;
-    final chromeFg = isDark ? Colors.white : JournalScreen._chromeFgLight;
+        isDark ? JournalScreen._buttonBgDark : BibleLightPalette.chromePillFill;
+    final chromeFg =
+        isDark ? Colors.white : BibleLightPalette.primaryText;
+    final chromeIconFg =
+        isDark ? Colors.white : BibleLightPalette.iconActive;
+    final lightOutline =
+        isDark ? null : BibleLightPalette.chromePillOutlineSide;
     final trackHint = isDark
         ? Colors.blueGrey.shade700.withValues(alpha: 0.9)
-        : Colors.blue.shade100.withValues(alpha: 0.65);
+        : BibleLightPalette.activeBg;
     final hubTitleColor =
-        isDark ? const Color(0xFF81D4FA) : Colors.blue.shade900;
+        isDark ? const Color(0xFF81D4FA) : BibleLightPalette.primary;
     final hubMutedFg =
-        isDark ? Colors.grey.shade400 : Colors.grey.shade700;
-    final hubCardBg = isDark ? const Color(0xFF37474F) : Colors.white;
+        isDark ? Colors.grey.shade400 : BibleLightPalette.secondaryText;
+    final hubCardBg =
+        isDark ? const Color(0xFF37474F) : BibleLightPalette.cardFillPrimary;
 
     final inQuarter = _openQuarter != null;
     final uiFs = app.fontSize.clamp(12.0, 28.0);
@@ -2852,10 +2950,12 @@ class _JournalScreenState extends State<JournalScreen>
         (chromeSize * 0.12).clamp(4.0, 10.0);
 
     return Scaffold(
+      backgroundColor:
+          isDark ? null : Colors.transparent,
       appBar: AppBar(
         toolbarHeight: AppProvider.toolbarHeightForChrome(chromeSize),
         backgroundColor: appBarBg,
-        surfaceTintColor: appBarBg,
+        surfaceTintColor: isDark ? appBarBg : Colors.transparent,
         foregroundColor: chromeFg,
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -2871,9 +2971,10 @@ class _JournalScreenState extends State<JournalScreen>
                   child: ChromeIconButton(
                     icon: Icons.arrow_back,
                     tooltip: 'К кварталам',
-                    foregroundColor: chromeFg,
+                    foregroundColor: chromeIconFg,
                     backgroundColor: buttonBg,
                     width: quarterIconWFirst,
+                    outlineSide: lightOutline,
                     onPressed: _closeQuarterScreen,
                   ),
                 ),
@@ -2886,18 +2987,20 @@ class _JournalScreenState extends State<JournalScreen>
                   ChromeIconButton(
                     icon: Icons.vertical_align_top,
                     tooltip: 'В начало списка',
-                    foregroundColor: chromeFg,
+                    foregroundColor: chromeIconFg,
                     backgroundColor: buttonBg,
                     width: quarterIconWFirst,
+                    outlineSide: lightOutline,
                     onPressed: _jumpScrollToStart,
                   ),
                   SizedBox(width: quarterIconGap),
                   ChromeIconButton(
                     icon: Icons.vertical_align_bottom,
                     tooltip: 'В конец списка',
-                    foregroundColor: chromeFg,
+                    foregroundColor: chromeIconFg,
                     backgroundColor: buttonBg,
                     width: quarterIconWSecond,
+                    outlineSide: lightOutline,
                     onPressed: _jumpScrollToEnd,
                   ),
                   SizedBox(width: quarterIconGap),
@@ -2924,7 +3027,9 @@ class _JournalScreenState extends State<JournalScreen>
                     color: buttonBg,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
-                      side: ChromeOutline.side,
+                      side: isDark
+                          ? ChromeOutline.side
+                          : BibleLightPalette.chromePillOutlineSide,
                     ),
                     clipBehavior: Clip.antiAlias,
                     child: InkWell(
@@ -2937,7 +3042,7 @@ class _JournalScreenState extends State<JournalScreen>
                             horizontal: (chromeSize * 0.26).clamp(10.0, 20.0),
                           ),
                           child: _planKindAppBarTitleOnHub(
-                            chromeFg,
+                            chromeIconFg,
                             chromeSize,
                             double.infinity,
                           ),
@@ -2951,8 +3056,9 @@ class _JournalScreenState extends State<JournalScreen>
           Padding(
             padding: EdgeInsets.only(right: overflowRightInset),
             child: AppChromeOverflowMenu(
-              iconColor: chromeFg,
+              iconColor: chromeIconFg,
               backgroundColor: buttonBg,
+              shapeSide: lightOutline,
               tileWidth: inQuarter
                   ? quarterIconWFirst
                   : math.min(chromeSize, 44.0),
@@ -2962,43 +3068,37 @@ class _JournalScreenState extends State<JournalScreen>
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (inQuarter)
-                  Expanded(
-                    child: _buildPlanListWithRail(
-                      app,
-                      chromeSize,
-                      isDark: isDark,
-                      thumbColor: buttonBg,
-                      trackHintColor: trackHint,
-                    ),
-                  )
-                else if (_planUsesSingleQuarterHub(_plan))
-                  Align(
-                    alignment: Alignment.topCenter,
-                    child: _buildQuarterSelectionHub(
-                      app,
-                      isDark: isDark,
-                      cardTodoBg: hubCardBg,
-                      cardMutedFg: hubMutedFg,
-                      titleColor: hubTitleColor,
-                    ),
-                  )
-                else
-                  Expanded(
-                    child: _buildQuarterSelectionHub(
+          : (inQuarter
+              ? _buildPlanListWithRail(
+                  app,
+                  chromeSize,
+                  isDark: isDark,
+                  thumbColor: buttonBg,
+                  trackHintColor: trackHint,
+                )
+              : _planUsesSingleQuarterHub(_plan)
+                  ? SingleChildScrollView(
+                      primary: false,
+                      child: Align(
+                        alignment: Alignment.topCenter,
+                        child: _buildQuarterSelectionHub(
+                          app,
+                          isDark: isDark,
+                          cardTodoBg: hubCardBg,
+                          cardMutedFg: hubMutedFg,
+                          titleColor: hubTitleColor,
+                        ),
+                      ),
+                    )
+                  : _buildQuarterSelectionHub(
                       app,
                       isDark: isDark,
                       cardTodoBg: hubCardBg,
                       cardMutedFg: hubMutedFg,
                       titleColor: hubTitleColor,
-                    ),
-                  ),
-                _readProgressFooter(app, isDark: isDark),
-              ],
-            ),
+                    )),
+      bottomNavigationBar:
+          _loading ? null : _readProgressFooter(app, isDark: isDark),
     );
   }
 }

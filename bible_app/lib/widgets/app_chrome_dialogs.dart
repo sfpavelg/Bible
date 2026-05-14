@@ -5,6 +5,7 @@ import 'package:bible_app/journal/faith_reading_plan_data.dart';
 import 'package:bible_app/journal/love_reading_plan_data.dart';
 import 'package:bible_app/journal/parallel_reading_plan_data.dart';
 import 'package:bible_app/providers/app_provider.dart';
+import 'package:bible_app/theme/bible_light_palette.dart';
 import 'package:bible_app/widgets/chrome_outline.dart';
 import 'package:bible_app/widgets/notebook_chrome_dialog_button.dart';
 import 'package:flutter/material.dart';
@@ -68,6 +69,51 @@ class _SettingsSliderVerticalTickMarkShape extends SliderTickMarkShape {
       paint,
     );
   }
+}
+
+/// Вариант светлой подложки боковых панелей.
+enum ChromePanelLightSurface {
+  /// «Стекло» на градиенте экрана (книга/глава, меню ⋯).
+  chromeCardGlass,
+
+  /// Настройки: плотный градиент без просвета внизу.
+  settingsPanel,
+
+  /// Техподдержка и инструкция: полностью непрозрачная плашка.
+  modalOpaque,
+}
+
+/// Корпус боковых панелей «Настройки», «Техподдержка», «Инструкция».
+Widget _chromePanelShell({
+  required bool isDark,
+  double borderRadius = 12,
+  ChromePanelLightSurface lightSurface = ChromePanelLightSurface.chromeCardGlass,
+  required Widget child,
+}) {
+  if (isDark) {
+    return Material(
+      color: const Color(0xFF37474F),
+      elevation: 10,
+      borderRadius: BorderRadius.circular(borderRadius),
+      clipBehavior: Clip.antiAlias,
+      child: child,
+    );
+  }
+  final BoxDecoration decoration = switch (lightSurface) {
+    ChromePanelLightSurface.settingsPanel =>
+      BibleLightPalette.lightSettingsPanelDecoration(radius: borderRadius),
+    ChromePanelLightSurface.modalOpaque =>
+      BibleLightPalette.lightModalOpaquePanelDecoration(radius: borderRadius),
+    ChromePanelLightSurface.chromeCardGlass =>
+      BibleLightPalette.lightPanelShellDecoration(radius: borderRadius),
+  };
+  return ClipRRect(
+    borderRadius: BorderRadius.circular(borderRadius),
+    child: DecoratedBox(
+      decoration: decoration,
+      child: child,
+    ),
+  );
 }
 
 /// Публичный JSON с информацией о последней версии.
@@ -245,15 +291,25 @@ Widget _supportChromeActionButton({
   required VoidCallback? onTap,
 }) {
   final chrome = context.watch<AppProvider>().chromeButtonSize;
+  final isDark = Theme.of(context).brightness == Brightness.dark;
   final scheme = Theme.of(context).colorScheme;
-  final fg = NotebookChromeUi.secondaryButtonForeground(context);
   final iconSize = (chrome * 0.48).clamp(18.0, 30.0);
   final fontSize = (chrome * 0.32).clamp(12.0, 17.0);
+  final fg = isDark
+      ? NotebookChromeUi.secondaryButtonForeground(context)
+      : BibleLightPalette.primaryText;
+  final ic = isDark
+      ? NotebookChromeUi.secondaryButtonForeground(context)
+      : BibleLightPalette.iconActive;
   return Material(
-    color: scheme.surfaceContainerHighest.withValues(alpha: 0.75),
+    color: isDark
+        ? scheme.surfaceContainerHighest.withValues(alpha: 0.75)
+        : BibleLightPalette.activeBg,
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(8),
-      side: ChromeOutline.side,
+      side: isDark
+          ? ChromeOutline.side
+          : BibleLightPalette.chromePillOutlineSide,
     ),
     clipBehavior: Clip.antiAlias,
     child: InkWell(
@@ -268,7 +324,7 @@ Widget _supportChromeActionButton({
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: fg, size: iconSize),
+              Icon(icon, color: ic, size: iconSize),
               SizedBox(width: (chrome * 0.2).clamp(6.0, 12.0)),
               Flexible(
                 child: Text(
@@ -385,26 +441,27 @@ void showAppSettingsDialog(BuildContext context) {
               final theme = Theme.of(consumerContext);
               final scheme = theme.colorScheme;
               final isDark = theme.brightness == Brightness.dark;
-              final settingsBg =
-                  isDark ? const Color(0xFF37474F) : const Color(0xFFE1F5FE);
 
               final uiFs = fontSize.clamp(12.0, 28.0);
+              final textPrimary =
+                  isDark ? scheme.onSurface : BibleLightPalette.primaryText;
               final kSettingsTitleStyle = TextStyle(
                 fontSize: (uiFs * 1.25).clamp(16.0, 32.0),
                 fontWeight: FontWeight.w600,
-                color: scheme.onSurface,
+                color: textPrimary,
               );
               final kSettingsHeadingStyle = TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: (uiFs * 0.9).clamp(12.0, 26.0),
-                color: scheme.onSurface,
+                color: textPrimary,
               );
               final kSettingsBodyStyle = TextStyle(
                 fontSize: uiFs,
-                color: scheme.onSurface,
+                color: textPrimary,
               );
               final kSettingsSegmentTextStyle = TextStyle(
                 fontSize: (uiFs * 0.92).clamp(12.0, 24.0),
+                color: textPrimary,
               );
               const kSegIcon = 18.0;
               const sliderHorizontalPadding = EdgeInsets.symmetric(horizontal: 8);
@@ -414,18 +471,21 @@ void showAppSettingsDialog(BuildContext context) {
 
               SliderThemeData sliderDecor(SliderThemeData base) =>
                   base.copyWith(
-                    activeTrackColor: scheme.primary,
+                    activeTrackColor:
+                        isDark ? scheme.primary : BibleLightPalette.primary,
                     inactiveTrackColor: isDark
                         ? scheme.surfaceContainerHighest
-                        : Colors.blue.shade100,
-                    thumbColor: scheme.primary,
-                    overlayColor: scheme.primary.withValues(alpha: 0.12),
+                        : BibleLightPalette.cardDivider,
+                    thumbColor:
+                        isDark ? scheme.primary : BibleLightPalette.primary,
+                    overlayColor: BibleLightPalette.primary.withValues(alpha: 0.12),
                     tickMarkShape: const _SettingsSliderVerticalTickMarkShape(),
-                    activeTickMarkColor:
-                        isDark ? scheme.primary : Colors.blue.shade900,
+                    activeTickMarkColor: isDark
+                        ? scheme.primary
+                        : BibleLightPalette.primaryDark,
                     inactiveTickMarkColor: isDark
                         ? scheme.onSurface.withValues(alpha: 0.38)
-                        : Colors.blue.shade600,
+                        : BibleLightPalette.secondaryText,
                     disabledActiveTickMarkColor: Colors.grey.shade600,
                     disabledInactiveTickMarkColor: Colors.grey.shade500,
                   );
@@ -453,11 +513,9 @@ void showAppSettingsDialog(BuildContext context) {
                     right: 0,
                     child: SizedBox(
                       width: panelWidth,
-                      child: Material(
-                        color: settingsBg,
-                        elevation: 10,
-                        borderRadius: BorderRadius.circular(12),
-                        clipBehavior: Clip.antiAlias,
+                      child: _chromePanelShell(
+                        isDark: isDark,
+                        lightSurface: ChromePanelLightSurface.settingsPanel,
                         child: Padding(
                           padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
                           child: Column(
@@ -559,30 +617,42 @@ void showAppSettingsDialog(BuildContext context) {
                                           isExpanded: true,
                                           isDense: true,
                                           itemHeight: dropdownHeight,
+                                          dropdownColor: isDark
+                                              ? scheme.surfaceContainerHighest
+                                              : BibleLightPalette.modalPanelSolid,
                                           value: fontPreset,
                                           style: kSettingsBodyStyle,
                                           decoration: InputDecoration(
                                             filled: true,
-                                            fillColor: scheme
-                                                .surfaceContainerHighest
-                                                .withValues(alpha: 0.75),
+                                            fillColor: isDark
+                                                ? scheme.surfaceContainerHighest
+                                                    .withValues(alpha: 0.75)
+                                                : BibleLightPalette.activeBg,
                                             border: OutlineInputBorder(
                                               borderRadius:
                                                   BorderRadius.circular(8),
-                                              borderSide: ChromeOutline.side,
+                                              borderSide: isDark
+                                                  ? ChromeOutline.side
+                                                  : BibleLightPalette
+                                                      .chromePillOutlineSide,
                                             ),
                                             enabledBorder: OutlineInputBorder(
                                               borderRadius:
                                                   BorderRadius.circular(8),
-                                              borderSide: ChromeOutline.side,
+                                              borderSide: isDark
+                                                  ? ChromeOutline.side
+                                                  : BibleLightPalette
+                                                      .chromePillOutlineSide,
                                             ),
                                             focusedBorder: OutlineInputBorder(
                                               borderRadius:
                                                   BorderRadius.circular(8),
-                                              borderSide:
-                                                  ChromeOutline.side.copyWith(
-                                                width:
-                                                    ChromeOutline.width + 0.3,
+                                              borderSide: (isDark
+                                                      ? ChromeOutline.side
+                                                      : BibleLightPalette
+                                                          .chromePillOutlineSide)
+                                                  .copyWith(
+                                                width: ChromeOutline.width + 0.3,
                                               ),
                                             ),
                                             contentPadding:
@@ -686,21 +756,26 @@ void showAppSettingsDialog(BuildContext context) {
                                         ],
                                         style: SegmentedButton.styleFrom(
                                           textStyle: kSettingsSegmentTextStyle,
+                                          selectedForegroundColor: isDark
+                                              ? scheme.onSurface
+                                              : BibleLightPalette.primary,
+                                          selectedBackgroundColor: isDark
+                                              ? scheme.surfaceContainerHighest
+                                                  .withValues(alpha: 0.75)
+                                              : BibleLightPalette.activeBg,
+                                          foregroundColor: isDark
+                                              ? scheme.onSurface
+                                              : BibleLightPalette.secondaryText,
+                                          backgroundColor: isDark
+                                              ? scheme.surface
+                                                  .withValues(alpha: 0.12)
+                                              : BibleLightPalette.activeBg,
                                         ).copyWith(
-                                          backgroundColor: WidgetStateProperty
-                                              .resolveWith<Color?>(
-                                            (states) {
-                                              if (states.contains(
-                                                  WidgetState.selected)) {
-                                                return scheme
-                                                    .surfaceContainerHighest
-                                                    .withValues(alpha: 0.75);
-                                              }
-                                              return null;
-                                            },
-                                          ),
-                                          side: const WidgetStatePropertyAll(
-                                            ChromeOutline.side,
+                                          side: WidgetStatePropertyAll(
+                                            isDark
+                                                ? ChromeOutline.side
+                                                : BibleLightPalette
+                                                    .chromePillOutlineSide,
                                           ),
                                         ),
                                         selected: <ThemeMode>{selectedTheme},
@@ -723,7 +798,9 @@ void showAppSettingsDialog(BuildContext context) {
                                           style: kSettingsBodyStyle,
                                         ),
                                         value: showSeptuagintText,
-                                        activeTrackColor: scheme.primary,
+                                        activeTrackColor: isDark
+                                            ? scheme.primary
+                                            : BibleLightPalette.primary,
                                         activeThumbColor: Colors.white,
                                         inactiveTrackColor: isDark
                                             ? Colors.grey.shade700
@@ -748,7 +825,9 @@ void showAppSettingsDialog(BuildContext context) {
                                           style: kSettingsBodyStyle,
                                         ),
                                         value: keepScreenOn,
-                                        activeTrackColor: scheme.primary,
+                                        activeTrackColor: isDark
+                                            ? scheme.primary
+                                            : BibleLightPalette.primary,
                                         activeThumbColor: Colors.white,
                                         inactiveTrackColor: isDark
                                             ? Colors.grey.shade700
@@ -823,12 +902,12 @@ class _ChromePanelLayout {
   final double maxBodyHeight;
 }
 
-TextStyle _chromePanelTitleStyle(ColorScheme scheme, double fontSize) {
+TextStyle _chromePanelTitleStyle(ColorScheme scheme, double fontSize, bool isDark) {
   final uiFs = fontSize.clamp(12.0, 28.0);
   return TextStyle(
     fontSize: (uiFs * 1.25).clamp(16.0, 32.0),
     fontWeight: FontWeight.w600,
-    color: scheme.onSurface,
+    color: isDark ? scheme.onSurface : BibleLightPalette.primaryText,
   );
 }
 
@@ -855,15 +934,17 @@ class _SupportDialogRouteBodyState extends State<_SupportDialogRouteBody> {
         final theme = Theme.of(consumerContext);
         final scheme = theme.colorScheme;
         final isDark = theme.brightness == Brightness.dark;
-        final settingsBg =
-            isDark ? const Color(0xFF37474F) : const Color(0xFFE1F5FE);
         final layout =
             _ChromePanelLayout.fromContext(consumerContext, app.chromeButtonSize);
-        final titleStyle = _chromePanelTitleStyle(scheme, app.fontSize);
+        final titleStyle = _chromePanelTitleStyle(scheme, app.fontSize, isDark);
         final body = theme.textTheme.bodyMedium!.copyWith(
-          color: scheme.onSurface,
+          color: isDark ? scheme.onSurface : BibleLightPalette.secondaryText,
           fontSize: app.fontSize,
           height: app.lineHeight,
+        );
+        final bodyEmphasis = body.copyWith(
+          color: isDark ? scheme.onSurface : BibleLightPalette.primaryText,
+          fontWeight: FontWeight.w600,
         );
         final scrollMaxH = (layout.maxBodyHeight - 88).clamp(120.0, 600.0);
 
@@ -875,11 +956,9 @@ class _SupportDialogRouteBodyState extends State<_SupportDialogRouteBody> {
               right: 0,
               child: SizedBox(
                 width: layout.panelWidth,
-                child: Material(
-                  color: settingsBg,
-                  elevation: 10,
-                  borderRadius: BorderRadius.circular(12),
-                  clipBehavior: Clip.antiAlias,
+                child: _chromePanelShell(
+                  isDark: isDark,
+                  lightSurface: ChromePanelLightSurface.modalOpaque,
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
                     child: FutureBuilder<_SupportDialogData>(
@@ -892,10 +971,15 @@ class _SupportDialogRouteBodyState extends State<_SupportDialogRouteBody> {
                             children: [
                               Text('Техподдержка', style: titleStyle),
                               const SizedBox(height: 8),
-                              const SizedBox(
+                              SizedBox(
                                 height: 180,
-                                child:
-                                    Center(child: CircularProgressIndicator()),
+                                child: Center(
+                                  child: CircularProgressIndicator(
+                                    color: isDark
+                                        ? null
+                                        : BibleLightPalette.primary,
+                                  ),
+                                ),
                               ),
                             ],
                           );
@@ -933,7 +1017,44 @@ class _SupportDialogRouteBodyState extends State<_SupportDialogRouteBody> {
                                   child: Padding(
                                     padding:
                                         const EdgeInsets.fromLTRB(4, 0, 4, 0),
-                                    child: Column(
+                                    child: Theme(
+                                      data: theme.copyWith(
+                                        dividerColor: isDark
+                                            ? theme.dividerColor
+                                            : BibleLightPalette.cardDivider,
+                                        splashColor: Colors.transparent,
+                                        highlightColor: Colors.transparent,
+                                        hoverColor: Colors.transparent,
+                                        iconTheme: IconThemeData(
+                                          color: isDark
+                                              ? scheme.onSurface
+                                              : BibleLightPalette.iconActive,
+                                        ),
+                                        expansionTileTheme:
+                                            ExpansionTileThemeData(
+                                          backgroundColor: Colors.transparent,
+                                          collapsedBackgroundColor:
+                                              Colors.transparent,
+                                          iconColor: isDark
+                                              ? scheme.onSurface
+                                              : BibleLightPalette.iconActive,
+                                          collapsedIconColor: isDark
+                                              ? scheme.onSurface
+                                              : BibleLightPalette.iconActive,
+                                          textColor: isDark
+                                              ? scheme.onSurface
+                                              : BibleLightPalette.secondaryText,
+                                          collapsedTextColor: isDark
+                                              ? scheme.onSurface
+                                              : BibleLightPalette.secondaryText,
+                                        ),
+                                        listTileTheme: ListTileThemeData(
+                                          tileColor: Colors.transparent,
+                                          selectedTileColor:
+                                              BibleLightPalette.activeBg,
+                                        ),
+                                      ),
+                                      child: Column(
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -941,51 +1062,55 @@ class _SupportDialogRouteBodyState extends State<_SupportDialogRouteBody> {
                           const SizedBox(height: 4),
                           Text(
                             'Текст Синодального перевода Библии с элементами Септуагинты (в [...])',
-                            style: body.copyWith(fontWeight: FontWeight.w600),
+                            style: bodyEmphasis,
                           ),
                           const SizedBox(height: 12),
                           const Text('Автор проекта:'),
                           const SizedBox(height: 4),
                           Text(
                             'Софеин Павел Геннадьевич',
-                            style: body.copyWith(fontWeight: FontWeight.w600),
+                            style: bodyEmphasis,
                           ),
                           const SizedBox(height: 12),
                           const Text('Контактная почта:'),
                           const SizedBox(height: 4),
                           Text(
                             'februaryidea7@gmail.com',
-                            style: body.copyWith(fontWeight: FontWeight.w600),
+                            style: bodyEmphasis,
                           ),
                           const SizedBox(height: 12),
                           Text(
                             'Версия приложения: $currentVersion+$currentBuild',
-                            style: body.copyWith(fontWeight: FontWeight.w700),
+                            style: bodyEmphasis.copyWith(
+                                fontWeight: FontWeight.w700),
                           ),
                           const SizedBox(height: 12),
-                          ExpansionTile(
-                            tilePadding: EdgeInsets.zero,
-                            dense: true,
-                            visualDensity: VisualDensity.compact,
-                            childrenPadding:
-                                const EdgeInsets.only(left: 4, right: 4),
-                            title: Text(
-                              'История версий',
-                              style: body,
-                            ),
-                            subtitle: Text(
-                              data != null && data.changelog.isNotEmpty
-                                  ? 'Нажмите, чтобы посмотреть изменения'
-                                  : 'Пока нет записей',
-                              style: body,
-                            ),
-                            children: [
-                              if (data != null && data.changelog.isNotEmpty)
+                          if (data != null && data.changelog.isNotEmpty)
+                            ExpansionTile(
+                              tilePadding: EdgeInsets.zero,
+                              dense: true,
+                              visualDensity: VisualDensity.compact,
+                              backgroundColor: Colors.transparent,
+                              collapsedBackgroundColor: Colors.transparent,
+                              childrenPadding:
+                                  const EdgeInsets.only(left: 4, right: 4),
+                              title: Text(
+                                'История версий',
+                                style: body,
+                              ),
+                              subtitle: Text(
+                                'Нажмите, чтобы посмотреть изменения',
+                                style: body,
+                              ),
+                              children: [
                                 for (final v in data.changelog)
                                   ExpansionTile(
                                     tilePadding: EdgeInsets.zero,
                                     dense: true,
                                     visualDensity: VisualDensity.compact,
+                                    backgroundColor: Colors.transparent,
+                                    collapsedBackgroundColor:
+                                        Colors.transparent,
                                     childrenPadding: const EdgeInsets.only(
                                         left: 6, bottom: 2),
                                     title: Text(
@@ -1008,12 +1133,26 @@ class _SupportDialogRouteBodyState extends State<_SupportDialogRouteBody> {
                                         ),
                                     ],
                                   ),
-                            ],
-                          ),
+                              ],
+                            )
+                          else ...[
+                            Text(
+                              'История версий',
+                              style: body.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Пока нет записей',
+                              style: body,
+                            ),
+                          ],
                           const SizedBox(height: 8),
                           Text(
                             'Обновление',
-                            style: body.copyWith(fontWeight: FontWeight.w700),
+                            style: bodyEmphasis.copyWith(
+                                fontWeight: FontWeight.w700),
                           ),
                           const SizedBox(height: 6),
                           _supportChromeActionButton(
@@ -1088,6 +1227,8 @@ class _SupportDialogRouteBodyState extends State<_SupportDialogRouteBody> {
                                   key: ValueKey(
                                     'remote_changes_${remoteRelease!.versionCode}',
                                   ),
+                                  backgroundColor: Colors.transparent,
+                                  collapsedBackgroundColor: Colors.transparent,
                                   tilePadding: const EdgeInsets.symmetric(
                                     horizontal: 2,
                                   ),
@@ -1117,8 +1258,10 @@ class _SupportDialogRouteBodyState extends State<_SupportDialogRouteBody> {
                                       Text(
                                         'Нажмите, чтобы посмотреть список изменений',
                                         style: body.copyWith(
-                                          color: scheme.onSurface
-                                              .withValues(alpha: 0.72),
+                                          color: isDark
+                                              ? scheme.onSurface
+                                                  .withValues(alpha: 0.72)
+                                              : BibleLightPalette.secondaryText,
                                         ),
                                       ),
                                     ],
@@ -1138,13 +1281,17 @@ class _SupportDialogRouteBodyState extends State<_SupportDialogRouteBody> {
                               ),
                             ],
                           ] else
-                            const Text('Установлена актуальная версия'),
-                        ],
-                                    ),
-                                  ),
-                                ),
-                              ),
+                            Text(
+                              'Установлена актуальная версия',
+                              style: body,
                             ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
                             Padding(
                               padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
                               child: Align(
@@ -1224,22 +1371,21 @@ void showAppHelpDialog(BuildContext context) {
           final theme = Theme.of(consumerContext);
           final scheme = theme.colorScheme;
           final isDark = theme.brightness == Brightness.dark;
-          final settingsBg =
-              isDark ? const Color(0xFF37474F) : const Color(0xFFE1F5FE);
           final fs = app.fontSize;
           final lh = app.lineHeight;
           final layout = _ChromePanelLayout.fromContext(
             consumerContext,
             app.chromeButtonSize,
           );
-          final titleStyle = _chromePanelTitleStyle(scheme, app.fontSize);
+          final titleStyle =
+              _chromePanelTitleStyle(scheme, app.fontSize, isDark);
           final tocStyle = _helpDialogTocStyle.copyWith(
-            color: scheme.onSurface,
+            color: isDark ? scheme.onSurface : BibleLightPalette.primaryText,
             fontSize: (fs * 0.95).clamp(12.0, 26.0),
             height: lh,
           );
           final bodyStyle = theme.textTheme.bodyMedium!.copyWith(
-            color: scheme.onSurface,
+            color: isDark ? scheme.onSurface : BibleLightPalette.secondaryText,
             fontSize: fs,
             height: lh,
           );
@@ -1255,11 +1401,9 @@ void showAppHelpDialog(BuildContext context) {
                 right: 0,
                 child: SizedBox(
                   width: layout.panelWidth,
-                  child: Material(
-                    color: settingsBg,
-                    elevation: 10,
-                    borderRadius: BorderRadius.circular(12),
-                    clipBehavior: Clip.antiAlias,
+                  child: _chromePanelShell(
+                    isDark: isDark,
+                    lightSurface: ChromePanelLightSurface.modalOpaque,
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
                       child: Column(

@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:bible_app/models/bible_model.dart';
 import 'package:bible_app/navigation/app_tab_switcher.dart';
 import 'package:bible_app/providers/app_provider.dart';
+import 'package:bible_app/theme/bible_light_palette.dart';
 import 'package:bible_app/services/bible_service.dart';
 import 'package:bible_app/widgets/app_chrome_overflow_menu.dart';
 import 'package:bible_app/widgets/chrome_outline.dart';
@@ -75,30 +76,37 @@ bool _scrollPositionHasMetrics(ScrollController c) =>
 
 Color _bibleScreenAppBarBg(BuildContext context) => _bibleScreenIsDark(context)
     ? const Color(0xFF37474F)
-    : const Color(0xFFB3E5FC);
+    : BibleLightPalette.topBarBg;
 
 Color _bibleScreenButtonBg(BuildContext context) => _bibleScreenIsDark(context)
     ? const Color(0xFF455A64)
-    : const Color(0xFFE1F5FE);
+    : BibleLightPalette.chromePillFill;
 
 Color _bibleScreenChromeFg(BuildContext context) =>
-    _bibleScreenIsDark(context) ? Colors.white : Colors.black;
+    _bibleScreenIsDark(context) ? Colors.white : BibleLightPalette.primaryText;
 
 Color _bibleScreenVerseAreaBg(BuildContext context) =>
-    _bibleScreenIsDark(context) ? Colors.grey.shade900 : Colors.white;
+    _bibleScreenIsDark(context)
+        ? Colors.grey.shade900
+        : BibleLightPalette.cardFillSecondary;
 
 Color _bibleScreenVerseMutedFg(BuildContext context) =>
-    _bibleScreenIsDark(context) ? Colors.grey.shade300 : Colors.grey.shade800;
+    _bibleScreenIsDark(context) ? Colors.grey.shade300 : BibleLightPalette.secondaryText;
 
 Color _bibleScreenRowHighlight(BuildContext context) =>
     _bibleScreenIsDark(context)
         ? Colors.blueGrey.shade700
-        : Colors.amber.shade100;
+        : BibleLightPalette.selectedBg;
 
 Color _bibleScreenSearchMatchHighlight(BuildContext context) =>
     _bibleScreenIsDark(context)
         ? Colors.amber.shade700.withValues(alpha: 0.45)
         : Colors.amber.shade300;
+
+BorderSide _bibleChromeOutlineSide(BuildContext context) =>
+    _bibleScreenIsDark(context)
+        ? ChromeOutline.side
+        : BibleLightPalette.chromePillOutlineSide;
 
 /// Текст панели «Избранное»: тот же шрифт, размер и интервал, что у стихов в настройках.
 TextStyle _favoritesPanelTextStyle(
@@ -325,8 +333,9 @@ class BibleScreen extends StatefulWidget {
 }
 
 class _BibleScreenState extends State<BibleScreen> {
-  static const Color _appBarBgLight = Color(0xFFB3E5FC);
-  static const Color _buttonBgLight = Color(0xFFE1F5FE);
+  /// Светлая шапка — прозрачная, градиент экрана из [MainScreen].
+  static const Color _appBarBgLight = Colors.transparent;
+  static const Color _buttonBgLight = BibleLightPalette.chromePillFill;
 
   /// Согласован с нижней навигацией в тёмной теме.
   static const Color _appBarBgDark = Color(0xFF37474F);
@@ -429,7 +438,7 @@ class _BibleScreenState extends State<BibleScreen> {
                 color: _bibleScreenButtonBg(context),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(noteBtnRadius),
-                  side: ChromeOutline.side,
+                  side: _bibleChromeOutlineSide(context),
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: InkWell(
@@ -804,20 +813,29 @@ class _BibleScreenState extends State<BibleScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final appBarBg = isDark ? _appBarBgDark : _appBarBgLight;
     final buttonBg = isDark ? _buttonBgDark : _buttonBgLight;
-    final chromeTextColor = isDark ? Colors.white : Colors.black;
-    final verseBg = isDark ? Colors.grey.shade900 : Colors.white;
-    final verseTextColor = isDark ? Colors.white : Colors.black;
+    final chromeTextColor =
+        isDark ? Colors.white : BibleLightPalette.primaryText;
+    final verseBg = isDark ? Colors.grey.shade900 : Colors.transparent;
+    final verseTextColor =
+        isDark ? Colors.white : BibleLightPalette.primaryText;
+    final iconFg = isDark ? chromeTextColor : BibleLightPalette.iconActive;
+    final iconFgDisabled = isDark
+        ? chromeTextColor.withValues(alpha: 0.35)
+        : BibleLightPalette.disabledText;
+    final lightChromeOutline =
+        isDark ? null : BibleLightPalette.chromePillOutlineSide;
 
     final toolbarH =
         AppProvider.toolbarHeightForChrome(appProvider.chromeButtonSize);
 
-    return Scaffold(
+    final scaffold = Scaffold(
+      backgroundColor: isDark ? null : Colors.transparent,
       appBar: AppBar(
         backgroundColor: appBarBg,
-        surfaceTintColor: appBarBg,
+        surfaceTintColor: isDark ? appBarBg : Colors.transparent,
         foregroundColor: chromeTextColor,
-        iconTheme: IconThemeData(color: chromeTextColor),
-        actionsIconTheme: IconThemeData(color: chromeTextColor),
+        iconTheme: IconThemeData(color: iconFg),
+        actionsIconTheme: IconThemeData(color: iconFg),
         elevation: 0,
         scrolledUnderElevation: 0,
         toolbarHeight: toolbarH,
@@ -838,11 +856,10 @@ class _BibleScreenState extends State<BibleScreen> {
                 icon: Icons.arrow_back,
                 width: w,
                 tooltip: can ? 'Предыдущая глава' : 'Нет предыдущей главы',
-                foregroundColor: can
-                    ? chromeTextColor
-                    : chromeTextColor.withValues(alpha: 0.35),
+                foregroundColor: can ? iconFg : iconFgDisabled,
                 backgroundColor: buttonBg,
                 circular: false,
+                outlineSide: lightChromeOutline,
                 onPressed: can
                     ? () async {
                         await appProvider.goPrev();
@@ -857,11 +874,10 @@ class _BibleScreenState extends State<BibleScreen> {
                 icon: Icons.arrow_forward,
                 width: w,
                 tooltip: can ? 'Следующая глава' : 'Нет следующей главы',
-                foregroundColor: can
-                    ? chromeTextColor
-                    : chromeTextColor.withValues(alpha: 0.35),
+                foregroundColor: can ? iconFg : iconFgDisabled,
                 backgroundColor: buttonBg,
                 circular: false,
+                outlineSide: lightChromeOutline,
                 onPressed: can
                     ? () async {
                         await appProvider.goNext();
@@ -875,8 +891,10 @@ class _BibleScreenState extends State<BibleScreen> {
                   height: s,
                   label: BibleService()
                       .getBookAbbreviation(appProvider.currentBook),
-                  foregroundColor: chromeTextColor,
+                  foregroundColor:
+                      isDark ? chromeTextColor : BibleLightPalette.iconActive,
                   backgroundColor: buttonBg,
+                  outlineSide: lightChromeOutline,
                   onPressed: () => _showBookSelectionDialog(context),
                 );
 
@@ -884,8 +902,10 @@ class _BibleScreenState extends State<BibleScreen> {
                   width: w,
                   height: s,
                   label: '${appProvider.currentChapter}',
-                  foregroundColor: chromeTextColor,
+                  foregroundColor:
+                      isDark ? chromeTextColor : BibleLightPalette.iconActive,
                   backgroundColor: buttonBg,
+                  outlineSide: lightChromeOutline,
                   onPressed: () => _showChapterSelectionDialog(context),
                 );
 
@@ -893,8 +913,9 @@ class _BibleScreenState extends State<BibleScreen> {
                   icon: Icons.bookmarks_outlined,
                   width: w,
                   tooltip: 'Избранное',
-                  foregroundColor: chromeTextColor,
+                  foregroundColor: iconFg,
                   backgroundColor: buttonBg,
+                  outlineSide: lightChromeOutline,
                   onPressed: () => _openBookmarksFromToolbar(
                     context,
                     appProvider,
@@ -906,15 +927,17 @@ class _BibleScreenState extends State<BibleScreen> {
                   icon: Icons.search,
                   width: w,
                   tooltip: 'Поиск',
-                  foregroundColor: chromeTextColor,
+                  foregroundColor: iconFg,
                   backgroundColor: buttonBg,
+                  outlineSide: lightChromeOutline,
                   onPressed: () => _showSearchDialog(context),
                 );
 
             Widget menuBtn(double w) => AppChromeOverflowMenu(
-                  iconColor: chromeTextColor,
+                  iconColor: iconFg,
                   backgroundColor: buttonBg,
                   tileWidth: w,
+                  shapeSide: lightChromeOutline,
                 );
 
             /// Полная ширина кнопок [s] с отступами [2*g] и шестью зазорами [g] между кнопками.
@@ -1021,166 +1044,78 @@ class _BibleScreenState extends State<BibleScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
-            child: IgnorePointer(
-              ignoring: !_isBibleInteractionActive,
-              child: GestureDetector(
-                onHorizontalDragEnd: (details) async {
-                  if (!_isBibleInteractionActive) return;
-                  if (details.primaryVelocity == null) return;
-                  if (details.primaryVelocity! > 0) {
-                    if (appProvider.canGoPrevBible) await appProvider.goPrev();
-                  } else if (details.primaryVelocity! < 0) {
-                    if (appProvider.canGoNextBible) await appProvider.goNext();
-                  }
-                },
-                child: appProvider.isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : verses.isEmpty
-                        ? const Center(child: Text('Глава не найдена'))
-                        : Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              ListView.builder(
-                                key: ValueKey(
-                                  '${appProvider.currentBook}_${appProvider.currentChapter}_${appProvider.verseFontPreset}',
-                                ),
-                                controller: _scrollController,
-                                itemCount: verses.length,
-                                itemBuilder: (context, index) {
-                                  final verse = verses[index];
-                                  final num = verse['verse'] as int;
-                                  final payload =
-                                      _bibleVerseDisplayPayloadFromRaw(
-                                    (verse['text'] ?? '').toString(),
-                                  );
-                                  final verseTextWithMarkers =
-                                      '$num. ${payload.textWithMarkers}';
-                                  Color textColor = verseTextColor;
-                                  final highlighted = _highlightVerse == num;
-                                  final selected =
-                                      _selectedVerses.contains(num);
-                                  Color rowBg = verseBg;
-                                  if (highlighted) {
-                                    rowBg = isDark
-                                        ? Colors.blueGrey.shade700
-                                        : Colors.amber.shade100;
-                                  } else if (selected) {
-                                    rowBg = isDark
-                                        ? Colors.blueGrey.shade700
-                                        : Colors.amber.shade100;
-                                  }
-                                  final multiSelect =
-                                      _selectedVerses.isNotEmpty;
-                                  final gap = index < verses.length - 1
-                                      ? appProvider.verseSpacing
-                                      : 0.0;
-                                  return KeyedSubtree(
-                                    key: _verseRowKeys.putIfAbsent(
-                                      num,
-                                      GlobalKey.new,
-                                    ),
-                                    child: Padding(
-                                      padding: EdgeInsets.only(bottom: gap),
-                                      child: Material(
-                                        color: rowBg,
-                                        child: InkWell(
-                                          onTap: multiSelect
-                                              ? () {
-                                                  setState(() {
-                                                    if (_selectedVerses
-                                                        .contains(num)) {
-                                                      _selectedVerses
-                                                          .remove(num);
-                                                    } else {
-                                                      _selectedVerses.add(num);
-                                                    }
-                                                  });
-                                                }
-                                              : null,
-                                          onLongPress: () {
-                                            setState(() {
-                                              if (_selectedVerses
-                                                  .contains(num)) {
-                                                _selectedVerses.remove(num);
-                                              } else {
-                                                _selectedVerses.add(num);
-                                              }
-                                            });
-                                          },
-                                          child: Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 16,
-                                              vertical: 2,
-                                            ),
-                                            child: Align(
-                                              alignment: Alignment.centerLeft,
-                                              child: Text.rich(
-                                                TextSpan(
-                                                  children:
-                                                      _buildVerseInlineSpans(
-                                                    appProvider,
-                                                    verseTextWithMarkers,
-                                                    payload.notes,
-                                                    textColor: textColor,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                              if (_selectedVerses.isNotEmpty)
-                                Positioned(
-                                  top: 8,
-                                  right: 8,
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      ChromeIconButton(
-                                        icon: Icons.copy_all,
-                                        tooltip: 'Копировать',
-                                        foregroundColor: chromeTextColor,
-                                        backgroundColor: buttonBg,
-                                        onPressed: () => _copySelectedVerses(
-                                          context,
-                                          appProvider,
-                                          verses,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      ChromeIconButton(
-                                        icon: Icons.bookmark_add_outlined,
-                                        tooltip: 'В избранное',
-                                        foregroundColor: chromeTextColor,
-                                        backgroundColor: buttonBg,
-                                        onPressed: () =>
-                                            _addSelectedVersesToBookmarks(
-                                          context,
-                                          appProvider,
-                                          verses,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      ChromeIconButton(
-                                        icon: Icons.highlight_off_outlined,
-                                        tooltip: 'Отмена',
-                                        foregroundColor: chromeTextColor,
-                                        backgroundColor: buttonBg,
-                                        onPressed: () => setState(
-                                          () => _selectedVerses.clear(),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                            ],
+            child: isDark
+                ? IgnorePointer(
+                    ignoring: !_isBibleInteractionActive,
+                    child: GestureDetector(
+                      onHorizontalDragEnd: (details) async {
+                        if (!_isBibleInteractionActive) return;
+                        if (details.primaryVelocity == null) return;
+                        if (details.primaryVelocity! > 0) {
+                          if (appProvider.canGoPrevBible) {
+                            await appProvider.goPrev();
+                          }
+                        } else if (details.primaryVelocity! < 0) {
+                          if (appProvider.canGoNextBible) {
+                            await appProvider.goNext();
+                          }
+                        }
+                      },
+                      child: _bibleVerseBody(
+                        appProvider: appProvider,
+                        verses: verses,
+                        verseBg: verseBg,
+                        verseTextColor: verseTextColor,
+                        isDark: isDark,
+                        chromeTextColor: chromeTextColor,
+                        buttonBg: buttonBg,
+                      ),
+                    ),
+                  )
+                : Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        gradient: BibleLightPalette.verseCardGradient,
+                        border: Border.all(
+                          color: BibleLightPalette.border,
+                          width: 1,
+                        ),
+                        boxShadow: BibleLightPalette.verseCardShadow,
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: IgnorePointer(
+                          ignoring: !_isBibleInteractionActive,
+                          child: GestureDetector(
+                            onHorizontalDragEnd: (details) async {
+                              if (!_isBibleInteractionActive) return;
+                              if (details.primaryVelocity == null) return;
+                              if (details.primaryVelocity! > 0) {
+                                if (appProvider.canGoPrevBible) {
+                                  await appProvider.goPrev();
+                                }
+                              } else if (details.primaryVelocity! < 0) {
+                                if (appProvider.canGoNextBible) {
+                                  await appProvider.goNext();
+                                }
+                              }
+                            },
+                            child: _bibleVerseBody(
+                              appProvider: appProvider,
+                              verses: verses,
+                              verseBg: verseBg,
+                              verseTextColor: verseTextColor,
+                              isDark: isDark,
+                              chromeTextColor: chromeTextColor,
+                              buttonBg: buttonBg,
+                            ),
                           ),
-              ),
-            ),
+                        ),
+                      ),
+                    ),
+                  ),
           ),
           if (_bottomBannerText != null)
             Container(
@@ -1202,6 +1137,179 @@ class _BibleScreenState extends State<BibleScreen> {
         ],
       ),
     );
+
+    return scaffold;
+  }
+
+  Widget _bibleVerseBody({
+    required AppProvider appProvider,
+    required List<Map<String, dynamic>> verses,
+    required Color verseBg,
+    required Color verseTextColor,
+    required bool isDark,
+    required Color chromeTextColor,
+    required Color buttonBg,
+  }) {
+    final overlayIconFg =
+        isDark ? chromeTextColor : BibleLightPalette.iconActive;
+    final overlayChromeOutline =
+        isDark ? null : BibleLightPalette.chromePillOutlineSide;
+
+    return appProvider.isLoading
+        ? const Center(child: CircularProgressIndicator())
+        : verses.isEmpty
+            ? const Center(child: Text('Глава не найдена'))
+            : Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  ListView.builder(
+                    key: ValueKey(
+                      '${appProvider.currentBook}_${appProvider.currentChapter}_${appProvider.verseFontPreset}',
+                    ),
+                    controller: _scrollController,
+                    itemCount: verses.length,
+                    itemBuilder: (context, index) {
+                      final verse = verses[index];
+                      final num = verse['verse'] as int;
+                      final payload = _bibleVerseDisplayPayloadFromRaw(
+                        (verse['text'] ?? '').toString(),
+                      );
+                      final verseTextWithMarkers =
+                          '$num. ${payload.textWithMarkers}';
+                      Color textColor = verseTextColor;
+                      final highlighted = _highlightVerse == num;
+                      final selected = _selectedVerses.contains(num);
+                      Color rowBg = verseBg;
+                      if (highlighted) {
+                        rowBg = isDark
+                            ? Colors.blueGrey.shade700
+                            : BibleLightPalette.selectedBg;
+                      } else if (selected) {
+                        rowBg = isDark
+                            ? Colors.blueGrey.shade700
+                            : BibleLightPalette.selectedBg;
+                      }
+                      final multiSelect = _selectedVerses.isNotEmpty;
+                      final gap = index < verses.length - 1
+                          ? appProvider.verseSpacing
+                          : 0.0;
+                      final showDivider =
+                          !isDark && index < verses.length - 1;
+                      return KeyedSubtree(
+                        key: _verseRowKeys.putIfAbsent(
+                          num,
+                          GlobalKey.new,
+                        ),
+                        child: Padding(
+                          padding: EdgeInsets.only(bottom: gap),
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: rowBg,
+                              border: showDivider
+                                  ? const Border(
+                                      bottom: BorderSide(
+                                        color: BibleLightPalette.verseDivider,
+                                        width: 1,
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: multiSelect
+                                    ? () {
+                                        setState(() {
+                                          if (_selectedVerses.contains(num)) {
+                                            _selectedVerses.remove(num);
+                                          } else {
+                                            _selectedVerses.add(num);
+                                          }
+                                        });
+                                      }
+                                    : null,
+                                onLongPress: () {
+                                  setState(() {
+                                    if (_selectedVerses.contains(num)) {
+                                      _selectedVerses.remove(num);
+                                    } else {
+                                      _selectedVerses.add(num);
+                                    }
+                                  });
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 2,
+                                  ),
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text.rich(
+                                      TextSpan(
+                                        children: _buildVerseInlineSpans(
+                                          appProvider,
+                                          verseTextWithMarkers,
+                                          payload.notes,
+                                          textColor: textColor,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  if (_selectedVerses.isNotEmpty)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ChromeIconButton(
+                            icon: Icons.copy_all,
+                            tooltip: 'Копировать',
+                            foregroundColor: overlayIconFg,
+                            backgroundColor: buttonBg,
+                            outlineSide: overlayChromeOutline,
+                            onPressed: () => _copySelectedVerses(
+                              context,
+                              appProvider,
+                              verses,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          ChromeIconButton(
+                            icon: Icons.bookmark_add_outlined,
+                            tooltip: 'В избранное',
+                            foregroundColor: overlayIconFg,
+                            backgroundColor: buttonBg,
+                            outlineSide: overlayChromeOutline,
+                            onPressed: () => _addSelectedVersesToBookmarks(
+                              context,
+                              appProvider,
+                              verses,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          ChromeIconButton(
+                            icon: Icons.highlight_off_outlined,
+                            tooltip: 'Отмена',
+                            foregroundColor: overlayIconFg,
+                            backgroundColor: buttonBg,
+                            outlineSide: overlayChromeOutline,
+                            onPressed: () =>
+                                setState(() => _selectedVerses.clear()),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              );
   }
 
   Future<void> _showSearchDialog(BuildContext context) async {
@@ -1230,7 +1338,7 @@ class _BibleScreenState extends State<BibleScreen> {
                   color: _bibleScreenAppBarBg(dialogContext),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
-                    side: ChromeOutline.side,
+                    side: _bibleChromeOutlineSide(dialogContext),
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: _BibleSearchDialog(
@@ -1364,74 +1472,110 @@ class _BibleScreenState extends State<BibleScreen> {
             // Высота диалога — по экрану устройства (без искусственного потолка).
             final maxDialogH =
                 (h - mq.viewPadding.vertical - 12).clamp(120.0, h);
-            final titleAndChrome = (uiFs * 5.5).clamp(72.0, 120.0);
-            final contentMaxH =
-                (maxDialogH - titleAndChrome).clamp(60.0, maxDialogH);
-            return AlertDialog(
-              insetPadding: EdgeInsets.symmetric(
-                horizontal: (uiFs * 0.5).clamp(6.0, 14.0),
-                vertical: (uiFs * 0.375).clamp(4.0, 12.0),
-              ),
-              constraints: BoxConstraints(
-                maxWidth: (w - 16).clamp(280.0, 440.0),
-                maxHeight: maxDialogH,
-              ),
-              title: Text(
-                'Выберите главу (${BibleBook.liturgicalDisplayName(selectedBook)})',
-                style: TextStyle(
-                  fontSize: titleFs,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              content: ConstrainedBox(
+            return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: EdgeInsets.symmetric(
+            horizontal: (uiFs * 0.5).clamp(6.0, 14.0),
+            vertical: (uiFs * 0.375).clamp(4.0, 12.0),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(22),
+            child: DecoratedBox(
+              decoration: _bibleScreenIsDark(dialogContext)
+                  ? const BoxDecoration(
+                      color: Color(0xFF37474F),
+                      borderRadius: BorderRadius.all(Radius.circular(22)),
+                    )
+                  : BibleLightPalette.lightPanelShellDecoration(radius: 22),
+              child: ConstrainedBox(
                 constraints: BoxConstraints(
-                  maxWidth: (w - 48).clamp(260.0, 400.0),
-                  maxHeight: contentMaxH,
+                  maxWidth: (w - 16).clamp(280.0, 440.0),
+                  maxHeight: maxDialogH,
                 ),
-                child: SingleChildScrollView(
-                  child: Wrap(
-                    spacing: wrapGap,
-                    runSpacing: wrapGap,
-                    alignment: WrapAlignment.center,
-                    children: List.generate(chapterCount, (index) {
-                      final chapterNumber = index + 1;
-                      final isCurrent = selectedBook == app.currentBook &&
-                          chapterNumber == app.currentChapter;
-                      return SizedBox(
-                        width: chapterCell,
-                        height: chapterCell,
-                        child: ElevatedButton(
-                          onPressed: () {
-                            app.changeBookAndChapter(
-                              selectedBook,
-                              chapterNumber,
-                            );
-                            Navigator.pop(dialogContext);
-                          },
-                          style: ElevatedButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            shape: const CircleBorder(),
-                            backgroundColor:
-                                isCurrent ? Colors.blue : Colors.lightBlue[50],
-                            foregroundColor:
-                                isCurrent ? Colors.white : Colors.black,
-                          ),
-                          child: Text(
-                            '$chapterNumber',
-                            style: TextStyle(
-                              fontSize: chapterNumFs,
-                              fontWeight: isCurrent
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                            ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'Выберите главу (${BibleBook.liturgicalDisplayName(selectedBook)})',
+                        style: TextStyle(
+                          fontSize: titleFs,
+                          fontWeight: FontWeight.w600,
+                          color: _bibleScreenChromeFg(dialogContext),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: Wrap(
+                            spacing: wrapGap,
+                            runSpacing: wrapGap,
+                            alignment: WrapAlignment.center,
+                            children: List.generate(chapterCount, (index) {
+                              final chapterNumber = index + 1;
+                              final isCurrent = selectedBook == app.currentBook &&
+                                  chapterNumber == app.currentChapter;
+                              final isLight = !_bibleScreenIsDark(dialogContext);
+                              return SizedBox(
+                                width: chapterCell,
+                                height: chapterCell,
+                                child: ElevatedButton(
+                                  onPressed: () {
+                                    app.changeBookAndChapter(
+                                      selectedBook,
+                                      chapterNumber,
+                                    );
+                                    Navigator.pop(dialogContext);
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    padding: EdgeInsets.zero,
+                                    shape: const CircleBorder(),
+                                    elevation: 0,
+                                    backgroundColor: isCurrent
+                                        ? (isLight
+                                            ? BibleLightPalette.primary
+                                            : Colors.blue)
+                                        : (isLight
+                                            ? BibleLightPalette.activeBg
+                                            : Colors.lightBlue[50]),
+                                    foregroundColor: isCurrent
+                                        ? Colors.white
+                                        : (isLight
+                                            ? BibleLightPalette.primaryText
+                                            : Colors.black),
+                                    side: isLight
+                                        ? BorderSide(
+                                            color: isCurrent
+                                                ? BibleLightPalette.primaryDark
+                                                : BibleLightPalette
+                                                    .chromePillOutlineColor,
+                                            width: 1.2,
+                                          )
+                                        : BorderSide.none,
+                                  ),
+                                  child: Text(
+                                    '$chapterNumber',
+                                    style: TextStyle(
+                                      fontSize: chapterNumFs,
+                                      fontWeight: isCurrent
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }),
                           ),
                         ),
-                      );
-                    }),
+                      ),
+                    ],
                   ),
                 ),
               ),
-            );
+            ),
+          ),
+        );
           },
         );
       },
@@ -1462,125 +1606,225 @@ class _BibleScreenState extends State<BibleScreen> {
             // Почти вся высота экрана: иначе 66 кнопок в Wrap не помещаются и включается скролл.
             final maxH =
                 (h - mq.viewPadding.vertical - 12).clamp(360.0, 2000.0);
-            return AlertDialog(
+            return Dialog(
+              backgroundColor: Colors.transparent,
               insetPadding: EdgeInsets.symmetric(
                 horizontal: (uiFs * 0.5).clamp(6.0, 14.0),
                 vertical: (uiFs * 0.375).clamp(4.0, 12.0),
               ),
-              constraints: BoxConstraints(
-                maxWidth: (w - 16).clamp(280.0, 560.0),
-                maxHeight: maxH,
-              ),
-              title: Text(
-                'Выберите книгу',
-                style: TextStyle(
-                  fontSize: titleFs,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              content: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Ветхий Завет:',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: sectionFs,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(22),
+                child: DecoratedBox(
+                  decoration: _bibleScreenIsDark(dialogContext)
+                      ? const BoxDecoration(
+                          color: Color(0xFF37474F),
+                          borderRadius: BorderRadius.all(Radius.circular(22)),
+                        )
+                      : BibleLightPalette.lightPanelShellDecoration(radius: 22),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: (w - 16).clamp(280.0, 560.0),
+                      maxHeight: maxH,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            'Выберите книгу',
+                            style: TextStyle(
+                              fontSize: titleFs,
+                              fontWeight: FontWeight.w600,
+                              color: _bibleScreenChromeFg(dialogContext),
+                            ),
+                          ),
+                          SizedBox(height: gapSm),
+                          Expanded(
+                            child: SingleChildScrollView(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'Ветхий Завет:',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: sectionFs,
+                                      color: _bibleScreenChromeFg(dialogContext),
+                                    ),
+                                  ),
+                                  SizedBox(height: gapSm),
+                                  Wrap(
+                                    spacing: wrapH,
+                                    runSpacing: wrapV,
+                                    children: oldTestamentBooks.map((book) {
+                                      final isCurrentBook =
+                                          book == app.currentBook;
+                                      final isLight =
+                                          !_bibleScreenIsDark(dialogContext);
+                                      return TextButton(
+                                        onPressed: () {
+                                          Navigator.pop(dialogContext);
+                                          WidgetsBinding.instance
+                                              .addPostFrameCallback((_) {
+                                            if (context.mounted) {
+                                              _showChapterSelectionDialog(
+                                                context,
+                                                forBook: book,
+                                              );
+                                            }
+                                          });
+                                        },
+                                        style: TextButton.styleFrom(
+                                          backgroundColor: isCurrentBook
+                                              ? (isLight
+                                                  ? BibleLightPalette.primary
+                                                  : Colors.blue)
+                                              : (isLight
+                                                  ? BibleLightPalette.activeBg
+                                                  : Colors.lightBlue[50]),
+                                          foregroundColor: isCurrentBook
+                                              ? Colors.white
+                                              : (isLight
+                                                  ? BibleLightPalette
+                                                      .primaryText
+                                                  : Colors.black),
+                                          side: isLight
+                                              ? BorderSide(
+                                                  color: isCurrentBook
+                                                      ? BibleLightPalette
+                                                          .primaryDark
+                                                      : BibleLightPalette
+                                                          .chromePillOutlineColor,
+                                                  width: 1.2,
+                                                )
+                                              : BorderSide.none,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(20),
+                                          ),
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: padH,
+                                            vertical: padV,
+                                          ),
+                                          minimumSize: Size.zero,
+                                          tapTargetSize:
+                                              MaterialTapTargetSize.shrinkWrap,
+                                        ),
+                                        child: Text(
+                                          BibleService()
+                                              .getBookAbbreviation(book),
+                                          style: TextStyle(
+                                            color: isCurrentBook
+                                                ? Colors.white
+                                                : (isLight
+                                                    ? BibleLightPalette
+                                                        .primaryText
+                                                    : Colors.black),
+                                            fontSize: bookAbbrFs,
+                                            fontWeight: isCurrentBook
+                                                ? FontWeight.bold
+                                                : FontWeight.normal,
+                                          ),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                  SizedBox(height: gapMd),
+                                  Text(
+                                    'Новый Завет:',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: sectionFs,
+                                      color: _bibleScreenChromeFg(dialogContext),
+                                    ),
+                                  ),
+                                  SizedBox(height: gapSm),
+                                  Wrap(
+                                    spacing: wrapH,
+                                    runSpacing: wrapV,
+                                    children: newTestamentBooks.map((book) {
+                                      final isCurrentBook =
+                                          book == app.currentBook;
+                                      final isLight =
+                                          !_bibleScreenIsDark(dialogContext);
+                                      return TextButton(
+                                        onPressed: () {
+                                          Navigator.pop(dialogContext);
+                                          WidgetsBinding.instance
+                                              .addPostFrameCallback((_) {
+                                            if (context.mounted) {
+                                              _showChapterSelectionDialog(
+                                                context,
+                                                forBook: book,
+                                              );
+                                            }
+                                          });
+                                        },
+                                        style: TextButton.styleFrom(
+                                          backgroundColor: isCurrentBook
+                                              ? (isLight
+                                                  ? BibleLightPalette.primary
+                                                  : Colors.blue)
+                                              : (isLight
+                                                  ? BibleLightPalette.activeBg
+                                                  : Colors.lightBlue[50]),
+                                          foregroundColor: isCurrentBook
+                                              ? Colors.white
+                                              : (isLight
+                                                  ? BibleLightPalette
+                                                      .primaryText
+                                                  : Colors.black),
+                                          side: isLight
+                                              ? BorderSide(
+                                                  color: isCurrentBook
+                                                      ? BibleLightPalette
+                                                          .primaryDark
+                                                      : BibleLightPalette
+                                                          .chromePillOutlineColor,
+                                                  width: 1.2,
+                                                )
+                                              : BorderSide.none,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(20),
+                                          ),
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: padH,
+                                            vertical: padV,
+                                          ),
+                                          minimumSize: Size.zero,
+                                          tapTargetSize:
+                                              MaterialTapTargetSize.shrinkWrap,
+                                        ),
+                                        child: Text(
+                                          BibleService()
+                                              .getBookAbbreviation(book),
+                                          style: TextStyle(
+                                            color: isCurrentBook
+                                                ? Colors.white
+                                                : (isLight
+                                                    ? BibleLightPalette
+                                                        .primaryText
+                                                    : Colors.black),
+                                            fontSize: bookAbbrFs,
+                                            fontWeight: isCurrentBook
+                                                ? FontWeight.bold
+                                                : FontWeight.normal,
+                                          ),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    SizedBox(height: gapSm),
-                    Wrap(
-                      spacing: wrapH,
-                      runSpacing: wrapV,
-                      children: oldTestamentBooks.map((book) {
-                        final isCurrentBook = book == app.currentBook;
-                        return TextButton(
-                          onPressed: () {
-                            Navigator.pop(dialogContext);
-                            WidgetsBinding.instance.addPostFrameCallback((_) {
-                              if (context.mounted) {
-                                _showChapterSelectionDialog(context,
-                                    forBook: book);
-                              }
-                            });
-                          },
-                          style: TextButton.styleFrom(
-                            backgroundColor: isCurrentBook
-                                ? Colors.blue
-                                : Colors.lightBlue[50],
-                            padding: EdgeInsets.symmetric(
-                              horizontal: padH,
-                              vertical: padV,
-                            ),
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          child: Text(
-                            BibleService().getBookAbbreviation(book),
-                            style: TextStyle(
-                              color:
-                                  isCurrentBook ? Colors.white : Colors.black,
-                              fontSize: bookAbbrFs,
-                              fontWeight: isCurrentBook
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                    SizedBox(height: gapMd),
-                    Text(
-                      'Новый Завет:',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: sectionFs,
-                      ),
-                    ),
-                    SizedBox(height: gapSm),
-                    Wrap(
-                      spacing: wrapH,
-                      runSpacing: wrapV,
-                      children: newTestamentBooks.map((book) {
-                        final isCurrentBook = book == app.currentBook;
-                        return TextButton(
-                          onPressed: () {
-                            Navigator.pop(dialogContext);
-                            WidgetsBinding.instance.addPostFrameCallback((_) {
-                              if (context.mounted) {
-                                _showChapterSelectionDialog(context,
-                                    forBook: book);
-                              }
-                            });
-                          },
-                          style: TextButton.styleFrom(
-                            backgroundColor: isCurrentBook
-                                ? Colors.blue
-                                : Colors.lightBlue[50],
-                            padding: EdgeInsets.symmetric(
-                              horizontal: padH,
-                              vertical: padV,
-                            ),
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          child: Text(
-                            BibleService().getBookAbbreviation(book),
-                            style: TextStyle(
-                              color:
-                                  isCurrentBook ? Colors.white : Colors.black,
-                              fontSize: bookAbbrFs,
-                              fontWeight: isCurrentBook
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             );
@@ -1716,7 +1960,9 @@ class _BibleRailScrollHandleState extends State<_BibleRailScrollHandle> {
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
-                      side: ChromeOutline.side,
+                      side: Theme.of(context).brightness == Brightness.dark
+                          ? ChromeOutline.side
+                          : BibleLightPalette.chromePillOutlineSide,
                     ),
                     clipBehavior: Clip.antiAlias,
                     child: SizedBox(
@@ -2115,10 +2361,14 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
     final rowHi = _bibleScreenRowHighlight(context);
     final hintColor = _bibleScreenIsDark(context)
         ? Colors.grey.shade500
-        : const Color(0xFFBDBDBD);
+        : BibleLightPalette.disabledText;
     final divColor = _bibleScreenIsDark(context)
         ? Colors.white.withValues(alpha: 0.12)
-        : Colors.black.withValues(alpha: 0.08);
+        : BibleLightPalette.cardDivider;
+    final iconToolFg =
+        _bibleScreenIsDark(context) ? fg : BibleLightPalette.iconActive;
+    final searchChromeOutline =
+        _bibleScreenIsDark(context) ? null : BibleLightPalette.chromePillOutlineSide;
     final mqW = MediaQuery.sizeOf(context).width;
     final contentW = (mqW - 24).clamp(280.0, double.infinity);
     final app = widget.appProvider;
@@ -2150,14 +2400,14 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
               final isDark = _bibleScreenIsDark(context);
               final segTrack = isDark
                   ? const Color(0xFF37474F)
-                  : Colors.grey.shade200;
+                  : BibleLightPalette.disabledBg;
               final segActive = isDark
                   ? const Color(0xFF81D4FA)
-                  : Colors.blue.shade700;
+                  : BibleLightPalette.primary;
               final segActiveFg =
                   isDark ? Colors.black87 : Colors.white;
               final segInactiveFg =
-                  isDark ? Colors.white70 : Colors.blue.shade800;
+                  isDark ? Colors.white70 : BibleLightPalette.secondaryText;
               final segPadV = (chrome * 0.22).clamp(9.0, 14.0);
               final segFont = (chromeLabel * 0.88 * textScale)
                   .clamp(11.0, 18.0);
@@ -2211,7 +2461,9 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                       color: segTrack,
                       borderRadius: segRadius,
                       border: Border.all(
-                        color: ChromeOutline.color,
+                        color: isDark
+                            ? ChromeOutline.color
+                            : BibleLightPalette.chromePillOutlineColor,
                         width: ChromeOutline.width,
                       ),
                     ),
@@ -2231,7 +2483,9 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                             child: VerticalDivider(
                               width: 1,
                               thickness: 1,
-                              color: divColor,
+                              color: isDark
+                                  ? divColor
+                                  : BibleLightPalette.chromePillOutlineColor,
                             ),
                           ),
                           Expanded(
@@ -2265,9 +2519,7 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                           }),
                           trackColor: WidgetStateProperty.resolveWith((s) {
                             if (s.contains(WidgetState.selected)) {
-                              return Theme.of(context)
-                                  .colorScheme
-                                  .primary;
+                              return BibleLightPalette.primary;
                             }
                             return isDark
                                 ? Colors.grey.shade700
@@ -2298,7 +2550,9 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
               color: padBg,
               borderRadius: BorderRadius.circular(22),
               border: Border.all(
-                color: ChromeOutline.color,
+                color: _bibleScreenIsDark(context)
+                    ? ChromeOutline.color
+                    : BibleLightPalette.chromePillOutlineColor,
                 width: ChromeOutline.width,
               ),
             ),
@@ -2439,7 +2693,9 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(18),
                           borderSide: BorderSide(
-                            color: fg.withValues(alpha: 0.35),
+                            color: isDark
+                                ? fg.withValues(alpha: 0.35)
+                                : BibleLightPalette.borderActive,
                             width: 1,
                           ),
                         ),
@@ -2458,7 +2714,7 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                     color: verseBg,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
-                      side: ChromeOutline.side,
+                      side: _bibleChromeOutlineSide(context),
                     ),
                     clipBehavior: Clip.antiAlias,
                     child: ConstrainedBox(
@@ -2519,7 +2775,9 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                               color: verseBg,
                               borderRadius: BorderRadius.circular(10),
                               border: Border.all(
-                                color: ChromeOutline.color,
+                                color: _bibleScreenIsDark(context)
+                                    ? ChromeOutline.color
+                                    : BibleLightPalette.chromePillOutlineColor,
                                 width: ChromeOutline.width,
                               ),
                             ),
@@ -2632,8 +2890,7 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                                   trackHintColor: _bibleScreenIsDark(context)
                                       ? Colors.blueGrey.shade700
                                           .withValues(alpha: 0.9)
-                                      : Colors.blue.shade100
-                                          .withValues(alpha: 0.65),
+                                      : BibleLightPalette.activeBg,
                                   thumbSize: (widget.appProvider.chromeButtonSize *
                                           0.68)
                                       .clamp(26.0, 36.0),
@@ -2655,8 +2912,9 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                                   ChromeIconButton(
                                     icon: Icons.copy_all,
                                     tooltip: 'Копировать',
-                                    foregroundColor: fg,
+                                    foregroundColor: iconToolFg,
                                     backgroundColor: padBg,
+                                    outlineSide: searchChromeOutline,
                                     onPressed: () {
                                       unawaited(
                                         _copySelectedSearchResults(context),
@@ -2667,8 +2925,9 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                                   ChromeIconButton(
                                     icon: Icons.highlight_off_outlined,
                                     tooltip: 'Отмена',
-                                    foregroundColor: fg,
+                                    foregroundColor: iconToolFg,
                                     backgroundColor: padBg,
+                                    outlineSide: searchChromeOutline,
                                     onPressed: () => setState(
                                       () => _selectedResultIndices.clear(),
                                     ),
@@ -2799,16 +3058,22 @@ class _BibleBookmarksPanelState extends State<_BibleBookmarksPanel> {
     final fg = _bibleScreenChromeFg(context);
     final listBg = _bibleScreenVerseAreaBg(context);
     final verseMuted = _bibleScreenVerseMutedFg(context);
+    final favIconFg =
+        _bibleScreenIsDark(context) ? fg : BibleLightPalette.iconActive;
+    final favOutline =
+        _bibleScreenIsDark(context) ? null : BibleLightPalette.chromePillOutlineSide;
 
     return Material(
       color: Colors.transparent,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 740),
         child: Container(
-          decoration: BoxDecoration(
-            color: panelBg,
-            borderRadius: BorderRadius.circular(14),
-          ),
+          decoration: _bibleScreenIsDark(context)
+              ? BoxDecoration(
+                  color: panelBg,
+                  borderRadius: BorderRadius.circular(14),
+                )
+              : BibleLightPalette.lightPanelShellDecoration(radius: 14),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
             child: Column(
@@ -2850,24 +3115,27 @@ class _BibleBookmarksPanelState extends State<_BibleBookmarksPanel> {
                                           _entries.isNotEmpty
                                       ? 'Снять выделение'
                                       : 'Выделить всё',
-                                  foregroundColor: fg,
+                                  foregroundColor: favIconFg,
                                   backgroundColor: buttonBg,
+                                  outlineSide: favOutline,
                                   onPressed: _toggleSelectAll,
                                 ),
                                 const SizedBox(width: 4),
                                 ChromeIconButton(
                                   icon: Icons.copy_all,
                                   tooltip: 'Копировать',
-                                  foregroundColor: fg,
+                                  foregroundColor: favIconFg,
                                   backgroundColor: buttonBg,
+                                  outlineSide: favOutline,
                                   onPressed: () => unawaited(_copySelected()),
                                 ),
                                 const SizedBox(width: 4),
                                 ChromeIconButton(
                                   icon: Icons.delete_outline,
                                   tooltip: 'Удалить',
-                                  foregroundColor: fg,
+                                  foregroundColor: favIconFg,
                                   backgroundColor: buttonBg,
+                                  outlineSide: favOutline,
                                   onPressed: _deleteSelected,
                                 ),
                               ],
@@ -2883,6 +3151,12 @@ class _BibleBookmarksPanelState extends State<_BibleBookmarksPanel> {
                     decoration: BoxDecoration(
                       color: buttonBg,
                       borderRadius: BorderRadius.circular(10),
+                      border: _bibleScreenIsDark(context)
+                          ? null
+                          : Border.all(
+                              color: BibleLightPalette.border,
+                              width: 1,
+                            ),
                     ),
                     padding: const EdgeInsets.symmetric(
                       horizontal: 14,
@@ -2903,6 +3177,12 @@ class _BibleBookmarksPanelState extends State<_BibleBookmarksPanel> {
                     decoration: BoxDecoration(
                       color: listBg,
                       borderRadius: BorderRadius.circular(10),
+                      border: _bibleScreenIsDark(context)
+                          ? null
+                          : Border.all(
+                              color: BibleLightPalette.border,
+                              width: 1,
+                            ),
                     ),
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxHeight: 360),
@@ -2918,7 +3198,7 @@ class _BibleBookmarksPanelState extends State<_BibleBookmarksPanel> {
                             height: 1,
                             color: _bibleScreenIsDark(context)
                                 ? Colors.white.withValues(alpha: 0.12)
-                                : Colors.black.withValues(alpha: 0.08),
+                                : BibleLightPalette.cardDivider,
                           ),
                           itemBuilder: (context, i) {
                             final e = _entries[i];
@@ -2932,8 +3212,8 @@ class _BibleBookmarksPanelState extends State<_BibleBookmarksPanel> {
                             );
                             final headerLineStyle = _favoritesPanelTextStyle(
                               app,
-                              color: fg,
-                              fontWeight: FontWeight.w700,
+                              color: verseMuted,
+                              fontWeight: FontWeight.w600,
                               fontSize: (app.fontSize * 0.95).clamp(
                                 12.0,
                                 26.0,

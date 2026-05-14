@@ -1,22 +1,22 @@
 import 'package:bible_app/providers/app_provider.dart';
+import 'package:bible_app/theme/bible_light_palette.dart';
 import 'package:bible_app/widgets/chrome_outline.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 /// Фон и цвет текста/иконки «вторичных» кнопок хрома — как в разделе «Библия».
 abstract final class NotebookChromeUi {
-  static const Color _buttonBgLight = Color(0xFFE1F5FE);
   static const Color _buttonBgDark = Color(0xFF455A64);
 
   static Color secondaryButtonBackground(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark
           ? _buttonBgDark
-          : _buttonBgLight;
+          : BibleLightPalette.chromePillFill;
 
   static Color secondaryButtonForeground(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark
           ? Colors.white
-          : Colors.black87;
+          : BibleLightPalette.primaryText;
 }
 
 /// Стиль действия в диалогах вкладки «Блокнот».
@@ -41,9 +41,12 @@ class NotebookChromeDialogCloseButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final chrome = context.watch<AppProvider>().chromeButtonSize;
     final ic = (chrome * 0.5).clamp(18.0, 30.0);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final outlineSide =
+        isDark ? ChromeOutline.side : BibleLightPalette.chromePillOutlineSide;
     final shape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(8),
-      side: ChromeOutline.side,
+      side: outlineSide,
     );
     final bg = NotebookChromeUi.secondaryButtonBackground(context);
     final fg = NotebookChromeUi.secondaryButtonForeground(context);
@@ -83,9 +86,12 @@ class NotebookChromeDialogToolbarIconButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final chrome = context.watch<AppProvider>().chromeButtonSize;
     final ic = (chrome * 0.5).clamp(18.0, 30.0);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final outlineSide =
+        isDark ? ChromeOutline.side : BibleLightPalette.chromePillOutlineSide;
     final shape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(8),
-      side: ChromeOutline.side,
+      side: outlineSide,
     );
     final bg = NotebookChromeUi.secondaryButtonBackground(context);
     final baseFg = NotebookChromeUi.secondaryButtonForeground(context);
@@ -138,6 +144,9 @@ class NotebookChromeDialogButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final chrome = context.watch<AppProvider>().chromeButtonSize;
     final fontSize = (chrome * 0.32).clamp(12.0, 17.0);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final outlineSide =
+        isDark ? ChromeOutline.side : BibleLightPalette.chromePillOutlineSide;
     final Color bg;
     final Color fg;
     switch (style) {
@@ -145,7 +154,7 @@ class NotebookChromeDialogButton extends StatelessWidget {
         bg = NotebookChromeUi.secondaryButtonBackground(context);
         fg = NotebookChromeUi.secondaryButtonForeground(context);
       case NotebookDialogActionStyle.confirm:
-        bg = Colors.blue;
+        bg = isDark ? Colors.blue : BibleLightPalette.primary;
         fg = Colors.white;
       case NotebookDialogActionStyle.danger:
         bg = Colors.red.shade700;
@@ -155,7 +164,7 @@ class NotebookChromeDialogButton extends StatelessWidget {
       color: bg,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
-        side: ChromeOutline.side,
+        side: outlineSide,
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(

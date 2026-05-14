@@ -1,4 +1,5 @@
 import 'package:bible_app/providers/app_provider.dart';
+import 'package:bible_app/theme/bible_light_palette.dart';
 import 'package:bible_app/widgets/chrome_outline.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -50,8 +51,6 @@ class MainChromeTabBar extends StatelessWidget {
   static const _labels = ['Библия', 'Блокнот', 'План'];
   static const _tooltips = ['Библия', 'Блокнот', 'План'];
 
-  static const Color _appBarBgLight = Color(0xFFB3E5FC);
-  static const Color _buttonBgLight = Color(0xFFE1F5FE);
   static const Color _appBarBgDark = Color(0xFF37474F);
   static const Color _buttonBgDark = Color(0xFF455A64);
 
@@ -59,10 +58,19 @@ class MainChromeTabBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final chrome = context.watch<AppProvider>().chromeButtonSize;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final barBg = isDark ? _appBarBgDark : _appBarBgLight;
-    final buttonBg = isDark ? _buttonBgDark : _buttonBgLight;
-    final fgSelected = isDark ? const Color(0xFF81D4FA) : Colors.blue.shade800;
-    final fgUnselected = isDark ? Colors.grey.shade500 : Colors.grey.shade600;
+    final barBg = isDark ? _appBarBgDark : Colors.transparent;
+    final buttonBg = isDark ? _buttonBgDark : BibleLightPalette.chromePillFill;
+    final buttonBgSelected =
+        isDark ? _buttonBgDark : BibleLightPalette.bottomIconActiveBg;
+    final fgSelected =
+        isDark ? const Color(0xFF81D4FA) : BibleLightPalette.primary;
+    final fgUnselected =
+        isDark ? Colors.grey.shade500 : BibleLightPalette.iconInactive;
+    final outlineSelected = isDark
+        ? ChromeOutline.side
+        : BibleLightPalette.chromePillOutlineActiveSide;
+    final outlineUnselected =
+        isDark ? ChromeOutline.side : BibleLightPalette.chromePillOutlineSide;
     final corner = (chrome * 0.22).clamp(4.0, 12.0);
     final iconSize = _mainTabIconSize(chrome);
     final labelSize = _mainTabLabelFont(chrome);
@@ -72,7 +80,7 @@ class MainChromeTabBar extends StatelessWidget {
     final tileHorizontalPad = (chrome * 0.10).clamp(4.0, 9.0);
     final iconLabelGap = (chrome * 0.05).clamp(2.0, 5.0);
 
-    return Material(
+    final bar = Material(
       color: barBg,
       child: SafeArea(
         top: false,
@@ -92,10 +100,12 @@ class MainChromeTabBar extends StatelessWidget {
                     message: _tooltips[i],
                     waitDuration: const Duration(milliseconds: 400),
                     child: Material(
-                      color: buttonBg,
+                      color: currentIndex == i ? buttonBgSelected : buttonBg,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(corner),
-                        side: ChromeOutline.side,
+                        side: currentIndex == i
+                            ? outlineSelected
+                            : outlineUnselected,
                       ),
                       clipBehavior: Clip.antiAlias,
                       child: InkWell(
@@ -151,6 +161,16 @@ class MainChromeTabBar extends StatelessWidget {
           ),
         ),
       ),
+    );
+
+    if (isDark) return bar;
+
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        color: Colors.transparent,
+        boxShadow: BibleLightPalette.bottomBarShadow,
+      ),
+      child: bar,
     );
   }
 }
