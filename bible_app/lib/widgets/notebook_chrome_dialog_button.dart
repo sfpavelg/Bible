@@ -76,25 +76,30 @@ class NotebookChromeDialogToolbarIconButton extends StatelessWidget {
     required this.icon,
     this.onPressed,
     this.tooltip,
+    this.iconColor,
+    this.borderColor,
   });
 
   final IconData icon;
   final VoidCallback? onPressed;
   final String? tooltip;
+  final Color? iconColor;
+  final Color? borderColor;
 
   @override
   Widget build(BuildContext context) {
     final chrome = context.watch<AppProvider>().chromeButtonSize;
     final ic = (chrome * 0.5).clamp(18.0, 30.0);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final outlineSide =
-        isDark ? ChromeOutline.side : BibleLightPalette.chromePillOutlineSide;
+    final outlineSide = borderColor != null
+        ? BorderSide(color: borderColor!, width: ChromeOutline.width)
+        : (isDark ? ChromeOutline.side : BibleLightPalette.chromePillOutlineSide);
     final shape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(8),
       side: outlineSide,
     );
     final bg = NotebookChromeUi.secondaryButtonBackground(context);
-    final baseFg = NotebookChromeUi.secondaryButtonForeground(context);
+    final baseFg = iconColor ?? NotebookChromeUi.secondaryButtonForeground(context);
     final fg = onPressed == null
         ? baseFg.withValues(alpha: Theme.of(context).brightness == Brightness.dark ? 0.32 : 0.38)
         : baseFg;

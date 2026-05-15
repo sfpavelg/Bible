@@ -99,6 +99,8 @@ abstract final class BibleLightPalette {
 
   // Выделение / отключено
   static const Color selectedBg = Color(0xFFF0EDFF);
+  /// Подсветка выбранного стиха, перехода из поиска и совпадений в превью.
+  static const Color verseHighlightBg = Color(0xFFBFB3F5);
   static const Color disabledBg = Color(0xFFF3F2F9);
 
   /// Плашки в шапке Библии — тот же тон, что «фон иконки внизу».
@@ -154,4 +156,86 @@ abstract final class BibleLightPalette {
       color: Color(0x407B6DFF),
     ),
   ];
+
+  // --- Frosted Glass Minimal (панель «Настройки», светлая тема) ---
+
+  /// ~45 % лаванды — blur должен просвечивать.
+  static const Color settingsGlassPanelBg = Color(0x73F4F1FF);
+  static const Color settingsGlassOverlay = Color(0x40FFFFFF);
+  static const Color settingsGlassCard = Color(0xC4FFFFFF);
+  static const Color settingsGlassGlow = Color(0x55B9A7FF);
+  static const Color settingsGlassPrimary = Color(0xFF7B6DFF);
+  static const Color settingsGlassHover = Color(0xFF9589FF);
+  static const Color settingsGlassActiveGlow = Color(0xFFB5ACFF);
+  static const Color settingsGlassTextPrimary = Color(0xFF23213A);
+  static const Color settingsGlassTextSecondary = Color(0xFF6E6A91);
+  static const Color settingsGlassTextDisabled = Color(0xFFB6B2D1);
+  static const Color settingsGlassBorder = Color(0xB3FFFFFF);
+  static const Color settingsGlassBorderActive = Color(0xFFA89BFF);
+
+  static const LinearGradient settingsFrostGlassPanelGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [
+      Color(0xA8FFFFFF),
+      Color(0x73F4F1FF),
+    ],
+  );
+
+  static const List<BoxShadow> settingsGlassPanelShadow = [
+    BoxShadow(
+      offset: Offset(0, 16),
+      blurRadius: 40,
+      spreadRadius: -4,
+      color: Color(0x45B9A7FF),
+    ),
+    BoxShadow(
+      offset: Offset(0, 8),
+      blurRadius: 28,
+      spreadRadius: 0,
+      color: Color(0x307B6DFF),
+    ),
+  ];
+
+  static BoxDecoration settingsFrostGlassPanelDecoration({double radius = 12}) =>
+      BoxDecoration(
+        gradient: settingsFrostGlassPanelGradient,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: settingsGlassBorder, width: 1.2),
+      );
+
+  /// Фиолетовое свечение подписей в glass-настройках.
+  static const List<Shadow> settingsGlassTextShadows = [
+    Shadow(
+      color: Color(0x997B6DFF),
+      offset: Offset(0, 1),
+      blurRadius: 2,
+    ),
+    Shadow(
+      color: Color(0x66B5ACFF),
+      offset: Offset(0, 0),
+      blurRadius: 4,
+    ),
+  ];
+
+  static BoxDecoration settingsGlassCardDecoration({double radius = 14}) =>
+      BoxDecoration(
+        color: settingsGlassCard,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: settingsGlassBorder, width: 1.1),
+        boxShadow: const [
+          BoxShadow(
+            offset: Offset(0, 4),
+            blurRadius: 16,
+            spreadRadius: 0,
+            color: Color(0x28B9A7FF),
+          ),
+          BoxShadow(
+            offset: Offset(0, 1),
+            blurRadius: 0,
+            spreadRadius: 0,
+            color: Color(0x33FFFFFF),
+          ),
+        ],
+      );
 }

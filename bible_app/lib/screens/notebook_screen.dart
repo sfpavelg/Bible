@@ -60,6 +60,29 @@ void _showNotebookTopOverlayMessage(
   });
 }
 
+/// Область контента блокнота в светлой теме — как карточка стихов на вкладке «Библия».
+Widget _notebookLightContentShell({
+  required bool isDark,
+  required Widget child,
+}) {
+  if (isDark) return child;
+  return Padding(
+    padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: BibleLightPalette.verseCardGradient,
+        border: Border.all(color: BibleLightPalette.border, width: 1),
+        boxShadow: BibleLightPalette.verseCardShadow,
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: child,
+      ),
+    ),
+  );
+}
+
 /// Предупреждение поверх экрана (дубликат имени и т.п.): не сырой текст исключения.
 void _showNotebookWarningBanner(
   BuildContext context, {
@@ -1327,7 +1350,8 @@ class _NotebookScreenState extends State<NotebookScreen> {
 
   Widget _buildListFolderFooter() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final pathAreaBg = isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF5F5F5);
+    final pathAreaBg =
+        isDark ? const Color(0xFF2A2A2A) : Colors.transparent;
     return _buildNotebookPathStrip(
       label: 'Папка:',
       pathValue: '',
@@ -2188,8 +2212,12 @@ class _NotebookScreenState extends State<NotebookScreen> {
     final listCheckVisualSize = (uiListFontSize * 0.72).clamp(9.0, 20.0);
     final listCheckScale = (listCheckVisualSize / 18.0).clamp(0.5, 1.15);
     final listCbBox = (listCheckVisualSize * 2.4).clamp(30.0, 56.0);
+    /// Белый «ореол» вокруг чекбокса в множественном выборе — подсказка зоны выбора.
+    final listBulkCbOuter = (listCbBox + (listCbBox * 0.34).clamp(10.0, 18.0))
+        .clamp(42.0, 72.0);
     final notebookVisibleRows = _buildNotebookVisibleRows();
     final treeIndentStep = (uiListFontSize * 0.55).clamp(10.0, 18.0);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       backgroundColor:
@@ -2210,27 +2238,32 @@ class _NotebookScreenState extends State<NotebookScreen> {
                   ),
                 )
               : editing
-                  ? Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(
-                          child: NotebookEditorPanel(
-                            key: _editorKey,
-                            repo: _repo!,
-                            relativePath: _editingPath!,
-                            onDocumentDeleted: () {
-                              unawaited(_closeEditor());
-                            },
+                  ? _notebookLightContentShell(
+                      isDark: isDark,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(
+                            child: NotebookEditorPanel(
+                              key: _editorKey,
+                              repo: _repo!,
+                              relativePath: _editingPath!,
+                              onDocumentDeleted: () {
+                                unawaited(_closeEditor());
+                              },
+                            ),
                           ),
-                        ),
-                        _buildEditorDocumentFooter(),
-                      ],
+                          _buildEditorDocumentFooter(),
+                        ],
+                      ),
                     )
                   : Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Expanded(
-                          child: notebookVisibleRows.isEmpty
+                          child: _notebookLightContentShell(
+                            isDark: isDark,
+                            child: notebookVisibleRows.isEmpty
                               ? Center(
                                   child: Text(
                                     _currentDir.isEmpty
@@ -2255,21 +2288,20 @@ class _NotebookScreenState extends State<NotebookScreen> {
                                         itemBuilder: (listContext, i) {
                                           final row = notebookVisibleRows[i];
                                           final item = row.item;
+                                          final scheme =
+                                              Theme.of(listContext).colorScheme;
+                                          const listItemPurple =
+                                              BibleLightPalette.primaryDark;
+                                          final listRowIconFg =
+                                              isDark ? scheme.onSurface : listItemPurple;
+                                          final listRowTextFg =
+                                              isDark ? scheme.onSurface : listItemPurple;
                                           final depthPad =
                                               row.depth * treeIndentStep;
                                           final bulk = _fileBulkSelectionUi &&
                                               !item.isFolder;
                                           final sel = _bulkSelectedFilePaths
                                               .contains(item.relativePath);
-                                          final isDark =
-                                              Theme.of(context).brightness ==
-                                                  Brightness.dark;
-                                          final tileBg = bulk && sel
-                                              ? (isDark
-                                                  ? Colors.blueGrey.shade700
-                                                      .withValues(alpha: 0.45)
-                                                  : BibleLightPalette.selectedBg)
-                                              : null;
                                           final rowDividerColor = isDark
                                               ? Colors.white.withValues(
                                                   alpha: 0.12,
@@ -2287,13 +2319,13 @@ class _NotebookScreenState extends State<NotebookScreen> {
                                                   : BibleLightPalette.primary)
                                               : (isDark
                                                   ? Colors.white38
-                                                  : BibleLightPalette.iconInactive);
+                                                  : listItemPurple);
                                           final countTextStyle = TextStyle(
                                             fontSize: (uiListFontSize * 0.82)
                                                 .clamp(11.0, 22.0),
                                             color: isDark
                                                 ? Colors.white54
-                                                : BibleLightPalette.secondaryText,
+                                                : listItemPurple,
                                             fontFeatures: const [
                                               FontFeature.tabularFigures(),
                                             ],
@@ -2326,9 +2358,25 @@ class _NotebookScreenState extends State<NotebookScreen> {
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
                                               Material(
-                                                color: tileBg,
+                                                color: Colors.transparent,
                                                 child: InkWell(
                                                   onTap: onTap,
+                                                  splashColor: isDark
+                                                      ? Colors.white
+                                                          .withValues(
+                                                              alpha: 0.08)
+                                                      : BibleLightPalette
+                                                          .primary
+                                                          .withValues(
+                                                              alpha: 0.10),
+                                                  highlightColor: isDark
+                                                      ? Colors.white
+                                                          .withValues(
+                                                              alpha: 0.04)
+                                                      : BibleLightPalette
+                                                          .primary
+                                                          .withValues(
+                                                              alpha: 0.05),
                                                   onLongPress: () =>
                                                       _openFileActionsPanel(
                                                     item,
@@ -2348,10 +2396,10 @@ class _NotebookScreenState extends State<NotebookScreen> {
                                                       children: [
                                                         SizedBox(
                                                           width: bulk
-                                                              ? listCbBox
+                                                              ? listBulkCbOuter
                                                               : listIconSize,
                                                           height: bulk
-                                                              ? listCbBox
+                                                              ? listBulkCbOuter
                                                               : listIconSize,
                                                           child: bulk
                                                               ? Align(
@@ -2359,38 +2407,97 @@ class _NotebookScreenState extends State<NotebookScreen> {
                                                                       Alignment
                                                                           .center,
                                                                   child:
-                                                                      SizedBox(
+                                                                      Container(
                                                                     width:
-                                                                        listCbBox,
+                                                                        listBulkCbOuter,
                                                                     height:
-                                                                        listCbBox,
-                                                                    child: Transform
-                                                                        .scale(
-                                                                      scale:
-                                                                          listCheckScale,
-                                                                      alignment:
-                                                                          Alignment
-                                                                              .center,
-                                                                      child:
-                                                                          Checkbox(
-                                                                        value:
-                                                                            sel,
-                                                                        onChanged:
-                                                                            (v) {
-                                                                          setState(
-                                                                            () {
-                                                                              if (v == true) {
-                                                                                _bulkSelectedFilePaths.add(
-                                                                                  item.relativePath,
-                                                                                );
-                                                                              } else {
-                                                                                _bulkSelectedFilePaths.remove(
-                                                                                  item.relativePath,
-                                                                                );
-                                                                              }
-                                                                            },
-                                                                          );
-                                                                        },
+                                                                        listBulkCbOuter,
+                                                                    decoration:
+                                                                        BoxDecoration(
+                                                                      color: Colors
+                                                                          .white,
+                                                                      shape: BoxShape
+                                                                          .circle,
+                                                                      border: Border
+                                                                          .all(
+                                                                        color: isDark
+                                                                            ? Colors
+                                                                                .white
+                                                                                .withValues(
+                                                                                alpha:
+                                                                                    0.22,
+                                                                              )
+                                                                            : BibleLightPalette
+                                                                                .border
+                                                                                .withValues(
+                                                                                alpha:
+                                                                                    0.55,
+                                                                              ),
+                                                                        width: 1,
+                                                                      ),
+                                                                      boxShadow: [
+                                                                        BoxShadow(
+                                                                          color: BibleLightPalette
+                                                                              .primary
+                                                                              .withValues(
+                                                                            alpha:
+                                                                                isDark
+                                                                                    ? 0.18
+                                                                                    : 0.12,
+                                                                          ),
+                                                                          blurRadius:
+                                                                              (listCbBox * 0.22).clamp(
+                                                                            6.0,
+                                                                            11.0,
+                                                                          ),
+                                                                          offset:
+                                                                              const Offset(
+                                                                            0,
+                                                                            2,
+                                                                          ),
+                                                                        ),
+                                                                      ],
+                                                                    ),
+                                                                    alignment:
+                                                                        Alignment
+                                                                            .center,
+                                                                    child:
+                                                                        SizedBox(
+                                                                      width:
+                                                                          listCbBox,
+                                                                      height:
+                                                                          listCbBox,
+                                                                      child: Transform
+                                                                          .scale(
+                                                                        scale:
+                                                                            listCheckScale,
+                                                                        alignment:
+                                                                            Alignment.center,
+                                                                        child:
+                                                                            Checkbox(
+                                                                          materialTapTargetSize:
+                                                                              MaterialTapTargetSize.shrinkWrap,
+                                                                          visualDensity:
+                                                                              VisualDensity.standard,
+                                                                          value:
+                                                                              sel,
+                                                                          onChanged:
+                                                                              (v) {
+                                                                            setState(
+                                                                              () {
+                                                                                if (v == true) {
+                                                                                  _bulkSelectedFilePaths.add(
+                                                                                    item.relativePath,
+                                                                                  );
+                                                                                } else {
+                                                                                  _bulkSelectedFilePaths.remove(
+                                                                                    item.relativePath,
+                                                                                  );
+                                                                                }
+                                                                              },
+                                                                            );
+                                                                          },
+                                                                        ),
                                                                       ),
                                                                     ),
                                                                   ),
@@ -2407,6 +2514,8 @@ class _NotebookScreenState extends State<NotebookScreen> {
                                                                             .description_outlined,
                                                                     size:
                                                                         listIconSize,
+                                                                    color:
+                                                                        listRowIconFg,
                                                                   ),
                                                                 ),
                                                         ),
@@ -2437,6 +2546,8 @@ class _NotebookScreenState extends State<NotebookScreen> {
                                                                     1.15,
                                                                     1.45,
                                                                   ),
+                                                                  color:
+                                                                      listRowTextFg,
                                                                 ),
                                                               );
                                                               if (!bulk) {
@@ -2538,7 +2649,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
                                                   math.max(
                                                     listIconSize,
                                                     _fileBulkSelectionUi
-                                                        ? listCbBox
+                                                        ? listBulkCbOuter
                                                         : listIconSize,
                                                   ) +
                                                   10,
@@ -2575,6 +2686,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
                                     ],
                                   ],
                                 ),
+                          ),
                         ),
                         if (_currentDir.isNotEmpty) _buildListFolderFooter(),
                       ],
