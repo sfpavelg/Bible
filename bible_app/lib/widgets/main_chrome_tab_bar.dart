@@ -1,4 +1,5 @@
 import 'package:bible_app/providers/app_provider.dart';
+import 'package:bible_app/theme/bible_dark_palette.dart';
 import 'package:bible_app/theme/bible_light_palette.dart';
 import 'package:bible_app/widgets/chrome_outline.dart';
 import 'package:flutter/material.dart';
@@ -51,26 +52,31 @@ class MainChromeTabBar extends StatelessWidget {
   static const _labels = ['Библия', 'Блокнот', 'План'];
   static const _tooltips = ['Библия', 'Блокнот', 'План'];
 
-  static const Color _appBarBgDark = Color(0xFF37474F);
-  static const Color _buttonBgDark = Color(0xFF455A64);
-
   @override
   Widget build(BuildContext context) {
     final chrome = context.watch<AppProvider>().chromeButtonSize;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final barBg = isDark ? _appBarBgDark : Colors.transparent;
-    final buttonBg = isDark ? _buttonBgDark : BibleLightPalette.chromePillFill;
+    final barBg = isDark ? BibleDarkPalette.screenBg : Colors.transparent;
+    final buttonBg = isDark ? BibleDarkPalette.cardBg : BibleLightPalette.chromePillFill;
     final buttonBgSelected =
-        isDark ? _buttonBgDark : BibleLightPalette.bottomIconActiveBg;
+        isDark ? BibleDarkPalette.cardBg : BibleLightPalette.bottomIconActiveBg;
     final fgSelected =
-        isDark ? const Color(0xFF81D4FA) : BibleLightPalette.primary;
-    final fgUnselected =
-        isDark ? Colors.grey.shade500 : BibleLightPalette.iconInactive;
+        isDark ? BibleDarkPalette.accentGold : BibleLightPalette.primary;
+    final fgUnselected = isDark
+        ? BibleDarkPalette.chromeTabInactiveFg
+        : BibleLightPalette.iconInactive;
     final outlineSelected = isDark
-        ? ChromeOutline.side
+        ? BorderSide(
+            color: BibleDarkPalette.accentGold,
+            width: ChromeOutline.width,
+          )
         : BibleLightPalette.chromePillOutlineActiveSide;
-    final outlineUnselected =
-        isDark ? ChromeOutline.side : BibleLightPalette.chromePillOutlineSide;
+    final outlineUnselected = isDark
+        ? BorderSide(
+            color: BibleDarkPalette.chromeTabInactiveBorder,
+            width: ChromeOutline.width,
+          )
+        : BibleLightPalette.chromePillOutlineSide;
     final corner = (chrome * 0.22).clamp(4.0, 12.0);
     final iconSize = _mainTabIconSize(chrome);
     final labelSize = _mainTabLabelFont(chrome);
@@ -80,7 +86,7 @@ class MainChromeTabBar extends StatelessWidget {
     final tileHorizontalPad = (chrome * 0.10).clamp(4.0, 9.0);
     final iconLabelGap = (chrome * 0.05).clamp(2.0, 5.0);
 
-    final bar = Material(
+    final barContent = Material(
       color: barBg,
       child: SafeArea(
         top: false,
@@ -162,6 +168,21 @@ class MainChromeTabBar extends StatelessWidget {
         ),
       ),
     );
+
+    final bar = isDark
+        ? Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Divider(
+                height: 1,
+                thickness: 1,
+                color: BibleDarkPalette.divider,
+              ),
+              barContent,
+            ],
+          )
+        : barContent;
 
     if (isDark) return bar;
 

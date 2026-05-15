@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:bible_app/notebook/notebook_repository.dart';
 import 'package:bible_app/providers/app_provider.dart';
+import 'package:bible_app/theme/bible_dark_palette.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -161,6 +162,9 @@ class NotebookEditorPanelState extends State<NotebookEditorPanel> {
     final fs = app.fontSize;
     final lh = app.lineHeight;
     final hintColor = Theme.of(context).hintColor;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor =
+        isDark ? BibleDarkPalette.primaryText : null;
     return Padding(
       padding: const EdgeInsets.all(12),
       child: TextField(
@@ -171,7 +175,11 @@ class NotebookEditorPanelState extends State<NotebookEditorPanel> {
         expands: true,
         textAlignVertical: TextAlignVertical.top,
         keyboardType: TextInputType.multiline,
-        style: TextStyle(fontSize: fs, height: lh),
+        style: TextStyle(
+          fontSize: fs,
+          height: lh,
+          color: textColor,
+        ),
         decoration: InputDecoration(
           border: InputBorder.none,
           hintText:

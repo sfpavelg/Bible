@@ -1,3 +1,4 @@
+import 'package:bible_app/theme/bible_dark_palette.dart';
 import 'package:bible_app/theme/bible_light_palette.dart';
 import 'package:bible_app/widgets/chrome_outline.dart';
 import 'package:flutter/material.dart';
@@ -50,17 +51,19 @@ class ChromePillTwoSegmentControl<T> extends StatelessWidget {
     final panelRadius = rowHeight / 2;
     final resolvedTrack = trackColor ??
         (isDark
-            ? const Color(0xFF37474F)
+            ? BibleDarkPalette.cardBg
             : BibleLightPalette.disabledBg);
     final resolvedActive = activeColor ??
-        (isDark ? const Color(0xFF81D4FA) : BibleLightPalette.primary);
-    final activeFg =
-        activeForegroundColor ?? (isDark ? Colors.black87 : Colors.white);
+        (isDark ? BibleDarkPalette.accentGold : BibleLightPalette.primary);
+    final activeFg = activeForegroundColor ??
+        (isDark ? Colors.black : Colors.white);
     final inactiveFg = inactiveForegroundColor ??
-        (isDark ? Colors.white70 : BibleLightPalette.secondaryText);
+        (isDark
+            ? BibleDarkPalette.accentGold
+            : BibleLightPalette.secondaryText);
     final resolvedBorder = borderColor ??
         (isDark
-            ? ChromeOutline.color
+            ? BibleDarkPalette.cardBorderGold
             : BibleLightPalette.chromePillOutlineColor);
     final labelStyle = TextStyle(
       fontSize: fontSize,

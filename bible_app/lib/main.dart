@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:bible_app/bootstrap_splash.dart';
 import 'package:bible_app/main_screen.dart';
 import 'package:bible_app/providers/app_provider.dart';
+import 'package:bible_app/theme/bible_dark_palette.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Future<void> main() async {
@@ -75,13 +76,21 @@ class MyApp extends StatelessWidget {
             ),
             darkTheme: ThemeData(
               useMaterial3: true,
+              scaffoldBackgroundColor: BibleDarkPalette.screenBg,
               colorScheme: ColorScheme.fromSeed(
-                seedColor: Colors.blue,
+                seedColor: BibleDarkPalette.accentGold,
                 brightness: Brightness.dark,
               ).copyWith(
-                // Чуть светлее «чистого» чёрного, чтобы экран не выглядел плоским.
-                surface: const Color(0xFF2E323A),
-                surfaceContainerLowest: const Color(0xFF262A32),
+                surface: BibleDarkPalette.screenBg,
+                surfaceContainerLowest: BibleDarkPalette.screenBg,
+                surfaceContainerHigh: BibleDarkPalette.cardBg,
+                surfaceContainerHighest: BibleDarkPalette.cardBg,
+                primary: BibleDarkPalette.accentGold,
+                onPrimary: const Color(0xFF1A1A1A),
+                onSurface: BibleDarkPalette.primaryText,
+                onSurfaceVariant: BibleDarkPalette.secondaryText,
+                outline: BibleDarkPalette.divider,
+                outlineVariant: BibleDarkPalette.divider,
               ),
               appBarTheme: const AppBarTheme(
                 systemOverlayStyle: SystemUiOverlayStyle(

@@ -4,8 +4,8 @@ import 'package:bible_app/journal/faith_reading_plan_data.dart';
 import 'package:bible_app/journal/love_reading_plan_data.dart';
 import 'package:bible_app/journal/parallel_reading_plan_data.dart';
 import 'package:bible_app/providers/app_provider.dart';
+import 'package:bible_app/theme/bible_dark_palette.dart';
 import 'package:bible_app/theme/bible_light_palette.dart';
-import 'package:bible_app/widgets/chrome_outline.dart';
 import 'package:bible_app/widgets/chrome_frost_glass_panel.dart';
 import 'package:bible_app/widgets/chrome_pill_two_segment_control.dart';
 import 'package:bible_app/widgets/notebook_chrome_dialog_button.dart';
@@ -96,9 +96,13 @@ Widget _chromePanelShell({
 }) {
   if (isDark) {
     return Material(
-      color: const Color(0xFF37474F),
-      elevation: 10,
-      borderRadius: BorderRadius.circular(borderRadius),
+      color: BibleDarkPalette.cardBg,
+      elevation: 12,
+      shadowColor: const Color(0x80000000),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(borderRadius),
+        side: BorderSide(color: BibleDarkPalette.cardBorderGold, width: 1),
+      ),
       clipBehavior: Clip.antiAlias,
       child: child,
     );
@@ -305,29 +309,26 @@ Widget _supportChromeActionButton({
   final chrome = context.watch<AppProvider>().chromeButtonSize;
   final isDark = Theme.of(context).brightness == Brightness.dark;
   final glass = !isDark;
-  final scheme = Theme.of(context).colorScheme;
   final iconSize = (chrome * 0.48).clamp(18.0, 30.0);
   final fontSize = (chrome * 0.32).clamp(12.0, 17.0);
   final fg = isDark
-      ? NotebookChromeUi.secondaryButtonForeground(context)
+      ? BibleDarkPalette.primaryText
       : (glass
           ? BibleLightPalette.settingsGlassTextPrimary
           : BibleLightPalette.primaryText);
   final ic = isDark
-      ? NotebookChromeUi.secondaryButtonForeground(context)
+      ? BibleDarkPalette.iconActive
       : (glass
           ? BibleLightPalette.settingsGlassPrimary
           : BibleLightPalette.iconActive);
   return Material(
-    color: isDark
-        ? scheme.surfaceContainerHighest.withValues(alpha: 0.75)
-        : (glass
-            ? BibleLightPalette.settingsGlassCard
-            : BibleLightPalette.activeBg),
+    color: isDark ? BibleDarkPalette.cardBg.withValues(alpha: 0.92) : (glass
+        ? BibleLightPalette.settingsGlassCard
+        : BibleLightPalette.activeBg),
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(glass ? 12 : 8),
       side: isDark
-          ? ChromeOutline.side
+          ? BorderSide(color: BibleDarkPalette.cardBorderGold, width: 1)
           : (glass
               ? BorderSide(
                   color: BibleLightPalette.settingsGlassBorderActive,
@@ -479,7 +480,7 @@ class _SettingsFontPresetPicker extends StatelessWidget {
 
   BoxDecoration _fieldDecoration({double radius = 12}) {
     final borderColor = isDark
-        ? ChromeOutline.color
+        ? BibleDarkPalette.cardBorderGold
         : (glass
             ? BibleLightPalette.settingsGlassBorderActive
             : BibleLightPalette.chromePillOutlineColor);
@@ -500,8 +501,11 @@ class _SettingsFontPresetPicker extends StatelessWidget {
     final currentLabel =
         AppProvider.verseFontLabels[value] ?? AppProvider.verseFontLabels['sans']!;
     final chevronColor = isDark
-        ? scheme.onSurface.withValues(alpha: 0.55)
+        ? BibleDarkPalette.titleGold
         : BibleLightPalette.settingsGlassTextSecondary;
+    final triggerTextStyle = isDark
+        ? labelStyle.copyWith(color: BibleDarkPalette.titleGold)
+        : labelStyle;
     final panelRadius = glass ? 12.0 : 8.0;
 
     return Column(
@@ -521,7 +525,7 @@ class _SettingsFontPresetPicker extends StatelessWidget {
                   Expanded(
                     child: Text(
                       currentLabel,
-                      style: labelStyle,
+                      style: triggerTextStyle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -717,18 +721,15 @@ void showAppSettingsDialog(BuildContext context) {
               final uiFs = fontSize.clamp(12.0, 28.0);
               final glass = !isDark;
               final textPrimary = isDark
-                  ? scheme.onSurface
+                  ? BibleDarkPalette.primaryText
                   : (glass
                       ? BibleLightPalette.settingsGlassTextPrimary
                       : BibleLightPalette.primaryText);
               final textHeading = isDark
-                  ? scheme.onSurface
+                  ? BibleDarkPalette.titleGold
                   : (glass
                       ? BibleLightPalette.settingsGlassTextPrimary
                       : BibleLightPalette.primaryDark);
-              final textSecondary = glass
-                  ? BibleLightPalette.settingsGlassTextSecondary
-                  : BibleLightPalette.secondaryText;
               TextStyle settingsLabelStyle({
                 required double size,
                 required FontWeight weight,
@@ -758,25 +759,32 @@ void showAppSettingsDialog(BuildContext context) {
                 weight: FontWeight.w500,
                 color: textPrimary,
               );
+              final kSettingsDarkToggleRowStyle = settingsLabelStyle(
+                size: uiFs,
+                weight: FontWeight.w500,
+                color: BibleDarkPalette.titleGold,
+              );
               final themeSegmentRowH = (uiFs * 1.75).clamp(36.0, 48.0);
               final themeSegmentFs = (uiFs * 0.92).clamp(12.0, 24.0);
               final settingsSwitchTheme = SwitchThemeData(
                 thumbColor: WidgetStateProperty.resolveWith((s) {
                   if (s.contains(WidgetState.selected)) {
-                    return Colors.white;
+                    return isDark
+                        ? const Color(0xFF1A1A1A)
+                        : Colors.white;
                   }
                   return isDark
-                      ? const Color(0xFF81D4FA)
+                      ? BibleDarkPalette.iconInactive
                       : BibleLightPalette.settingsGlassPrimary;
                 }),
                 trackColor: WidgetStateProperty.resolveWith((s) {
                   if (s.contains(WidgetState.selected)) {
                     return isDark
-                        ? scheme.primary
+                        ? BibleDarkPalette.accentGold
                         : BibleLightPalette.settingsGlassPrimary;
                   }
                   return isDark
-                      ? Colors.grey.shade700
+                      ? BibleDarkPalette.cardBg
                       : BibleLightPalette.settingsGlassTextDisabled
                           .withValues(alpha: 0.45);
                 }),
@@ -785,13 +793,19 @@ void showAppSettingsDialog(BuildContext context) {
                     return Colors.transparent;
                   }
                   return isDark
-                      ? Colors.grey.shade600
+                      ? BibleDarkPalette.cardBorderGold.withValues(alpha: 0.55)
                       : BibleLightPalette.settingsGlassBorderActive
                           .withValues(alpha: 0.65);
                 }),
                 trackOutlineWidth: const WidgetStatePropertyAll(1.2),
               );
-              const sliderHorizontalPadding = EdgeInsets.symmetric(horizontal: 4);
+              /// В тёмной теме M3 по умолчанию даёт широкий бегунок; при padding 4 он
+              /// вылезает за край панели на max. Держим явный радиус и запас ≥ радиуса.
+              final settingsSliderThumbRadius = isDark ? 10.0 : 7.0;
+              final sliderHorizontalPadding = EdgeInsets.symmetric(
+                horizontal: (settingsSliderThumbRadius + 8)
+                    .clamp(12.0, 22.0),
+              );
               final dropdownHeight = chromeBtnSize < kMinInteractiveDimension
                   ? kMinInteractiveDimension
                   : chromeBtnSize;
@@ -800,15 +814,20 @@ void showAppSettingsDialog(BuildContext context) {
                 if (isDark) {
                   return base.copyWith(
                     trackHeight: 4,
-                    activeTrackColor: scheme.primary,
-                    inactiveTrackColor: scheme.surfaceContainerHighest,
-                    thumbColor: scheme.primary,
+                    activeTrackColor: BibleDarkPalette.accentGold,
+                    inactiveTrackColor: BibleDarkPalette.divider,
+                    thumbColor: BibleDarkPalette.accentGold,
                     overlayColor:
-                        BibleLightPalette.primary.withValues(alpha: 0.12),
+                        BibleDarkPalette.accentGoldLight.withValues(alpha: 0.18),
+                    thumbShape: RoundSliderThumbShape(
+                      enabledThumbRadius: settingsSliderThumbRadius,
+                    ),
+                    overlayShape: RoundSliderOverlayShape(
+                      overlayRadius: settingsSliderThumbRadius + 10,
+                    ),
                     tickMarkShape: const _SettingsSliderVerticalTickMarkShape(),
-                    activeTickMarkColor: scheme.primary,
-                    inactiveTickMarkColor:
-                        scheme.onSurface.withValues(alpha: 0.38),
+                    activeTickMarkColor: BibleDarkPalette.accentGold,
+                    inactiveTickMarkColor: BibleDarkPalette.iconInactive,
                     disabledActiveTickMarkColor: Colors.grey.shade600,
                     disabledInactiveTickMarkColor: Colors.grey.shade500,
                   );
@@ -831,6 +850,7 @@ void showAppSettingsDialog(BuildContext context) {
                 );
               }
 
+              final panelPadH = isDark ? 12.0 : 10.0;
               final mediaSize = MediaQuery.sizeOf(consumerContext);
               final mediaPadding = MediaQuery.paddingOf(consumerContext);
               final panelWidth =
@@ -846,18 +866,6 @@ void showAppSettingsDialog(BuildContext context) {
                       8)
                   .clamp(160.0, 2000.0)
                   .toDouble();
-
-              Widget settingsSectionLabel(String text) => Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: Text(
-                      text,
-                      style: settingsLabelStyle(
-                        size: (uiFs * 0.82).clamp(11.0, 18.0),
-                        weight: FontWeight.w500,
-                        color: textSecondary,
-                      ),
-                    ),
-                  );
 
               final readingBlocks = <Widget>[
                                       Text(
@@ -1002,19 +1010,32 @@ void showAppSettingsDialog(BuildContext context) {
                                         isDark: isDark,
                                         trackColor: glass
                                             ? BibleLightPalette.disabledBg
-                                            : null,
+                                            : (isDark
+                                                ? BibleDarkPalette.cardBg
+                                                : null),
                                         activeColor: glass
                                             ? BibleLightPalette
                                                 .settingsGlassPrimary
-                                            : null,
+                                            : (isDark
+                                                ? BibleDarkPalette.accentGold
+                                                : null),
+                                        activeForegroundColor: glass
+                                            ? null
+                                            : (isDark
+                                                ? Colors.black
+                                                : null),
                                         inactiveForegroundColor: glass
                                             ? BibleLightPalette
                                                 .settingsGlassTextSecondary
-                                            : null,
+                                            : (isDark
+                                                ? BibleDarkPalette.accentGold
+                                                : null),
                                         borderColor: glass
                                             ? BibleLightPalette
                                                 .chromePillOutlineColor
-                                            : null,
+                                            : (isDark
+                                                ? BibleDarkPalette.cardBorderGold
+                                                : null),
                                         labelShadows: glass
                                             ? BibleLightPalette
                                                 .settingsGlassTextShadows
@@ -1026,51 +1047,17 @@ void showAppSettingsDialog(BuildContext context) {
                                       ),
               ];
 
-              final settingsFields = glass
-                  ? <Widget>[
-                      _settingsGlassSectionCard(
-                        children: [
-                          settingsSectionLabel('Чтение'),
-                          ...readingBlocks,
-                        ],
-                      ),
-                      _settingsGlassSectionCard(
-                        children: [
-                          settingsSectionLabel('Интерфейс'),
-                          ...uiBlocks,
-                        ],
-                      ),
-                      _settingsToggleRow(
-                        label: 'Септуагинта [ ]',
-                        value: showSeptuagintText,
-                        labelStyle: kSettingsBodyStyle,
-                        switchTheme: settingsSwitchTheme,
-                        glass: true,
-                        onChanged: (value) {
-                          setModalState(() => showSeptuagintText = value);
-                          appProvider.setShowSeptuagintText(value);
-                        },
-                      ),
-                      _settingsToggleRow(
-                        label: 'Не выключать экран',
-                        value: keepScreenOn,
-                        labelStyle: kSettingsBodyStyle,
-                        switchTheme: settingsSwitchTheme,
-                        glass: true,
-                        onChanged: (value) async {
-                          setModalState(() => keepScreenOn = value);
-                          await appProvider.setKeepScreenOn(value);
-                        },
-                      ),
-                    ]
-                  : <Widget>[
+              final settingsFields = <Widget>[
                       ...readingBlocks,
                       ...uiBlocks,
                       _settingsToggleRow(
                         label: 'Септуагинта [ ]',
                         value: showSeptuagintText,
-                        labelStyle: kSettingsBodyStyle,
+                        labelStyle: glass
+                            ? kSettingsBodyStyle
+                            : kSettingsDarkToggleRowStyle,
                         switchTheme: settingsSwitchTheme,
+                        glass: false,
                         onChanged: (value) {
                           setModalState(() => showSeptuagintText = value);
                           appProvider.setShowSeptuagintText(value);
@@ -1079,8 +1066,11 @@ void showAppSettingsDialog(BuildContext context) {
                       _settingsToggleRow(
                         label: 'Не выключать экран',
                         value: keepScreenOn,
-                        labelStyle: kSettingsBodyStyle,
+                        labelStyle: glass
+                            ? kSettingsBodyStyle
+                            : kSettingsDarkToggleRowStyle,
                         switchTheme: settingsSwitchTheme,
+                        glass: false,
                         onChanged: (value) async {
                           setModalState(() => keepScreenOn = value);
                           await appProvider.setKeepScreenOn(value);
@@ -1115,9 +1105,9 @@ void showAppSettingsDialog(BuildContext context) {
                         lightSurface: ChromePanelLightSurface.settingsFrostGlass,
                         child: Padding(
                           padding: EdgeInsets.fromLTRB(
+                            panelPadH,
                             10,
-                            10,
-                            10,
+                            panelPadH,
                             glass ? 12 : 10,
                           ),
                           child: Column(
@@ -1218,7 +1208,6 @@ class _ChromeSidePanelTextTheme {
   final TextStyle tocStyle;
 
   factory _ChromeSidePanelTextTheme.create({
-    required ColorScheme scheme,
     required double fontSize,
     required double lineHeight,
     required bool isDark,
@@ -1226,13 +1215,18 @@ class _ChromeSidePanelTextTheme {
     final glass = !isDark;
     final uiFs = fontSize.clamp(12.0, 28.0);
     final primary = isDark
-        ? scheme.onSurface
+        ? BibleDarkPalette.primaryText
         : (glass
             ? BibleLightPalette.settingsGlassTextPrimary
             : BibleLightPalette.primaryText);
-    final secondary = glass
-        ? BibleLightPalette.settingsGlassTextSecondary
-        : BibleLightPalette.secondaryText;
+    final heading = isDark
+        ? BibleDarkPalette.titleGold
+        : primary;
+    final secondary = isDark
+        ? BibleDarkPalette.secondaryText
+        : (glass
+            ? BibleLightPalette.settingsGlassTextSecondary
+            : BibleLightPalette.secondaryText);
 
     TextStyle label({
       required double size,
@@ -1256,7 +1250,7 @@ class _ChromeSidePanelTextTheme {
       titleStyle: label(
         size: (uiFs * 1.25).clamp(16.0, 32.0),
         weight: FontWeight.w700,
-        color: primary,
+        color: heading,
       ),
       bodyStyle: label(
         size: uiFs,
@@ -1276,7 +1270,7 @@ class _ChromeSidePanelTextTheme {
       tocStyle: label(
         size: (uiFs * 0.95).clamp(12.0, 26.0),
         weight: FontWeight.w700,
-        color: primary,
+        color: heading,
         fontStyle: FontStyle.italic,
       ),
     );
@@ -1813,7 +1807,6 @@ class _SupportDialogRouteBodyState extends State<_SupportDialogRouteBody> {
           app.chromeButtonSize,
         );
         final text = _ChromeSidePanelTextTheme.create(
-          scheme: scheme,
           fontSize: app.fontSize,
           lineHeight: app.lineHeight,
           isDark: isDark,
@@ -1840,7 +1833,7 @@ class _SupportDialogRouteBodyState extends State<_SupportDialogRouteBody> {
                         child: Center(
                           child: CircularProgressIndicator(
                             color: isDark
-                                ? null
+                                ? BibleDarkPalette.accentGold
                                 : BibleLightPalette.settingsGlassPrimary,
                           ),
                         ),
@@ -1901,15 +1894,13 @@ void showAppHelpDialog(BuildContext context) {
     pageBuilder: (dialogContext, animation, secondaryAnimation) {
       return Consumer<AppProvider>(
         builder: (consumerContext, app, _) {
-          final theme = Theme.of(consumerContext);
-          final scheme = theme.colorScheme;
-          final isDark = theme.brightness == Brightness.dark;
+          final isDark =
+              Theme.of(consumerContext).brightness == Brightness.dark;
           final layout = _ChromePanelLayout.fromContext(
             consumerContext,
             app.chromeButtonSize,
           );
           final text = _ChromeSidePanelTextTheme.create(
-            scheme: scheme,
             fontSize: app.fontSize,
             lineHeight: app.lineHeight,
             isDark: isDark,

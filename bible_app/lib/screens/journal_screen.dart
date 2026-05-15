@@ -13,6 +13,7 @@ import 'package:bible_app/journal/sequential_reading_plan.dart';
 import 'package:bible_app/models/bible_model.dart';
 import 'package:bible_app/navigation/app_tab_switcher.dart';
 import 'package:bible_app/providers/app_provider.dart';
+import 'package:bible_app/theme/bible_dark_palette.dart';
 import 'package:bible_app/theme/bible_light_palette.dart';
 import 'package:bible_app/widgets/app_chrome_overflow_menu.dart';
 import 'package:bible_app/widgets/chrome_outline.dart';
@@ -209,12 +210,13 @@ class _PlanScrollRailState extends State<_PlanScrollRail> {
     if (mounted) setState(() {});
   }
 
-  Widget _scrollGripLine(double width) {
+  Widget _scrollGripLine(BuildContext context, double width) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: width,
       height: 2.5,
       decoration: BoxDecoration(
-        color: Colors.black,
+        color: dark ? BibleDarkPalette.accentGoldDark : Colors.black,
         borderRadius: BorderRadius.circular(1.25),
       ),
     );
@@ -227,11 +229,11 @@ class _PlanScrollRailState extends State<_PlanScrollRail> {
       mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _scrollGripLine(lineW),
+        _scrollGripLine(context, lineW),
         SizedBox(height: gap),
-        _scrollGripLine(lineW),
+        _scrollGripLine(context, lineW),
         SizedBox(height: gap),
-        _scrollGripLine(lineW),
+        _scrollGripLine(context, lineW),
       ],
     );
   }
@@ -318,7 +320,7 @@ class _PlanScrollRailState extends State<_PlanScrollRail> {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                       side: Theme.of(context).brightness == Brightness.dark
-                          ? ChromeOutline.side
+                          ? ChromeOutline.darkSide
                           : BibleLightPalette.chromePillOutlineSide,
                     ),
                     clipBehavior: Clip.antiAlias,
@@ -340,10 +342,6 @@ class _PlanScrollRailState extends State<_PlanScrollRail> {
 
 class JournalScreen extends StatefulWidget {
   const JournalScreen({super.key});
-
-  /// Как на экране Библии и нижней навигации.
-  static const _appBarBgDark = Color(0xFF37474F);
-  static const _buttonBgDark = Color(0xFF455A64);
 
   @override
   State<JournalScreen> createState() => _JournalScreenState();
@@ -1515,7 +1513,9 @@ class _JournalScreenState extends State<JournalScreen>
       context: context,
       builder: (dialogContext) {
         final isDark = Theme.of(dialogContext).brightness == Brightness.dark;
-        final fg = isDark ? Colors.white : Colors.black87;
+        final fg = isDark
+            ? BibleDarkPalette.primaryText
+            : Colors.black87;
         return StatefulBuilder(
           builder: (ctx, setModalState) {
             final doneNow = _doneItemsForCurrentPlan(dayIndex);
@@ -1647,15 +1647,12 @@ class _JournalScreenState extends State<JournalScreen>
             Expanded(
               child: Material(
                 color: isDark
-                    ? const Color(0xFF455A64)
+                    ? BibleDarkPalette.cardBg
                     : BibleLightPalette.chromePillFill,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                   side: isDark
-                      ? const BorderSide(
-                          color: Colors.black,
-                          width: ChromeOutline.width,
-                        )
+                      ? BibleDarkPalette.chromeButtonOutline
                       : BibleLightPalette.chromePillOutlineSide,
                 ),
                 clipBehavior: Clip.antiAlias,
@@ -1816,13 +1813,14 @@ class _JournalScreenState extends State<JournalScreen>
     HapticFeedback.lightImpact();
     if (!mounted) return;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final sheetBg = isDark ? const Color(0xFF263238) : BibleLightPalette.topBarBg;
+    final sheetBg =
+        isDark ? BibleDarkPalette.cardBg : BibleLightPalette.topBarBg;
     final titleColor =
-        isDark ? const Color(0xFF81D4FA) : BibleLightPalette.primary;
+        isDark ? BibleDarkPalette.titleGold : BibleLightPalette.primary;
     final unselectedBtn =
-        isDark ? JournalScreen._buttonBgDark : BibleLightPalette.chromePillFill;
+        isDark ? BibleDarkPalette.cardBg : BibleLightPalette.chromePillFill;
     final chromeFg =
-        isDark ? Colors.white : BibleLightPalette.primaryText;
+        isDark ? BibleDarkPalette.primaryText : BibleLightPalette.primaryText;
     await showDialog<void>(
       context: context,
       builder: (ctx) {
@@ -1834,6 +1832,9 @@ class _JournalScreenState extends State<JournalScreen>
           backgroundColor: sheetBg,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
+            side: isDark
+                ? BorderSide(color: BibleDarkPalette.cardBorderGold, width: 1)
+                : BorderSide.none,
           ),
           insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
           child: ConstrainedBox(
@@ -2031,14 +2032,14 @@ class _JournalScreenState extends State<JournalScreen>
     required VoidCallback onTap,
   }) {
     final bg = selected
-        ? (isDark ? const Color(0xFF81D4FA) : BibleLightPalette.primary)
+        ? (isDark ? BibleDarkPalette.accentGold : BibleLightPalette.primary)
         : unselectedBg;
     final fg = selected
-        ? (isDark ? const Color(0xFF263238) : Colors.white)
+        ? (isDark ? const Color(0xFF1A1A1A) : Colors.white)
         : chromeFg;
     final fontSize = (height * 0.30).clamp(11.0, 15.0);
     final outline =
-        isDark ? ChromeOutline.side : BibleLightPalette.chromePillOutlineSide;
+        isDark ? ChromeOutline.darkSide : BibleLightPalette.chromePillOutlineSide;
     return Material(
       color: bg,
       shape: RoundedRectangleBorder(
@@ -2084,7 +2085,7 @@ class _JournalScreenState extends State<JournalScreen>
     const qi = 0;
     final tipsStyle = app.bibleVerseTextStyle(
       color: isDark
-          ? Colors.grey.shade300
+          ? BibleDarkPalette.primaryText
           : BibleLightPalette.secondaryText,
       fontWeight: FontWeight.w500,
     );
@@ -2100,7 +2101,10 @@ class _JournalScreenState extends State<JournalScreen>
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
               side: isDark
-                  ? ChromeOutline.side
+                  ? BorderSide(
+                      color: BibleDarkPalette.cardBorderGold,
+                      width: 1,
+                    )
                   : BibleLightPalette.chromePillOutlineSide,
             ),
             clipBehavior: Clip.antiAlias,
@@ -2188,7 +2192,10 @@ class _JournalScreenState extends State<JournalScreen>
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                   side: isDark
-                      ? ChromeOutline.side
+                      ? BorderSide(
+                          color: BibleDarkPalette.cardBorderGold,
+                          width: 1,
+                        )
                       : BibleLightPalette.chromePillOutlineSide,
                 ),
                 clipBehavior: Clip.antiAlias,
@@ -2330,12 +2337,12 @@ class _JournalScreenState extends State<JournalScreen>
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
           decoration: BoxDecoration(
             color: isDark
-                ? const Color(0xFF81D4FA).withValues(alpha: 0.2)
+                ? BibleDarkPalette.accentGold.withValues(alpha: 0.22)
                 : BibleLightPalette.activeBg,
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
               color: isDark
-                  ? ChromeOutline.color
+                  ? BibleDarkPalette.cardBorderGold
                   : BibleLightPalette.chromePillOutlineColor,
               width: ChromeOutline.width,
             ),
@@ -2351,7 +2358,7 @@ class _JournalScreenState extends State<JournalScreen>
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(10),
           side: isDark
-              ? ChromeOutline.side
+              ? BorderSide(color: BibleDarkPalette.cardBorderGold, width: 1)
               : BibleLightPalette.chromePillOutlineSide,
         ),
         child: InkWell(
@@ -2447,17 +2454,17 @@ class _JournalScreenState extends State<JournalScreen>
     final baseFontPx = app.fontSize * app.verseFontSizeScale;
     final lineGap = (baseFontPx * 0.32).clamp(2.0, 8.0);
     final titleColor =
-        isDark ? const Color(0xFF81D4FA) : BibleLightPalette.primary;
+        isDark ? BibleDarkPalette.titleGold : BibleLightPalette.primary;
     final bodyColor =
-        isDark ? Colors.grey.shade200 : BibleLightPalette.primaryText;
+        isDark ? BibleDarkPalette.primaryText : BibleLightPalette.primaryText;
     final cardDoneBg = isDark
-        ? Colors.amber.shade900.withValues(alpha: 0.42)
+        ? BibleDarkPalette.accentGoldDark.withValues(alpha: 0.32)
         : BibleLightPalette.activeBg;
     final cardTodoBg =
-        isDark ? const Color(0xFF37474F) : BibleLightPalette.cardFillPrimary;
+        isDark ? BibleDarkPalette.cardBg : BibleLightPalette.cardFillPrimary;
     final railSize = (chromeSize * 0.68).clamp(26.0, 36.0);
     final railBg =
-        isDark ? const Color(0xFF263238) : BibleLightPalette.topBarBg;
+        isDark ? BibleDarkPalette.screenBg : BibleLightPalette.topBarBg;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2530,12 +2537,13 @@ class _JournalScreenState extends State<JournalScreen>
                       ),
                       decoration: BoxDecoration(
                         color: isDark
-                            ? const Color(0xFF81D4FA).withValues(alpha: 0.2)
+                            ? BibleDarkPalette.accentGold
+                                .withValues(alpha: 0.22)
                             : BibleLightPalette.activeBg,
                         borderRadius: BorderRadius.circular(999),
                         border: Border.all(
                           color: isDark
-                              ? ChromeOutline.color
+                              ? BibleDarkPalette.cardBorderGold
                               : BibleLightPalette.chromePillOutlineColor,
                           width: ChromeOutline.width,
                         ),
@@ -2550,7 +2558,10 @@ class _JournalScreenState extends State<JournalScreen>
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                         side: isDark
-                            ? ChromeOutline.side
+                            ? BorderSide(
+                                color: BibleDarkPalette.cardBorderGold,
+                                width: 1,
+                              )
                             : BibleLightPalette.chromePillOutlineSide,
                       ),
                       child: InkWell(
@@ -2876,8 +2887,10 @@ class _JournalScreenState extends State<JournalScreen>
   }
 
   Widget _readProgressFooter(AppProvider app, {required bool isDark}) {
-    final bg = isDark ? JournalScreen._buttonBgDark : BibleLightPalette.topBarBg;
-    final fg = isDark ? const Color(0xFF81D4FA) : BibleLightPalette.primary;
+    final bg =
+        isDark ? BibleDarkPalette.screenBg : BibleLightPalette.topBarBg;
+    final fg =
+        isDark ? BibleDarkPalette.titleGold : BibleLightPalette.primary;
     final String line;
     final q = _openQuarter;
     if (q == null) {
@@ -2912,24 +2925,24 @@ class _JournalScreenState extends State<JournalScreen>
     final chromeSize = app.chromeButtonSize;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final appBarBg =
-        isDark ? JournalScreen._appBarBgDark : Colors.transparent;
+        isDark ? BibleDarkPalette.screenBg : Colors.transparent;
     final buttonBg =
-        isDark ? JournalScreen._buttonBgDark : BibleLightPalette.chromePillFill;
+        isDark ? BibleDarkPalette.cardBg : BibleLightPalette.chromePillFill;
     final chromeFg =
-        isDark ? Colors.white : BibleLightPalette.primaryText;
+        isDark ? BibleDarkPalette.primaryText : BibleLightPalette.primaryText;
     final chromeIconFg =
-        isDark ? Colors.white : BibleLightPalette.iconActive;
+        isDark ? BibleDarkPalette.chromeMutedGold : BibleLightPalette.iconActive;
     final lightOutline =
         isDark ? null : BibleLightPalette.chromePillOutlineSide;
     final trackHint = isDark
-        ? Colors.blueGrey.shade700.withValues(alpha: 0.9)
+        ? BibleDarkPalette.divider
         : BibleLightPalette.activeBg;
     final hubTitleColor =
-        isDark ? const Color(0xFF81D4FA) : BibleLightPalette.primary;
+        isDark ? BibleDarkPalette.titleGold : BibleLightPalette.primary;
     final hubMutedFg =
-        isDark ? Colors.grey.shade400 : BibleLightPalette.secondaryText;
+        isDark ? BibleDarkPalette.secondaryText : BibleLightPalette.secondaryText;
     final hubCardBg =
-        isDark ? const Color(0xFF37474F) : BibleLightPalette.cardFillPrimary;
+        isDark ? BibleDarkPalette.cardBg : BibleLightPalette.cardFillPrimary;
 
     final inQuarter = _openQuarter != null;
     final uiFs = app.fontSize.clamp(12.0, 28.0);
@@ -3028,7 +3041,7 @@ class _JournalScreenState extends State<JournalScreen>
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                       side: isDark
-                          ? ChromeOutline.side
+                          ? ChromeOutline.darkSide
                           : BibleLightPalette.chromePillOutlineSide,
                     ),
                     clipBehavior: Clip.antiAlias,

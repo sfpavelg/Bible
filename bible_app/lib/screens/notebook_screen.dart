@@ -7,6 +7,7 @@ import 'package:bible_app/notebook/notebook_repository.dart';
 import 'package:bible_app/notebook/notebook_repository_factory.dart';
 import 'package:bible_app/screens/notebook_editor_panel.dart';
 import 'package:bible_app/providers/app_provider.dart';
+import 'package:bible_app/theme/bible_dark_palette.dart';
 import 'package:bible_app/theme/bible_light_palette.dart';
 import 'package:bible_app/widgets/app_chrome_overflow_menu.dart';
 import 'package:bible_app/widgets/chrome_outline.dart';
@@ -65,7 +66,23 @@ Widget _notebookLightContentShell({
   required bool isDark,
   required Widget child,
 }) {
-  if (isDark) return child;
+  if (isDark) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          color: BibleDarkPalette.cardBg,
+          border: Border.all(color: BibleDarkPalette.cardBorderGold, width: 1),
+          boxShadow: BibleDarkPalette.verseCardShadow,
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: child,
+        ),
+      ),
+    );
+  }
   return Padding(
     padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
     child: DecoratedBox(
@@ -351,9 +368,6 @@ class _NotebookScreenState extends State<NotebookScreen> {
     final rest = _bulkSelectedFilePaths.difference(inList).toList()..sort();
     return [...ordered, ...rest];
   }
-
-  static const _appBarBgDark = Color(0xFF37474F);
-  static const _buttonBgDark = Color(0xFF455A64);
 
   @override
   void initState() {
@@ -692,7 +706,6 @@ class _NotebookScreenState extends State<NotebookScreen> {
     String? labelText,
     String? hintText,
   }) {
-    final scheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final r = BorderRadius.circular(_notebookInputBorderRadius);
     OutlineInputBorder outline(Color color, {double width = 1}) =>
@@ -701,22 +714,24 @@ class _NotebookScreenState extends State<NotebookScreen> {
           borderSide: BorderSide(color: color, width: width),
         );
     final outlineIdle =
-        isDark ? scheme.outline : BibleLightPalette.border;
+        isDark ? BibleDarkPalette.divider : BibleLightPalette.border;
     final outlineFocus =
-        isDark ? scheme.primary : BibleLightPalette.primary;
+        isDark ? BibleDarkPalette.accentGold : BibleLightPalette.primary;
     return InputDecoration(
       labelText: labelText,
       hintText: hintText,
       isDense: true,
       filled: true,
       fillColor: isDark
-          ? scheme.surfaceContainerHighest.withValues(alpha: 0.45)
+          ? BibleDarkPalette.screenBg.withValues(alpha: 0.65)
           : BibleLightPalette.activeBg,
       labelStyle: TextStyle(
-        color: isDark ? scheme.onSurfaceVariant : BibleLightPalette.secondaryText,
+        color:
+            isDark ? BibleDarkPalette.secondaryText : BibleLightPalette.secondaryText,
       ),
       hintStyle: TextStyle(
-        color: isDark ? scheme.onSurfaceVariant : BibleLightPalette.secondaryText,
+        color:
+            isDark ? BibleDarkPalette.secondaryText : BibleLightPalette.secondaryText,
       ),
       border: outline(outlineIdle),
       enabledBorder: outline(outlineIdle),
@@ -727,7 +742,9 @@ class _NotebookScreenState extends State<NotebookScreen> {
               tooltip: 'Очистить',
               icon: Icon(
                 Icons.clear,
-                color: isDark ? scheme.onSurface : BibleLightPalette.iconActive,
+                color: isDark
+                    ? BibleDarkPalette.iconActive
+                    : BibleLightPalette.iconActive,
               ),
               onPressed: controller.clear,
             ),
@@ -1052,7 +1069,8 @@ class _NotebookScreenState extends State<NotebookScreen> {
     return Material(
       elevation: 8,
       borderRadius: BorderRadius.circular(12),
-      color: isDark ? _appBarBgDark : BibleLightPalette.topBarBg,
+      color:
+          isDark ? BibleDarkPalette.screenBg : BibleLightPalette.topBarBg,
       clipBehavior: Clip.antiAlias,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: halfScreen),
@@ -1074,7 +1092,9 @@ class _NotebookScreenState extends State<NotebookScreen> {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: isDark ? Colors.white : BibleLightPalette.primaryText,
+                    color: isDark
+                        ? BibleDarkPalette.primaryText
+                        : BibleLightPalette.primaryText,
                     fontWeight: FontWeight.w600,
                     fontSize: 15,
                   ),
@@ -1082,13 +1102,15 @@ class _NotebookScreenState extends State<NotebookScreen> {
               ),
               Divider(
                 height: 1,
-                color: isDark ? Colors.white24 : null,
+                color:
+                    isDark ? BibleDarkPalette.divider.withValues(alpha: 0.9) : null,
               ),
             ],
             if (!a.isFolder)
               Divider(
                 height: 1,
-                color: isDark ? Colors.white24 : null,
+                color:
+                    isDark ? BibleDarkPalette.divider.withValues(alpha: 0.9) : null,
               ),
             if (!a.isFolder)
               IgnorePointer(
@@ -1129,7 +1151,9 @@ class _NotebookScreenState extends State<NotebookScreen> {
             ),
             Divider(
               height: 1,
-              color: isDark ? Colors.white24 : null,
+              color: isDark
+                  ? BibleDarkPalette.divider.withValues(alpha: 0.9)
+                  : null,
             ),
             IgnorePointer(
               ignoring: !canBulkDelete,
@@ -1158,11 +1182,12 @@ class _NotebookScreenState extends State<NotebookScreen> {
     double gapAfterLabel = 4,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final barBg = isDark ? const Color(0xFF455A64) : BibleLightPalette.topBarBg;
+    final barBg =
+        isDark ? BibleDarkPalette.screenBg : BibleLightPalette.topBarBg;
     final labelColor =
-        isDark ? Colors.white70 : BibleLightPalette.secondaryText;
+        isDark ? BibleDarkPalette.secondaryText : BibleLightPalette.secondaryText;
     final valueColor =
-        isDark ? Colors.white : BibleLightPalette.primaryText;
+        isDark ? BibleDarkPalette.primaryText : BibleLightPalette.primaryText;
     final fs = context.watch<AppProvider>().fontSize;
     final labelSize = (fs * 0.88).clamp(11.0, 32.0);
     final valueSize = fs.clamp(12.0, 40.0);
@@ -1222,9 +1247,9 @@ class _NotebookScreenState extends State<NotebookScreen> {
     final segs = _notebookMoveDialogPathSegments(_currentDir);
     final crumbFs = fs.clamp(12.0, 40.0);
     final activeColor =
-        isDark ? Colors.white : BibleLightPalette.primaryText;
+        isDark ? BibleDarkPalette.titleGold : BibleLightPalette.primaryText;
     final inactiveColor =
-        isDark ? Colors.white70 : BibleLightPalette.secondaryText;
+        isDark ? BibleDarkPalette.secondaryText : BibleLightPalette.secondaryText;
 
     final chips = <Widget>[];
 
@@ -1281,12 +1306,12 @@ class _NotebookScreenState extends State<NotebookScreen> {
     final maxPathHeight = rowHeight * 2;
     final railSize = (app.chromeButtonSize * 0.68).clamp(26.0, 36.0);
     final railTrack = isDark
-        ? Colors.blueGrey.shade700.withValues(alpha: 0.9)
+        ? BibleDarkPalette.divider
         : BibleLightPalette.activeBg;
     final railThumb =
-        isDark ? _buttonBgDark : BibleLightPalette.chromePillFill;
+        isDark ? BibleDarkPalette.cardBg : BibleLightPalette.chromePillFill;
     final railBg = isDark
-        ? const Color(0xFF263238)
+        ? BibleDarkPalette.screenBg
         : BibleLightPalette.topBarBg;
     WidgetsBinding.instance
         .addPostFrameCallback((_) => _recomputeFolderPathOverflow());
@@ -1324,7 +1349,8 @@ class _NotebookScreenState extends State<NotebookScreen> {
 
   Widget _buildEditorDocumentFooter() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final valueColor = isDark ? Colors.white : BibleLightPalette.primaryText;
+    final valueColor =
+        isDark ? BibleDarkPalette.primaryText : BibleLightPalette.primaryText;
     final fs = context.watch<AppProvider>().fontSize;
     final valueSize = fs.clamp(12.0, 40.0);
     final fileName = p.posix.basename(_editingPath ?? '');
@@ -1369,7 +1395,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
     final fs = context.watch<AppProvider>().fontSize;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final crumbFs = fs.clamp(12.0, 40.0);
-    final activeColor = isDark ? Colors.white : Colors.black87;
+    final activeColor = isDark ? BibleDarkPalette.iconActive : Colors.black87;
     final pathText = _notebookPathForDisplay(_editingPath ?? '');
 
     if (pathText.isEmpty) {
@@ -2010,13 +2036,14 @@ class _NotebookScreenState extends State<NotebookScreen> {
     final toolbarH = AppProvider.toolbarHeightForChrome(chrome);
     final rightInset = (chrome * 0.12).clamp(4.0, 10.0);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final appBarBg = isDark ? _appBarBgDark : Colors.transparent;
+    final appBarBg =
+        isDark ? BibleDarkPalette.screenBg : Colors.transparent;
     final buttonBg =
-        isDark ? _buttonBgDark : BibleLightPalette.chromePillFill;
+        isDark ? BibleDarkPalette.cardBg : BibleLightPalette.chromePillFill;
     final chromeFg =
-        isDark ? Colors.white : BibleLightPalette.primaryText;
+        isDark ? BibleDarkPalette.primaryText : BibleLightPalette.primaryText;
     final chromeIconFg =
-        isDark ? Colors.white : BibleLightPalette.iconActive;
+        isDark ? BibleDarkPalette.chromeMutedGold : BibleLightPalette.iconActive;
     final lightOutline =
         isDark ? null : BibleLightPalette.chromePillOutlineSide;
     final leadingSlotWidth = (chrome + 8).clamp(52.0, 90.0);
@@ -2093,13 +2120,14 @@ class _NotebookScreenState extends State<NotebookScreen> {
     final toolbarH = AppProvider.toolbarHeightForChrome(chrome);
     final rightInset = (chrome * 0.12).clamp(4.0, 10.0);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final appBarBg = isDark ? _appBarBgDark : Colors.transparent;
+    final appBarBg =
+        isDark ? BibleDarkPalette.screenBg : Colors.transparent;
     final buttonBg =
-        isDark ? _buttonBgDark : BibleLightPalette.chromePillFill;
+        isDark ? BibleDarkPalette.cardBg : BibleLightPalette.chromePillFill;
     final chromeFg =
-        isDark ? Colors.white : BibleLightPalette.primaryText;
+        isDark ? BibleDarkPalette.primaryText : BibleLightPalette.primaryText;
     final chromeIconFg =
-        isDark ? Colors.white : BibleLightPalette.iconActive;
+        isDark ? BibleDarkPalette.chromeMutedGold : BibleLightPalette.iconActive;
     final lightOutline =
         isDark ? null : BibleLightPalette.chromePillOutlineSide;
     return AppBar(
@@ -2271,7 +2299,9 @@ class _NotebookScreenState extends State<NotebookScreen> {
                                         : 'Папка пуста.',
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
-                                      color: BibleLightPalette.secondaryText,
+                                      color: isDark
+                                          ? BibleDarkPalette.secondaryText
+                                          : BibleLightPalette.secondaryText,
                                       fontSize: (uiListFontSize * 0.95)
                                           .clamp(13.0, 28.0),
                                       height: 1.35,
@@ -2288,14 +2318,14 @@ class _NotebookScreenState extends State<NotebookScreen> {
                                         itemBuilder: (listContext, i) {
                                           final row = notebookVisibleRows[i];
                                           final item = row.item;
-                                          final scheme =
-                                              Theme.of(listContext).colorScheme;
                                           const listItemPurple =
                                               BibleLightPalette.primaryDark;
-                                          final listRowIconFg =
-                                              isDark ? scheme.onSurface : listItemPurple;
-                                          final listRowTextFg =
-                                              isDark ? scheme.onSurface : listItemPurple;
+                                          final listRowIconFg = isDark
+                                              ? BibleDarkPalette.iconActive
+                                              : listItemPurple;
+                                          final listRowTextFg = isDark
+                                              ? BibleDarkPalette.primaryText
+                                              : listItemPurple;
                                           final depthPad =
                                               row.depth * treeIndentStep;
                                           final bulk = _fileBulkSelectionUi &&
@@ -2303,9 +2333,8 @@ class _NotebookScreenState extends State<NotebookScreen> {
                                           final sel = _bulkSelectedFilePaths
                                               .contains(item.relativePath);
                                           final rowDividerColor = isDark
-                                              ? Colors.white.withValues(
-                                                  alpha: 0.12,
-                                                )
+                                              ? BibleDarkPalette.divider
+                                                  .withValues(alpha: 0.55)
                                               : BibleLightPalette.cardDivider;
                                           final expandedFolder =
                                               item.isFolder &&
@@ -2315,16 +2344,17 @@ class _NotebookScreenState extends State<NotebookScreen> {
                                                   );
                                           final chevronColor = expandedFolder
                                               ? (isDark
-                                                  ? Colors.amber.shade400
+                                                  ? BibleDarkPalette
+                                                      .accentGoldLight
                                                   : BibleLightPalette.primary)
                                               : (isDark
-                                                  ? Colors.white38
+                                                  ? BibleDarkPalette.iconInactive
                                                   : listItemPurple);
                                           final countTextStyle = TextStyle(
                                             fontSize: (uiListFontSize * 0.82)
                                                 .clamp(11.0, 22.0),
                                             color: isDark
-                                                ? Colors.white54
+                                                ? BibleDarkPalette.secondaryText
                                                 : listItemPurple,
                                             fontFeatures: const [
                                               FontFeature.tabularFigures(),
@@ -2362,21 +2392,17 @@ class _NotebookScreenState extends State<NotebookScreen> {
                                                 child: InkWell(
                                                   onTap: onTap,
                                                   splashColor: isDark
-                                                      ? Colors.white
-                                                          .withValues(
-                                                              alpha: 0.08)
-                                                      : BibleLightPalette
-                                                          .primary
-                                                          .withValues(
-                                                              alpha: 0.10),
+                                                      ? BibleDarkPalette
+                                                          .accentGoldLight
+                                                          .withValues(alpha: 0.12)
+                                                      : BibleLightPalette.primary
+                                                          .withValues(alpha: 0.10),
                                                   highlightColor: isDark
-                                                      ? Colors.white
-                                                          .withValues(
-                                                              alpha: 0.04)
-                                                      : BibleLightPalette
-                                                          .primary
-                                                          .withValues(
-                                                              alpha: 0.05),
+                                                      ? BibleDarkPalette
+                                                          .accentGoldDark
+                                                          .withValues(alpha: 0.14)
+                                                      : BibleLightPalette.primary
+                                                          .withValues(alpha: 0.05),
                                                   onLongPress: () =>
                                                       _openFileActionsPanel(
                                                     item,
@@ -2754,14 +2780,17 @@ class _NotebookPathScrollRailState extends State<_NotebookPathScrollRail> {
     c.jumpTo(pixels.clamp(0.0, maxExt));
   }
 
-  Widget _gripLine(double width) => Container(
-        width: width,
-        height: 2.5,
-        decoration: BoxDecoration(
-          color: Colors.black,
-          borderRadius: BorderRadius.circular(1.25),
-        ),
-      );
+  Widget _gripLine(BuildContext context, double width) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      width: width,
+      height: 2.5,
+      decoration: BoxDecoration(
+        color: dark ? BibleDarkPalette.accentGoldDark : Colors.black,
+        borderRadius: BorderRadius.circular(1.25),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2822,7 +2851,7 @@ class _NotebookPathScrollRailState extends State<_NotebookPathScrollRail> {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                       side: Theme.of(context).brightness == Brightness.dark
-                          ? ChromeOutline.side
+                          ? ChromeOutline.darkSide
                           : BibleLightPalette.chromePillOutlineSide,
                     ),
                     clipBehavior: Clip.antiAlias,
@@ -2833,11 +2862,11 @@ class _NotebookPathScrollRailState extends State<_NotebookPathScrollRail> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            _gripLine((ts * 0.55).clamp(14.0, 24.0)),
+                            _gripLine(context, (ts * 0.55).clamp(14.0, 24.0)),
                             SizedBox(height: (ts * 0.1).clamp(3.0, 6.0)),
-                            _gripLine((ts * 0.55).clamp(14.0, 24.0)),
+                            _gripLine(context, (ts * 0.55).clamp(14.0, 24.0)),
                             SizedBox(height: (ts * 0.1).clamp(3.0, 6.0)),
-                            _gripLine((ts * 0.55).clamp(14.0, 24.0)),
+                            _gripLine(context, (ts * 0.55).clamp(14.0, 24.0)),
                           ],
                         ),
                       ),
@@ -2879,7 +2908,7 @@ class _NotebookChromePanelActionButton extends StatelessWidget {
     final shape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(8),
       side: isDark
-          ? ChromeOutline.side
+          ? ChromeOutline.darkSide
           : BibleLightPalette.chromePillOutlineSide,
     );
     final rowBg = isDark
@@ -3006,7 +3035,8 @@ class _NotebookMoveFileDialogState extends State<_NotebookMoveFileDialog> {
   }
 
   Widget _moveYouAreHereChip(bool isDark, double uiFs) {
-    final fg = isDark ? const Color(0xFF90CAF9) : BibleLightPalette.primary;
+    final fg =
+        isDark ? BibleDarkPalette.accentGold : BibleLightPalette.primary;
     final fill = fg.withValues(alpha: isDark ? 0.16 : 0.11);
     return Container(
       padding: EdgeInsets.symmetric(
@@ -3055,13 +3085,14 @@ class _NotebookMoveFileDialogState extends State<_NotebookMoveFileDialog> {
       fontFamily: 'monospace',
       fontSize: monoFs,
       height: 1.0,
-      color: isDark ? Colors.white38 : Colors.black45,
+      color: isDark ? BibleDarkPalette.iconInactive : Colors.black45,
     );
     final nameStyle = TextStyle(
       fontSize: uiFs,
       height: 1.0,
       fontWeight: FontWeight.w500,
-      color: isDark ? Colors.white : Colors.black87,
+      color:
+          isDark ? BibleDarkPalette.primaryText : Colors.black87,
     );
     final isSourceParent = _sourceParentDirs.contains(targetPath);
     final rowIconData = isRoot
@@ -3069,12 +3100,12 @@ class _NotebookMoveFileDialogState extends State<_NotebookMoveFileDialog> {
         : (isSourceParent ? Icons.folder : Icons.folder_outlined);
     return Material(
       color: isSourceParent
-          ? (isDark
-              ? Colors.grey.shade700.withValues(alpha: 0.5)
-              : Colors.grey.shade300.withValues(alpha: 0.72))
+              ? (isDark
+                  ? BibleDarkPalette.divider.withValues(alpha: 0.55)
+                  : Colors.grey.shade300.withValues(alpha: 0.72))
           : isCurrent
               ? (isDark
-                  ? Colors.blueGrey.shade700.withValues(alpha: 0.42)
+                  ? BibleDarkPalette.accentGoldDark.withValues(alpha: 0.28)
                   : Colors.blue.shade50.withValues(alpha: 0.92))
               : Colors.transparent,
       child: InkWell(
@@ -3091,7 +3122,8 @@ class _NotebookMoveFileDialogState extends State<_NotebookMoveFileDialog> {
               Icon(
                 rowIconData,
                 size: rowIcon,
-                color: isDark ? Colors.white70 : Colors.black54,
+                color:
+                    isDark ? BibleDarkPalette.secondaryText : Colors.black54,
               ),
               Expanded(
                 child: Text(label, style: nameStyle, maxLines: 2),
@@ -3129,19 +3161,20 @@ class _NotebookMoveFileDialogState extends State<_NotebookMoveFileDialog> {
       fontFamily: 'monospace',
       fontSize: monoFs,
       height: 1.0,
-      color: isDark ? Colors.white38 : Colors.black45,
+      color: isDark ? BibleDarkPalette.iconInactive : Colors.black45,
     );
     final nameStyle = TextStyle(
       fontSize: uiFs,
       height: 1.0,
-      color: isDark ? Colors.white : Colors.black87,
+      color:
+          isDark ? BibleDarkPalette.primaryText : Colors.black87,
     );
     final isSourceParent = _sourceParentDirs.contains(folder.relativePath);
     final rowIconData = isSourceParent ? Icons.folder : Icons.folder_outlined;
     return Material(
       color: isSourceParent
           ? (isDark
-              ? Colors.grey.shade700.withValues(alpha: 0.5)
+              ? BibleDarkPalette.divider.withValues(alpha: 0.55)
               : Colors.grey.shade300.withValues(alpha: 0.72))
           : Colors.transparent,
       child: InkWell(
@@ -3157,7 +3190,8 @@ class _NotebookMoveFileDialogState extends State<_NotebookMoveFileDialog> {
               Icon(
                 rowIconData,
                 size: rowIcon,
-                color: isDark ? Colors.white70 : Colors.black54,
+                color:
+                    isDark ? BibleDarkPalette.secondaryText : Colors.black54,
               ),
               Expanded(
                 child: Text(
@@ -3212,7 +3246,7 @@ class _NotebookMoveFileDialogState extends State<_NotebookMoveFileDialog> {
         Divider(
           height: 1,
           thickness: 1,
-          color: isDark ? Colors.white24 : Colors.black12,
+          color: isDark ? BibleDarkPalette.divider : Colors.black12,
         ),
       );
       children.add(SizedBox(height: (uiFs * 0.12).clamp(2.0, 4.0)));
@@ -3222,7 +3256,8 @@ class _NotebookMoveFileDialogState extends State<_NotebookMoveFileDialog> {
           style: TextStyle(
             fontSize: (uiFs * 0.78).clamp(11.0, 16.0),
             fontWeight: FontWeight.w600,
-            color: isDark ? Colors.white54 : Colors.black45,
+            color:
+                isDark ? BibleDarkPalette.secondaryText : Colors.black45,
           ),
         ),
       );
@@ -3246,7 +3281,8 @@ class _NotebookMoveFileDialogState extends State<_NotebookMoveFileDialog> {
         Text(
           'Нет вложенных папок',
           style: TextStyle(
-            color: isDark ? Colors.white54 : Colors.black45,
+            color:
+                isDark ? BibleDarkPalette.secondaryText : Colors.black45,
             fontSize: (uiFs * 0.88).clamp(12.0, 20.0),
           ),
         ),
@@ -3268,7 +3304,7 @@ class _NotebookMoveFileDialogState extends State<_NotebookMoveFileDialog> {
     final uiFs = app.fontSize;
     final rowIcon = (24.0 * uiFs / 16.0).clamp(20.0, 48.0);
     final treePanelBg =
-        isDark ? const Color(0xFF2A2A2A) : BibleLightPalette.disabledBg;
+        isDark ? BibleDarkPalette.cardBg : BibleLightPalette.disabledBg;
     return AlertDialog(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
@@ -3296,7 +3332,7 @@ class _NotebookMoveFileDialogState extends State<_NotebookMoveFileDialog> {
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: isDark
-                        ? ChromeOutline.color
+                        ? BibleDarkPalette.cardBorderGold
                         : BibleLightPalette.border,
                     width: ChromeOutline.width,
                   ),

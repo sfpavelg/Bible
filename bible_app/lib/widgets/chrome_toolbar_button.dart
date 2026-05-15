@@ -1,9 +1,27 @@
 import 'dart:math' as math;
 
 import 'package:bible_app/providers/app_provider.dart';
+import 'package:bible_app/theme/bible_dark_palette.dart';
 import 'package:bible_app/widgets/chrome_outline.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+/// Обводка по умолчанию для кнопок хрома, если [outlineSide] не передан.
+BorderSide _defaultChromeOutlineSide(
+  BuildContext context, {
+  required bool disabled,
+}) {
+  final dark = Theme.of(context).brightness == Brightness.dark;
+  if (!disabled) {
+    return dark ? ChromeOutline.darkSide : ChromeOutline.side;
+  }
+  return BorderSide(
+    color: dark
+        ? BibleDarkPalette.chromeMutedGold.withValues(alpha: 0.42)
+        : ChromeOutline.color.withValues(alpha: 0.35),
+    width: ChromeOutline.width,
+  );
+}
 
 /// Кнопка хрома: высота из [AppProvider.chromeButtonSize], ширина по умолчанию равна высоте.
 /// [width] задаёт общую ширину ячейки (например, в панели Библии все кнопки одной [width]).
@@ -48,12 +66,7 @@ class ChromeIconButton extends StatelessWidget {
             color: outlineSide!.color.withValues(alpha: disabled ? 0.45 : 1.0),
             width: outlineSide!.width,
           )
-        : (disabled
-            ? BorderSide(
-                color: ChromeOutline.color.withValues(alpha: 0.35),
-                width: ChromeOutline.width,
-              )
-            : ChromeOutline.side);
+        : _defaultChromeOutlineSide(context, disabled: disabled);
     final ShapeBorder shapeBorder = useCircle
         ? CircleBorder(side: outlineSideResolved)
         : RoundedRectangleBorder(
@@ -122,7 +135,7 @@ class ChromeNavTextButton extends StatelessWidget {
       color: backgroundColor,
       shape: RoundedRectangleBorder(
         borderRadius: radius,
-        side: outlineSide ?? ChromeOutline.side,
+        side: outlineSide ?? _defaultChromeOutlineSide(context, disabled: false),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(

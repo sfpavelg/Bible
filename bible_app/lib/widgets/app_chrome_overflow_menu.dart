@@ -2,12 +2,12 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:bible_app/providers/app_provider.dart';
+import 'package:bible_app/theme/bible_dark_palette.dart';
 import 'package:bible_app/theme/bible_light_palette.dart';
 import 'package:bible_app/utils/app_exit.dart';
 import 'package:bible_app/widgets/app_chrome_dialogs.dart';
 import 'package:bible_app/widgets/chrome_frost_glass_panel.dart';
 import 'package:bible_app/widgets/chrome_outline.dart';
-import 'package:bible_app/widgets/notebook_chrome_dialog_button.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -104,9 +104,16 @@ class _AppChromeOverflowMenuState extends State<AppChromeOverflowMenu> {
               child: IntrinsicWidth(
                 child: isDark
                     ? Material(
-                        color: const Color(0xFF37474F),
+                        color: BibleDarkPalette.cardBg,
                         elevation: 10,
-                        borderRadius: BorderRadius.circular(12),
+                        shadowColor: Colors.black54,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(
+                            color: BibleDarkPalette.cardBorderGold,
+                            width: ChromeOutline.width,
+                          ),
+                        ),
                         clipBehavior: Clip.antiAlias,
                         child: menuBody,
                       )
@@ -137,16 +144,19 @@ class _AppChromeOverflowMenuState extends State<AppChromeOverflowMenu> {
   Widget build(BuildContext context) {
     return Consumer<AppProvider>(
       builder: (context, app, _) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
         final s = app.chromeButtonSize.clamp(
             AppProvider.chromeButtonSizeMin, AppProvider.chromeButtonSizeMax);
         final w = widget.tileWidth ?? s;
         final iconSz = (math.min(w, s) * 0.5).clamp(18.0, 30.0);
         final corner = (math.min(w, s) * 0.22).clamp(4.0, 12.0);
+        final outline = widget.shapeSide ??
+            (isDark ? ChromeOutline.darkSide : ChromeOutline.side);
         return Material(
           color: widget.backgroundColor,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(corner),
-            side: widget.shapeSide ?? ChromeOutline.side,
+            side: outline,
           ),
           clipBehavior: Clip.antiAlias,
           child: SizedBox(
@@ -184,17 +194,18 @@ Widget chromePopupMenuChoiceTile({
   final minHeight = (chrome * 0.96).clamp(42.0, 62.0);
   final isDark = Theme.of(context).brightness == Brightness.dark;
   final inner = isDark
-      ? NotebookChromeUi.secondaryButtonBackground(context)
+      ? BibleDarkPalette.cardBg
       : BibleLightPalette.settingsGlassCard;
   final fg = isDark
-      ? NotebookChromeUi.secondaryButtonForeground(context)
+      ? BibleDarkPalette.primaryText
       : BibleLightPalette.settingsGlassTextPrimary;
   final borderColor = isDark
-      ? ChromeOutline.color
+      ? BibleDarkPalette.cardBorderGold
       : BibleLightPalette.settingsGlassBorderActive;
   final borderWidth = isDark ? ChromeOutline.width : 1.2;
-  final iconColor =
-      isDark ? fg : BibleLightPalette.settingsGlassPrimary;
+  final iconColor = isDark
+      ? BibleDarkPalette.iconActive
+      : BibleLightPalette.settingsGlassPrimary;
   return Material(
     color: Colors.transparent,
     borderRadius: BorderRadius.circular(10),
