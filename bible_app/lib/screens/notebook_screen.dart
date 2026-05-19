@@ -2360,6 +2360,14 @@ class _NotebookScreenState extends State<NotebookScreen> {
                                               FontFeature.tabularFigures(),
                                             ],
                                           );
+                                          final folderChildCount = item.isFolder
+                                              ? _notebookFolderChildCounts[
+                                                  item.relativePath]
+                                              : null;
+                                          final showFolderCountAndChevron =
+                                              item.isFolder &&
+                                                  !bulk &&
+                                                  folderChildCount != 0;
 
                                           void onTap() {
                                             if (bulk) {
@@ -2594,10 +2602,12 @@ class _NotebookScreenState extends State<NotebookScreen> {
                                                             },
                                                           ),
                                                         ),
-                                                        if (item.isFolder &&
-                                                            !bulk) ...[
+                                                        if (showFolderCountAndChevron) ...[
                                                           Text(
-                                                            '${_notebookFolderChildCounts[item.relativePath] ?? '…'}',
+                                                            folderChildCount ==
+                                                                    null
+                                                                ? '…'
+                                                                : '$folderChildCount',
                                                             style:
                                                                 countTextStyle,
                                                           ),

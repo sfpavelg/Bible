@@ -2086,7 +2086,7 @@ class _JournalScreenState extends State<JournalScreen>
     final tipsStyle = app.bibleVerseTextStyle(
       color: isDark
           ? BibleDarkPalette.primaryText
-          : BibleLightPalette.secondaryText,
+          : BibleLightPalette.primaryText,
       fontWeight: FontWeight.w500,
     );
     return Padding(
@@ -2940,7 +2940,7 @@ class _JournalScreenState extends State<JournalScreen>
     final hubTitleColor =
         isDark ? BibleDarkPalette.titleGold : BibleLightPalette.primary;
     final hubMutedFg =
-        isDark ? BibleDarkPalette.secondaryText : BibleLightPalette.secondaryText;
+        isDark ? BibleDarkPalette.primaryText : BibleLightPalette.primaryText;
     final hubCardBg =
         isDark ? BibleDarkPalette.cardBg : BibleLightPalette.cardFillPrimary;
 

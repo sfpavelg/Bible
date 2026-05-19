@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:bible_app/journal/faith_reading_plan_data.dart';
 import 'package:bible_app/journal/love_reading_plan_data.dart';
-import 'package:bible_app/journal/parallel_reading_plan_data.dart';
 import 'package:bible_app/providers/app_provider.dart';
 import 'package:bible_app/theme/bible_dark_palette.dart';
 import 'package:bible_app/theme/bible_light_palette.dart';
@@ -83,6 +82,9 @@ enum ChromePanelLightSurface {
   /// Настройки: Frosted Glass Minimal (blur + стеклянные карточки).
   settingsFrostGlass,
 
+  /// Как [settingsFrostGlass], но без BackdropFilter — для длинной прокрутки.
+  settingsFrostGlassStatic,
+
   /// Устаревший непрозрачный вариант (оставлен для совместимости switch).
   modalOpaque,
 }
@@ -110,16 +112,20 @@ Widget _chromePanelShell({
   final BoxDecoration decoration = switch (lightSurface) {
     ChromePanelLightSurface.settingsPanel =>
       BibleLightPalette.lightSettingsPanelDecoration(radius: borderRadius),
-    ChromePanelLightSurface.settingsFrostGlass =>
+    ChromePanelLightSurface.settingsFrostGlass ||
+    ChromePanelLightSurface.settingsFrostGlassStatic =>
       const BoxDecoration(color: Colors.transparent),
     ChromePanelLightSurface.modalOpaque =>
       BibleLightPalette.lightModalOpaquePanelDecoration(radius: borderRadius),
     ChromePanelLightSurface.chromeCardGlass =>
       BibleLightPalette.lightPanelShellDecoration(radius: borderRadius),
   };
-  if (lightSurface == ChromePanelLightSurface.settingsFrostGlass) {
+  if (lightSurface == ChromePanelLightSurface.settingsFrostGlass ||
+      lightSurface == ChromePanelLightSurface.settingsFrostGlassStatic) {
     return chromeFrostGlassPanelShell(
       borderRadius: borderRadius,
+      backdropBlur:
+          lightSurface == ChromePanelLightSurface.settingsFrostGlass,
       child: child,
     );
   }
@@ -454,6 +460,127 @@ TextStyle _settingsGlassTextStyle(TextStyle base) => base.copyWith(
       shadows: BibleLightPalette.settingsGlassTextShadows,
     );
 
+double _settingsSliderOneCharWidth(TextStyle style) {
+  final painter = TextPainter(
+    text: TextSpan(text: 'А', style: style),
+    textDirection: TextDirection.ltr,
+    maxLines: 1,
+  )..layout();
+  return painter.width;
+}
+
+/// Ползунок настроек: единая разметка (подпись → отступ → дорожка), padding только в теме.
+class _SettingsSliderRow extends StatelessWidget {
+  const _SettingsSliderRow({
+    required this.label,
+    required this.labelStyle,
+    required this.theme,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.divisions,
+    required this.valueLabel,
+    required this.onChanged,
+    this.gapAfter = 5,
+    this.insetH = 12,
+    this.thumbRadius = 7,
+  });
+
+  final String label;
+  final TextStyle labelStyle;
+  final SliderThemeData theme;
+  final double value;
+  final double min;
+  final double max;
+  final int divisions;
+  final String valueLabel;
+  final ValueChanged<double> onChanged;
+  final double gapAfter;
+
+  /// Горизонтальный отступ дорожки — как у [_SettingsFontPresetPicker].
+  final double insetH;
+  final double thumbRadius;
+
+  @override
+  Widget build(BuildContext context) {
+    // Дорожка справа на insetH; слева — ближе к подписи и кнопкам (≈2 символа).
+    final charTrim = _settingsSliderOneCharWidth(labelStyle);
+    final trackInsetH = (insetH - thumbRadius).clamp(0.0, double.infinity);
+    final leftTrackPad =
+        (trackInsetH - charTrim * 2).clamp(0.0, double.infinity);
+    final edgePad = EdgeInsets.only(left: leftTrackPad, right: trackInsetH);
+    final thumbPad = EdgeInsets.symmetric(horizontal: thumbRadius);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: labelStyle),
+        const SizedBox(height: 4),
+        ClipRect(
+          child: Padding(
+            padding: edgePad,
+            child: SliderTheme(
+              data: theme,
+              child: Slider(
+                padding: thumbPad,
+                value: value.clamp(min, max),
+                min: min,
+                max: max,
+                divisions: divisions,
+                label: valueLabel,
+                onChanged: onChanged,
+              ),
+            ),
+          ),
+        ),
+        SizedBox(height: gapAfter),
+      ],
+    );
+  }
+}
+
+SliderThemeData _settingsSliderTheme({
+  required bool isDark,
+  required double thumbRadius,
+}) {
+  if (isDark) {
+    return SliderThemeData(
+      trackHeight: 4,
+      padding: EdgeInsets.zero,
+      trackShape: const RoundedRectSliderTrackShape(),
+      activeTrackColor: BibleDarkPalette.accentGold,
+      inactiveTrackColor: BibleDarkPalette.divider,
+      thumbColor: BibleDarkPalette.accentGold,
+      overlayColor: BibleDarkPalette.accentGoldLight.withValues(alpha: 0.18),
+      thumbShape: RoundSliderThumbShape(enabledThumbRadius: thumbRadius),
+      overlayShape: RoundSliderOverlayShape(overlayRadius: thumbRadius + 6),
+      tickMarkShape: const _SettingsSliderVerticalTickMarkShape(),
+      activeTickMarkColor: BibleDarkPalette.accentGold,
+      inactiveTickMarkColor: BibleDarkPalette.iconInactive,
+      disabledActiveTickMarkColor: Colors.grey.shade600,
+      disabledInactiveTickMarkColor: Colors.grey.shade500,
+    );
+  }
+  return SliderThemeData(
+    trackHeight: 2.5,
+    padding: EdgeInsets.zero,
+    trackShape: const RoundedRectSliderTrackShape(),
+    activeTrackColor: BibleLightPalette.settingsGlassPrimary,
+    inactiveTrackColor:
+        BibleLightPalette.settingsGlassTextDisabled.withValues(alpha: 0.35),
+    thumbColor: BibleLightPalette.settingsGlassPrimary,
+    overlayColor:
+        BibleLightPalette.settingsGlassActiveGlow.withValues(alpha: 0.28),
+    thumbShape: RoundSliderThumbShape(enabledThumbRadius: thumbRadius),
+    overlayShape: RoundSliderOverlayShape(overlayRadius: thumbRadius + 6),
+    tickMarkShape: const _SettingsSliderVerticalTickMarkShape(),
+    activeTickMarkColor: BibleLightPalette.settingsGlassHover,
+    inactiveTickMarkColor: BibleLightPalette.settingsGlassTextSecondary,
+    disabledActiveTickMarkColor: Colors.grey.shade600,
+    disabledInactiveTickMarkColor: Colors.grey.shade500,
+  );
+}
+
 /// Выбор шрифта: строка-триггер и раскрывающаяся панель вариантов снизу.
 class _SettingsFontPresetPicker extends StatelessWidget {
   const _SettingsFontPresetPicker({
@@ -462,6 +589,7 @@ class _SettingsFontPresetPicker extends StatelessWidget {
     required this.onToggleExpanded,
     required this.onSelected,
     required this.rowHeight,
+    required this.fieldPadH,
     required this.isDark,
     required this.glass,
     required this.labelStyle,
@@ -473,6 +601,7 @@ class _SettingsFontPresetPicker extends StatelessWidget {
   final VoidCallback onToggleExpanded;
   final ValueChanged<String> onSelected;
   final double rowHeight;
+  final double fieldPadH;
   final bool isDark;
   final bool glass;
   final TextStyle labelStyle;
@@ -518,7 +647,7 @@ class _SettingsFontPresetPicker extends StatelessWidget {
             borderRadius: BorderRadius.circular(panelRadius),
             child: Container(
               height: rowHeight,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
+              padding: EdgeInsets.symmetric(horizontal: fieldPadH),
               decoration: _fieldDecoration(radius: panelRadius),
               child: Row(
                 children: [
@@ -568,6 +697,7 @@ class _SettingsFontPresetPicker extends StatelessWidget {
                       label: entry.value,
                       selected: entry.key == value,
                       rowHeight: rowHeight,
+                      fieldPadH: fieldPadH,
                       isDark: isDark,
                       glass: glass,
                       labelStyle: labelStyle,
@@ -595,6 +725,7 @@ class _FontPresetOptionTile extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.rowHeight,
+    required this.fieldPadH,
     required this.isDark,
     required this.glass,
     required this.labelStyle,
@@ -605,6 +736,7 @@ class _FontPresetOptionTile extends StatelessWidget {
   final String label;
   final bool selected;
   final double rowHeight;
+  final double fieldPadH;
   final bool isDark;
   final bool glass;
   final TextStyle labelStyle;
@@ -629,7 +761,7 @@ class _FontPresetOptionTile extends StatelessWidget {
           duration: const Duration(milliseconds: 140),
           height: rowHeight,
           alignment: Alignment.centerLeft,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          padding: EdgeInsets.symmetric(horizontal: fieldPadH),
           color: selected ? selectedBg : Colors.transparent,
           child: Text(
             label,
@@ -764,7 +896,8 @@ void showAppSettingsDialog(BuildContext context) {
                 weight: FontWeight.w500,
                 color: BibleDarkPalette.titleGold,
               );
-              final themeSegmentRowH = (uiFs * 1.75).clamp(36.0, 48.0);
+              final settingsFieldPadH = (uiFs * 0.5).clamp(10.0, 14.0);
+              final settingsControlRowH = (uiFs * 1.75).clamp(36.0, 48.0);
               final themeSegmentFs = (uiFs * 0.92).clamp(12.0, 24.0);
               final settingsSwitchTheme = SwitchThemeData(
                 thumbColor: WidgetStateProperty.resolveWith((s) {
@@ -799,56 +932,12 @@ void showAppSettingsDialog(BuildContext context) {
                 }),
                 trackOutlineWidth: const WidgetStatePropertyAll(1.2),
               );
-              /// В тёмной теме M3 по умолчанию даёт широкий бегунок; при padding 4 он
-              /// вылезает за край панели на max. Держим явный радиус и запас ≥ радиуса.
               final settingsSliderThumbRadius = isDark ? 10.0 : 7.0;
-              final sliderHorizontalPadding = EdgeInsets.symmetric(
-                horizontal: (settingsSliderThumbRadius + 8)
-                    .clamp(12.0, 22.0),
-              );
-              final dropdownHeight = chromeBtnSize < kMinInteractiveDimension
-                  ? kMinInteractiveDimension
-                  : chromeBtnSize;
 
-              SliderThemeData sliderDecor(SliderThemeData base) {
-                if (isDark) {
-                  return base.copyWith(
-                    trackHeight: 4,
-                    activeTrackColor: BibleDarkPalette.accentGold,
-                    inactiveTrackColor: BibleDarkPalette.divider,
-                    thumbColor: BibleDarkPalette.accentGold,
-                    overlayColor:
-                        BibleDarkPalette.accentGoldLight.withValues(alpha: 0.18),
-                    thumbShape: RoundSliderThumbShape(
-                      enabledThumbRadius: settingsSliderThumbRadius,
-                    ),
-                    overlayShape: RoundSliderOverlayShape(
-                      overlayRadius: settingsSliderThumbRadius + 10,
-                    ),
-                    tickMarkShape: const _SettingsSliderVerticalTickMarkShape(),
-                    activeTickMarkColor: BibleDarkPalette.accentGold,
-                    inactiveTickMarkColor: BibleDarkPalette.iconInactive,
-                    disabledActiveTickMarkColor: Colors.grey.shade600,
-                    disabledInactiveTickMarkColor: Colors.grey.shade500,
-                  );
-                }
-                return base.copyWith(
-                  trackHeight: 2.5,
-                  activeTrackColor: BibleLightPalette.settingsGlassPrimary,
-                  inactiveTrackColor: BibleLightPalette.settingsGlassTextDisabled
-                      .withValues(alpha: 0.35),
-                  thumbColor: BibleLightPalette.settingsGlassPrimary,
-                  overlayColor: BibleLightPalette.settingsGlassActiveGlow
-                      .withValues(alpha: 0.28),
-                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
-                  tickMarkShape: const _SettingsSliderVerticalTickMarkShape(),
-                  activeTickMarkColor: BibleLightPalette.settingsGlassHover,
-                  inactiveTickMarkColor:
-                      BibleLightPalette.settingsGlassTextSecondary,
-                  disabledActiveTickMarkColor: Colors.grey.shade600,
-                  disabledInactiveTickMarkColor: Colors.grey.shade500,
-                );
-              }
+              final settingsSliderThemeData = _settingsSliderTheme(
+                isDark: isDark,
+                thumbRadius: settingsSliderThumbRadius,
+              );
 
               final panelPadH = isDark ? 12.0 : 10.0;
               final mediaSize = MediaQuery.sizeOf(consumerContext);
@@ -868,75 +957,60 @@ void showAppSettingsDialog(BuildContext context) {
                   .toDouble();
 
               final readingBlocks = <Widget>[
-                                      Text(
-                                        'Размер шрифта',
-                                        style: kSettingsHeadingStyle,
+                                      _SettingsSliderRow(
+                                        label: 'Размер шрифта',
+                                        labelStyle: kSettingsHeadingStyle,
+                                        theme: settingsSliderThemeData,
+                                        insetH: settingsFieldPadH,
+                                        thumbRadius: settingsSliderThumbRadius,
+                                        value: fontSize,
+                                        min: 12,
+                                        max: 28,
+                                        divisions: 16,
+                                        valueLabel:
+                                            fontSize.toStringAsFixed(0),
+                                        onChanged: (value) {
+                                          setModalState(() => fontSize = value);
+                                          appProvider.changeFontSize(value);
+                                        },
                                       ),
-                                      const SizedBox(height: 4),
-                                      SliderTheme(
-                                        data: sliderDecor(
-                                            SliderTheme.of(consumerContext)),
-                                        child: Slider(
-                                          padding: sliderHorizontalPadding,
-                                          value: fontSize.clamp(12.0, 28.0),
-                                          min: 12.0,
-                                          max: 28.0,
-                                          divisions: 16,
-                                          label: fontSize.toStringAsFixed(0),
-                                          onChanged: (value) {
-                                            setModalState(
-                                                () => fontSize = value);
-                                            appProvider.changeFontSize(value);
-                                          },
-                                        ),
+                                      _SettingsSliderRow(
+                                        label: 'Межстрочный интервал',
+                                        labelStyle: kSettingsHeadingStyle,
+                                        theme: settingsSliderThemeData,
+                                        insetH: settingsFieldPadH,
+                                        thumbRadius: settingsSliderThumbRadius,
+                                        value: lineHeight,
+                                        min: 1,
+                                        max: 2.2,
+                                        divisions: 12,
+                                        valueLabel:
+                                            lineHeight.toStringAsFixed(2),
+                                        onChanged: (value) {
+                                          setModalState(
+                                              () => lineHeight = value);
+                                          appProvider.changeLineHeight(value);
+                                        },
                                       ),
-                                      const SizedBox(height: 5),
-                                      Text(
-                                        'Межстрочный интервал',
-                                        style: kSettingsHeadingStyle,
+                                      _SettingsSliderRow(
+                                        label: 'Интервал между стихами',
+                                        labelStyle: kSettingsHeadingStyle,
+                                        theme: settingsSliderThemeData,
+                                        insetH: settingsFieldPadH,
+                                        thumbRadius: settingsSliderThumbRadius,
+                                        value: verseSpacing,
+                                        min: 0,
+                                        max: 28,
+                                        divisions: 28,
+                                        valueLabel:
+                                            verseSpacing.toStringAsFixed(0),
+                                        gapAfter: 8,
+                                        onChanged: (value) {
+                                          setModalState(
+                                              () => verseSpacing = value);
+                                          appProvider.changeVerseSpacing(value);
+                                        },
                                       ),
-                                      SliderTheme(
-                                        data: sliderDecor(
-                                            SliderTheme.of(consumerContext)),
-                                        child: Slider(
-                                          padding: sliderHorizontalPadding,
-                                          value: lineHeight.clamp(1.0, 2.2),
-                                          min: 1.0,
-                                          max: 2.2,
-                                          divisions: 12,
-                                          label: lineHeight.toStringAsFixed(2),
-                                          onChanged: (value) {
-                                            setModalState(
-                                                () => lineHeight = value);
-                                            appProvider.changeLineHeight(value);
-                                          },
-                                        ),
-                                      ),
-                                      const SizedBox(height: 5),
-                                      Text(
-                                        'Интервал между стихами',
-                                        style: kSettingsHeadingStyle,
-                                      ),
-                                      SliderTheme(
-                                        data: sliderDecor(
-                                            SliderTheme.of(consumerContext)),
-                                        child: Slider(
-                                          padding: sliderHorizontalPadding,
-                                          value: verseSpacing.clamp(0.0, 28.0),
-                                          min: 0.0,
-                                          max: 28.0,
-                                          divisions: 28,
-                                          label:
-                                              verseSpacing.toStringAsFixed(0),
-                                          onChanged: (value) {
-                                            setModalState(
-                                                () => verseSpacing = value);
-                                            appProvider
-                                                .changeVerseSpacing(value);
-                                          },
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
                                       Text(
                                         'Шрифт текста',
                                         style: kSettingsHeadingStyle,
@@ -945,7 +1019,8 @@ void showAppSettingsDialog(BuildContext context) {
                                       _SettingsFontPresetPicker(
                                         value: fontPreset,
                                         expanded: fontPresetPickerOpen,
-                                        rowHeight: dropdownHeight,
+                                        rowHeight: settingsControlRowH,
+                                        fieldPadH: settingsFieldPadH,
                                         isDark: isDark,
                                         glass: glass,
                                         labelStyle: kSettingsBodyStyle,
@@ -964,36 +1039,30 @@ void showAppSettingsDialog(BuildContext context) {
                                           appProvider.setVerseFontPreset(preset);
                                         },
                                       ),
+                                      const SizedBox(height: 6),
               ];
 
               final uiBlocks = <Widget>[
-                                      Text(
-                                        'Размер кнопок',
-                                        style: kSettingsHeadingStyle,
+                                      _SettingsSliderRow(
+                                        label: 'Размер кнопок',
+                                        labelStyle: kSettingsHeadingStyle,
+                                        theme: settingsSliderThemeData,
+                                        insetH: settingsFieldPadH,
+                                        thumbRadius: settingsSliderThumbRadius,
+                                        value: chromeBtnSize,
+                                        min: AppProvider.chromeButtonSizeMin,
+                                        max: AppProvider.chromeButtonSizeMax,
+                                        divisions: 24,
+                                        valueLabel:
+                                            chromeBtnSize.round().toString(),
+                                        gapAfter: 8,
+                                        onChanged: (value) {
+                                          setModalState(
+                                              () => chromeBtnSize = value);
+                                          appProvider
+                                              .changeChromeButtonSize(value);
+                                        },
                                       ),
-                                      SliderTheme(
-                                        data: sliderDecor(
-                                            SliderTheme.of(consumerContext)),
-                                        child: Slider(
-                                          padding: sliderHorizontalPadding,
-                                          value: chromeBtnSize.clamp(
-                                            AppProvider.chromeButtonSizeMin,
-                                            AppProvider.chromeButtonSizeMax,
-                                          ),
-                                          min: AppProvider.chromeButtonSizeMin,
-                                          max: AppProvider.chromeButtonSizeMax,
-                                          divisions: 24,
-                                          label:
-                                              chromeBtnSize.round().toString(),
-                                          onChanged: (value) {
-                                            setModalState(
-                                                () => chromeBtnSize = value);
-                                            appProvider
-                                                .changeChromeButtonSize(value);
-                                          },
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
                                       Text(
                                         'Тема',
                                         style: kSettingsHeadingStyle,
@@ -1005,7 +1074,7 @@ void showAppSettingsDialog(BuildContext context) {
                                         rightValue: ThemeMode.dark,
                                         leftLabel: 'Светлая',
                                         rightLabel: 'Тёмная',
-                                        rowHeight: themeSegmentRowH,
+                                        rowHeight: settingsControlRowH,
                                         fontSize: themeSegmentFs,
                                         isDark: isDark,
                                         trackColor: glass
@@ -1054,7 +1123,7 @@ void showAppSettingsDialog(BuildContext context) {
                         label: 'Септуагинта [ ]',
                         value: showSeptuagintText,
                         labelStyle: glass
-                            ? kSettingsBodyStyle
+                            ? kSettingsHeadingStyle
                             : kSettingsDarkToggleRowStyle,
                         switchTheme: settingsSwitchTheme,
                         glass: false,
@@ -1067,7 +1136,7 @@ void showAppSettingsDialog(BuildContext context) {
                         label: 'Не выключать экран',
                         value: keepScreenOn,
                         labelStyle: glass
-                            ? kSettingsBodyStyle
+                            ? kSettingsHeadingStyle
                             : kSettingsDarkToggleRowStyle,
                         switchTheme: settingsSwitchTheme,
                         glass: false,
@@ -1123,6 +1192,7 @@ void showAppSettingsDialog(BuildContext context) {
                                 fit: FlexFit.loose,
                                 child: SingleChildScrollView(
                                   physics: const ClampingScrollPhysics(),
+                                  clipBehavior: Clip.hardEdge,
                                   child: Column(
                                     mainAxisSize: MainAxisSize.min,
                                     crossAxisAlignment:
@@ -1211,8 +1281,9 @@ class _ChromeSidePanelTextTheme {
     required double fontSize,
     required double lineHeight,
     required bool isDark,
+    bool? glassTypography,
   }) {
-    final glass = !isDark;
+    final glass = glassTypography ?? !isDark;
     final uiFs = fontSize.clamp(12.0, 28.0);
     final primary = isDark
         ? BibleDarkPalette.primaryText
@@ -1302,8 +1373,12 @@ Widget _chromeSidePanelScaffold({
   required Widget scrollChild,
   ScrollController? scrollController,
   List<Widget> footer = const [],
+  ChromePanelLightSurface lightSurface =
+      ChromePanelLightSurface.settingsFrostGlass,
 }) {
-  final glass = !isDark;
+  final glass = !isDark &&
+      (lightSurface == ChromePanelLightSurface.settingsFrostGlass ||
+          lightSurface == ChromePanelLightSurface.settingsFrostGlassStatic);
   return Stack(
     clipBehavior: Clip.none,
     children: [
@@ -1318,7 +1393,7 @@ Widget _chromeSidePanelScaffold({
           ),
           child: _chromePanelShell(
             isDark: isDark,
-            lightSurface: ChromePanelLightSurface.settingsFrostGlass,
+            lightSurface: lightSurface,
             child: Padding(
               padding: EdgeInsets.fromLTRB(10, 10, 10, glass ? 12 : 10),
               child: Column(
@@ -1332,7 +1407,7 @@ Widget _chromeSidePanelScaffold({
                     child: SingleChildScrollView(
                       controller: scrollController,
                       physics: const ClampingScrollPhysics(),
-                      child: scrollChild,
+                      child: RepaintBoundary(child: scrollChild),
                     ),
                   ),
                   ...footer,
@@ -1806,6 +1881,7 @@ class _SupportDialogRouteBodyState extends State<_SupportDialogRouteBody> {
           consumerContext,
           app.chromeButtonSize,
         );
+        const panelSurface = ChromePanelLightSurface.settingsFrostGlassStatic;
         final text = _ChromeSidePanelTextTheme.create(
           fontSize: app.fontSize,
           lineHeight: app.lineHeight,
@@ -1826,6 +1902,7 @@ class _SupportDialogRouteBodyState extends State<_SupportDialogRouteBody> {
                 layout: layout,
                 title: 'Техподдержка',
                 titleStyle: text.titleStyle,
+                lightSurface: panelSurface,
                 scrollController: _panelScrollController,
                 scrollChild: loading
                     ? SizedBox(
@@ -1892,30 +1969,30 @@ void showAppHelpDialog(BuildContext context) {
     barrierColor: Colors.transparent,
     transitionDuration: const Duration(milliseconds: 160),
     pageBuilder: (dialogContext, animation, secondaryAnimation) {
-      return Consumer<AppProvider>(
-        builder: (consumerContext, app, _) {
-          final isDark =
-              Theme.of(consumerContext).brightness == Brightness.dark;
-          final layout = _ChromePanelLayout.fromContext(
-            consumerContext,
-            app.chromeButtonSize,
-          );
-          final text = _ChromeSidePanelTextTheme.create(
-            fontSize: app.fontSize,
-            lineHeight: app.lineHeight,
-            isDark: isDark,
-          );
-          final bodyStyle = text.bodyStyle;
-          final tocStyle = text.tocStyle;
-          final n = kParallelReadingPlan365.length;
+      final app = Provider.of<AppProvider>(dialogContext, listen: false);
+      final isDark = Theme.of(dialogContext).brightness == Brightness.dark;
+      const panelSurface = ChromePanelLightSurface.settingsFrostGlassStatic;
+      final layout = _ChromePanelLayout.fromContext(
+        dialogContext,
+        app.chromeButtonSize,
+      );
+      final text = _ChromeSidePanelTextTheme.create(
+        fontSize: app.fontSize,
+        lineHeight: app.lineHeight,
+        isDark: isDark,
+      );
+      final bodyStyle = text.bodyStyle;
+      final tocStyle = text.tocStyle;
+      const n = 365;
 
-          return _chromeSidePanelScaffold(
-            dialogContext: dialogContext,
-            isDark: isDark,
-            layout: layout,
-            title: 'Инструкция',
-            titleStyle: text.titleStyle,
-            scrollChild: DefaultTextStyle(
+      return _chromeSidePanelScaffold(
+        dialogContext: dialogContext,
+        isDark: isDark,
+        layout: layout,
+        title: 'Инструкция',
+        titleStyle: text.titleStyle,
+        lightSurface: panelSurface,
+        scrollChild: DefaultTextStyle(
               style: bodyStyle,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2130,8 +2207,6 @@ void showAppHelpDialog(BuildContext context) {
               ),
             ),
           );
-      },
-    );
     },
     transitionBuilder: (ctx, animation, secondaryAnimation, child) =>
         FadeTransition(

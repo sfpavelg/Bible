@@ -70,11 +70,6 @@ Color _bibleScreenVerseAreaBg(BuildContext context) =>
         ? BibleDarkPalette.cardBg
         : BibleLightPalette.cardFillSecondary;
 
-Color _bibleScreenVerseMutedFg(BuildContext context) =>
-    _bibleScreenIsDark(context)
-        ? BibleDarkPalette.secondaryText
-        : BibleLightPalette.secondaryText;
-
 Color _bibleScreenVerseHighlightBg(BuildContext context) =>
     _bibleScreenIsDark(context)
         ? BibleDarkPalette.accentGold.withValues(alpha: 0.28)
@@ -107,6 +102,56 @@ BorderSide _bibleChromeOutlineSide(BuildContext context) =>
     _bibleScreenIsDark(context)
         ? BibleDarkPalette.chromeButtonOutline
         : BibleLightPalette.chromePillOutlineSide;
+
+/// [Dialog] не учитывает [Scaffold.bottomNavigationBar] — резервируем вручную.
+double _bibleModalBottomChromeReserve(BuildContext context) =>
+    mainChromeTabBarTotalHeight(context) + 10.0;
+
+double _bibleModalTopChromeReserve(double chromeButtonSize) =>
+    AppProvider.toolbarHeightForChrome(chromeButtonSize) + 8.0;
+
+double _bibleModalMaxDialogHeight(
+  BuildContext context, {
+  required double screenHeight,
+  required double verticalViewPadding,
+  required double chromeButtonSize,
+  double extraMargin = 12.0,
+  double minHeight = 200.0,
+}) {
+  return (screenHeight -
+          verticalViewPadding -
+          _bibleModalBottomChromeReserve(context) -
+          _bibleModalTopChromeReserve(chromeButtonSize) -
+          extraMargin)
+      .clamp(minHeight, screenHeight);
+}
+
+/// Оболочка «Выберите книгу» / «Выберите главу» — как меню «⋯», без прозрачного
+/// [lightPanelShellDecoration] (низ градиента verseCard был полностью прозрачным).
+Widget _biblePickerDialogShell({
+  required BuildContext context,
+  required double borderRadius,
+  required Widget child,
+}) {
+  if (_bibleScreenIsDark(context)) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: BibleDarkPalette.cardBg,
+        borderRadius: BorderRadius.circular(borderRadius),
+        border: Border.all(
+          color: BibleDarkPalette.cardBorderGold,
+          width: 1,
+        ),
+        boxShadow: BibleDarkPalette.verseCardShadow,
+      ),
+      child: child,
+    );
+  }
+  return chromeFrostGlassPanelShell(
+    borderRadius: borderRadius,
+    child: child,
+  );
+}
 
 double _bibleBookChipMinWidth(
   String book,
@@ -261,9 +306,6 @@ class _BibleBookSelectionChipGrid extends StatelessWidget {
         final maxRowLen = rows.isEmpty
             ? 0
             : rows.map((r) => r.length).reduce(math.max);
-        final chipWidth = maxRowLen > 0
-            ? (maxW - horizontalGap * (maxRowLen - 1)) / maxRowLen
-            : 0.0;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -276,17 +318,12 @@ class _BibleBookSelectionChipGrid extends StatelessWidget {
                   final isPartialLastRow =
                       r == rows.length - 1 && row.length < maxRowLen;
                   if (isPartialLastRow) {
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        for (var c = 0; c < row.length; c++) ...[
-                          if (c > 0) SizedBox(width: horizontalGap),
-                          SizedBox(
-                            width: chipWidth,
-                            child: _chip(row[c]),
-                          ),
-                        ],
-                      ],
+                    // Неполный ряд: ширина по тексту, иначе при крупном шрифте/масштабе
+                    // системы «Откр» обрезается до «От…» (ширина ячейки от полных рядов).
+                    return Wrap(
+                      spacing: horizontalGap,
+                      runSpacing: verticalGap,
+                      children: [for (final book in row) _chip(book)],
                     );
                   }
                   return Row(
@@ -756,6 +793,9 @@ class _BibleScreenState extends State<BibleScreen> {
   /// Сброс [GlobalKey] строк при смене главы или параметров вёрстки списка стихов.
   String _verseListLayoutRef = '';
 
+  /// Отменяет устаревшие вызовы [_scrollToVerse] при быстрых повторных переходах.
+  int _scrollToVerseGeneration = 0;
+
   static const String _kBibleSearchHistoryKey = 'bible_search_matched_history';
   static const String _kBibleBookmarksKey = 'bible_bookmarks_tabs';
 
@@ -969,6 +1009,7 @@ class _BibleScreenState extends State<BibleScreen> {
 
   Future<void> _scrollToVerse(int verseNum) async {
     if (!mounted) return;
+    final generation = ++_scrollToVerseGeneration;
     final app = Provider.of<AppProvider>(context, listen: false);
     var verses = <Map<String, dynamic>>[];
     var index = -1;
@@ -976,8 +1017,9 @@ class _BibleScreenState extends State<BibleScreen> {
     // Дождаться списка после смены главы; rough jump — иначе у строки вне экрана
     // у GlobalKey ещё нет context (ListView.builder не построил элемент).
     for (var wait = 0; wait < 16; wait++) {
+      if (generation != _scrollToVerseGeneration) return;
       await WidgetsBinding.instance.endOfFrame;
-      if (!mounted) return;
+      if (!mounted || generation != _scrollToVerseGeneration) return;
       verses = app.getCurrentVerses();
       if (verses.isEmpty) {
         await Future<void>.delayed(const Duration(milliseconds: 24));
@@ -996,7 +1038,18 @@ class _BibleScreenState extends State<BibleScreen> {
       await Future<void>.delayed(const Duration(milliseconds: 24));
     }
 
-    if (index >= 0 &&
+    if (!mounted || generation != _scrollToVerseGeneration) return;
+
+    // Грубый jump только если строка ещё не в дереве. После успешного центрирования
+    // линейная оценка часто уводит список в сторону и GlobalKey теряет context
+    // (прокрутка «через раз» при повторном выборе из поиска).
+    final hasRowContext = () {
+      final ctx = _verseRowKeys[verseNum]?.currentContext;
+      return ctx != null && ctx.mounted;
+    }();
+
+    if (!hasRowContext &&
+        index >= 0 &&
         verses.isNotEmpty &&
         _scrollController.hasClients &&
         verses.length > 1) {
@@ -1007,10 +1060,11 @@ class _BibleScreenState extends State<BibleScreen> {
       await WidgetsBinding.instance.endOfFrame;
     }
 
-    if (!mounted) return;
+    if (!mounted || generation != _scrollToVerseGeneration) return;
     for (var attempt = 0; attempt < 12; attempt++) {
+      if (generation != _scrollToVerseGeneration) return;
       await WidgetsBinding.instance.endOfFrame;
-      if (!mounted) return;
+      if (!mounted || generation != _scrollToVerseGeneration) return;
       final ctx = _verseRowKeys[verseNum]?.currentContext;
       if (ctx != null && ctx.mounted) {
         await Scrollable.ensureVisible(
@@ -1632,8 +1686,10 @@ class _BibleScreenState extends State<BibleScreen> {
                       Navigator.pop(dialogContext);
                       await appProvider.changeBookAndChapter(book, chapter);
                       if (!mounted) return;
+                      await WidgetsBinding.instance.endOfFrame;
+                      if (!mounted) return;
                       _highlightVerseTemporarily(verse);
-                      unawaited(_scrollToVerse(verse));
+                      await _scrollToVerse(verse);
                     },
                   ),
                 ),
@@ -1754,8 +1810,13 @@ class _BibleScreenState extends State<BibleScreen> {
             final mq = MediaQuery.of(dialogContext);
             final h = mq.size.height;
             final w = mq.size.width;
-            final maxDialogH =
-                (h - mq.viewPadding.vertical - 12).clamp(120.0, h);
+            final maxDialogH = _bibleModalMaxDialogHeight(
+              dialogContext,
+              screenHeight: h,
+              verticalViewPadding: mq.viewPadding.vertical,
+              chromeButtonSize: app.chromeButtonSize,
+              minHeight: 120.0,
+            );
             final dialogMaxW = (w - 16).clamp(280.0, 440.0);
             const padH = 16.0;
             const padTop = 16.0;
@@ -1786,10 +1847,10 @@ class _BibleScreenState extends State<BibleScreen> {
             final headerH = padTop + titlePainter.height + gapAfterTitle;
             final bodyMaxH = (maxDialogH - headerH - padBottom).clamp(48.0, maxDialogH);
             final needsScroll = gridHeight > bodyMaxH;
-            /// См. [_showBookSelectionDialog]: учитываем высоту нижних вкладок.
-            final chromeBottomReserve =
-                mainChromeTabBarTotalHeight(dialogContext) + 10.0;
-            final bodyH = needsScroll ? bodyMaxH : gridHeight + chromeBottomReserve;
+            const scrollContentBottomPad = 12.0;
+            final bodyH = needsScroll
+                ? bodyMaxH
+                : gridHeight + scrollContentBottomPad;
             final chapterButtons = List.generate(chapterCount, (index) {
                               final chapterNumber = index + 1;
                               final isCurrent = selectedBook == app.currentBook &&
@@ -1863,61 +1924,50 @@ class _BibleScreenState extends State<BibleScreen> {
             horizontal: (uiFs * 0.5).clamp(6.0, 14.0),
             vertical: (uiFs * 0.375).clamp(4.0, 12.0),
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(22),
-            child: DecoratedBox(
-              decoration: _bibleScreenIsDark(dialogContext)
-                  ? BoxDecoration(
-                      color: BibleDarkPalette.cardBg,
-                      borderRadius: const BorderRadius.all(Radius.circular(22)),
-                      border: Border.all(
-                        color: BibleDarkPalette.cardBorderGold,
-                        width: 1,
-                      ),
-                      boxShadow: BibleDarkPalette.verseCardShadow,
-                    )
-                  : BibleLightPalette.lightPanelShellDecoration(radius: 22),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: dialogMaxW,
-                  maxHeight: maxDialogH,
+          child: _biblePickerDialogShell(
+            context: dialogContext,
+            borderRadius: 22,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: dialogMaxW,
+                maxHeight: maxDialogH,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  padH,
+                  padTop,
+                  padH,
+                  padBottom,
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    padH,
-                    padTop,
-                    padH,
-                    padBottom,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        titleText,
-                        style: titleStyle,
-                      ),
-                      const SizedBox(height: gapAfterTitle),
-                      SizedBox(
-                        height: bodyH,
-                        child: needsScroll
-                            ? SingleChildScrollView(
-                                child: Padding(
-                                  padding: EdgeInsets.only(
-                                    bottom: chromeBottomReserve,
-                                  ),
-                                  child: chapterGrid,
-                                ),
-                              )
-                            : Padding(
-                                padding: EdgeInsets.only(
-                                  bottom: chromeBottomReserve,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      titleText,
+                      style: titleStyle,
+                    ),
+                    const SizedBox(height: gapAfterTitle),
+                    SizedBox(
+                      height: bodyH,
+                      child: needsScroll
+                          ? SingleChildScrollView(
+                              physics: const ClampingScrollPhysics(),
+                              child: Padding(
+                                padding: const EdgeInsets.only(
+                                  bottom: scrollContentBottomPad,
                                 ),
                                 child: chapterGrid,
                               ),
-                      ),
-                    ],
-                  ),
+                            )
+                          : Padding(
+                              padding: const EdgeInsets.only(
+                                bottom: scrollContentBottomPad,
+                              ),
+                              child: chapterGrid,
+                            ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -1951,8 +2001,13 @@ class _BibleScreenState extends State<BibleScreen> {
             final textScaler = MediaQuery.textScalerOf(dialogContext);
             final h = mq.size.height;
             final w = mq.size.width;
-            final maxH =
-                (h - mq.viewPadding.vertical - 12).clamp(360.0, 2000.0);
+            final maxH = _bibleModalMaxDialogHeight(
+              dialogContext,
+              screenHeight: h,
+              verticalViewPadding: mq.viewPadding.vertical,
+              chromeButtonSize: app.chromeButtonSize,
+              minHeight: 280.0,
+            );
             final dialogMaxW = (w - 16).clamp(280.0, 560.0);
             const padDialogH = 18.0;
             const padTop = 18.0;
@@ -2031,14 +2086,11 @@ class _BibleScreenState extends State<BibleScreen> {
             final headerH = padTop + titlePainter.height + gapSm;
             final bodyMaxH =
                 (maxH - headerH - padBottom).clamp(80.0, maxH);
-            /// Запас снизу: в диалоге [MediaQuery.padding] не включает нашу нижнюю
-            /// панель вкладок — без этого последние кнопки оказываются под ней.
-            final bookListBottomPad =
-                mainChromeTabBarTotalHeight(dialogContext) + 10.0;
+            const scrollContentBottomPad = 12.0;
             final needsScroll = bookListBodyH > bodyMaxH;
             final bodyH = needsScroll
                 ? bodyMaxH
-                : bookListBodyH + bookListBottomPad;
+                : bookListBodyH + scrollContentBottomPad;
             final bookList = Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
@@ -2079,57 +2131,47 @@ class _BibleScreenState extends State<BibleScreen> {
                 horizontal: (uiFs * 0.5).clamp(6.0, 14.0),
                 vertical: (uiFs * 0.375).clamp(4.0, 12.0),
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(22),
-                child: DecoratedBox(
-                  decoration: _bibleScreenIsDark(dialogContext)
-                      ? BoxDecoration(
-                          color: BibleDarkPalette.cardBg,
-                          borderRadius: const BorderRadius.all(Radius.circular(22)),
-                          border: Border.all(
-                            color: BibleDarkPalette.cardBorderGold,
-                            width: 1,
-                          ),
-                          boxShadow: BibleDarkPalette.verseCardShadow,
-                        )
-                      : BibleLightPalette.lightPanelShellDecoration(radius: 22),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxWidth: dialogMaxW,
-                      maxHeight: maxH,
+              child: _biblePickerDialogShell(
+                context: dialogContext,
+                borderRadius: 22,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: dialogMaxW,
+                    maxHeight: maxH,
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      padDialogH,
+                      padTop,
+                      padDialogH,
+                      padBottom,
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        padDialogH,
-                        padTop,
-                        padDialogH,
-                        padBottom,
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text('Выберите книгу', style: titleStyle),
-                          SizedBox(height: gapSm),
-                          SizedBox(
-                            height: bodyH,
-                            child: needsScroll
-                                ? SingleChildScrollView(
-                                    child: Padding(
-                                      padding:
-                                          EdgeInsets.only(bottom: bookListBottomPad),
-                                      child: bookList,
-                                    ),
-                                  )
-                                : Padding(
-                                    padding: EdgeInsets.only(
-                                      bottom: bookListBottomPad,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text('Выберите книгу', style: titleStyle),
+                        SizedBox(height: gapSm),
+                        SizedBox(
+                          height: bodyH,
+                          child: needsScroll
+                              ? SingleChildScrollView(
+                                  physics: const ClampingScrollPhysics(),
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(
+                                      bottom: scrollContentBottomPad,
                                     ),
                                     child: bookList,
                                   ),
-                          ),
-                        ],
-                      ),
+                                )
+                              : Padding(
+                                  padding: const EdgeInsets.only(
+                                    bottom: scrollContentBottomPad,
+                                  ),
+                                  child: bookList,
+                                ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -2148,43 +2190,67 @@ class _BibleRailScrollHandle extends StatefulWidget {
     required this.thumbColor,
     required this.trackHintColor,
     required this.thumbSize,
-    this.onScrollAdjusted,
   });
 
   final ScrollController controller;
   final Color thumbColor;
   final Color trackHintColor;
   final double thumbSize;
-  final VoidCallback? onScrollAdjusted;
 
   @override
   State<_BibleRailScrollHandle> createState() => _BibleRailScrollHandleState();
 }
 
 class _BibleRailScrollHandleState extends State<_BibleRailScrollHandle> {
-  Widget _scrollGripLine(double width) {
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_onScroll);
+  }
+
+  @override
+  void didUpdateWidget(covariant _BibleRailScrollHandle oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_onScroll);
+      widget.controller.addListener(_onScroll);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onScroll);
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (mounted) setState(() {});
+  }
+
+  Widget _scrollGripLine(BuildContext context, double width) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: width,
       height: 2.5,
       decoration: BoxDecoration(
-        color: Colors.black,
+        color: dark ? BibleDarkPalette.accentGold : Colors.black,
         borderRadius: BorderRadius.circular(1.25),
       ),
     );
   }
 
-  Widget _scrollGripLines(double ts) {
+  Widget _scrollGripLines(BuildContext context, double ts) {
     final gap = (ts * 0.11).clamp(3.0, 6.0);
     final lineW = (ts * 0.55).clamp(14.0, 28.0);
     return Column(
       mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _scrollGripLine(lineW),
+        _scrollGripLine(context, lineW),
         SizedBox(height: gap),
-        _scrollGripLine(lineW),
+        _scrollGripLine(context, lineW),
         SizedBox(height: gap),
-        _scrollGripLine(lineW),
+        _scrollGripLine(context, lineW),
       ],
     );
   }
@@ -2200,7 +2266,6 @@ class _BibleRailScrollHandleState extends State<_BibleRailScrollHandle> {
     final targetTop = (localY - ts / 2).clamp(0.0, travel);
     final pixels = (targetTop / travel) * maxExt;
     c.jumpTo(pixels.clamp(0.0, maxExt));
-    widget.onScrollAdjusted?.call();
   }
 
   @override
@@ -2259,9 +2324,7 @@ class _BibleRailScrollHandleState extends State<_BibleRailScrollHandle> {
                     final delta = details.delta.dy;
                     final next = pos.pixels + delta * maxExt / travel;
                     c.jumpTo(next.clamp(0.0, maxExt));
-                    widget.onScrollAdjusted?.call();
                   },
-                  onVerticalDragEnd: (_) => widget.onScrollAdjusted?.call(),
                   child: Material(
                     color: widget.thumbColor,
                     elevation: 0,
@@ -2275,7 +2338,7 @@ class _BibleRailScrollHandleState extends State<_BibleRailScrollHandle> {
                     child: SizedBox(
                       width: ts,
                       height: ts,
-                      child: Center(child: _scrollGripLines(ts)),
+                      child: Center(child: _scrollGripLines(context, ts)),
                     ),
                   ),
                 ),
@@ -2704,7 +2767,6 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
     final fg = _bibleScreenChromeFg(context);
     final headingFg = _bibleScreenPanelHeadingFg(context);
     final verseBg = _bibleScreenVerseAreaBg(context);
-    final verseMuted = _bibleScreenVerseMutedFg(context);
     final rowHi = _bibleScreenRowHighlight(context);
     final hintColor = _bibleScreenIsDark(context)
         ? BibleDarkPalette.secondaryText
@@ -3167,7 +3229,7 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                                           _selectedResultIndices.contains(i);
                                       final previewBase = widget.appProvider
                                           .bibleVerseTextStyle(
-                                        color: verseMuted,
+                                        color: fg,
                                         fontWeight: FontWeight.normal,
                                       );
                                       return Material(
@@ -3250,9 +3312,6 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                                   thumbSize: (widget.appProvider.chromeButtonSize *
                                           0.68)
                                       .clamp(26.0, 36.0),
-                                  onScrollAdjusted: () {
-                                    if (mounted) setState(() {});
-                                  },
                                 ),
                                 const SizedBox(width: 4),
                               ],
@@ -3421,7 +3480,6 @@ class _BibleBookmarksPanelState extends State<_BibleBookmarksPanel> {
     final favEmptyHintBg = _bibleScreenIsDark(context)
         ? _bibleScreenVerseAreaBg(context)
         : BibleLightPalette.activeBg;
-    final verseMuted = _bibleScreenVerseMutedFg(context);
     final favIconFg = _bibleScreenIsDark(context)
         ? BibleDarkPalette.iconActive
         : BibleLightPalette.iconActive;
@@ -3565,12 +3623,12 @@ class _BibleBookmarksPanelState extends State<_BibleBookmarksPanel> {
                             final multi = _selectedEntryIndices.isNotEmpty;
                             final bodyStyle = _favoritesPanelTextStyle(
                               app,
-                              color: verseMuted,
+                              color: fg,
                               fontWeight: FontWeight.normal,
                             );
                             final headerLineStyle = _favoritesPanelTextStyle(
                               app,
-                              color: verseMuted,
+                              color: fg,
                               fontWeight: FontWeight.w600,
                               fontSize: (app.fontSize * 0.95).clamp(
                                 12.0,
