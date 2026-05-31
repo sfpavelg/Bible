@@ -2148,7 +2148,9 @@ class _NotebookScreenState extends State<NotebookScreen> {
   PreferredSizeWidget _buildEditorAppBar() {
     final chrome = context.watch<AppProvider>().chromeButtonSize;
     final toolbarH = AppProvider.toolbarHeightForChrome(chrome);
-    final rightInset = (chrome * 0.12).clamp(4.0, 10.0);
+    final gap = (chrome * 0.12).clamp(4.0, 10.0);
+    final rightInset = gap;
+    final pasteWidth = (chrome * 2.05).clamp(62.0, 88.0);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final appBarBg =
         isDark ? BibleDarkPalette.screenBg : Colors.transparent;
@@ -2186,74 +2188,83 @@ class _NotebookScreenState extends State<NotebookScreen> {
       ),
       title: const SizedBox.shrink(),
       actions: [
-        Builder(
-          builder: (context) {
-            final uc = _editorKey?.currentState?.undoHistoryController;
-            if (uc == null) return const SizedBox.shrink();
-            return ListenableBuilder(
-              listenable: uc,
-              builder: (context, _) {
-                final v = uc.value;
-                return Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Opacity(
-                      opacity: v.canUndo ? 1 : 0.38,
-                      child: ChromeIconButton(
-                        icon: Icons.undo,
-                        tooltip: 'Шаг назад',
-                        onPressed: v.canUndo ? () => uc.undo() : null,
-                        foregroundColor: chromeIconFg,
-                        backgroundColor: buttonBg,
-                        outlineSide: lightOutline,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Opacity(
-                      opacity: v.canRedo ? 1 : 0.38,
-                      child: ChromeIconButton(
-                        icon: Icons.redo,
-                        tooltip: 'Шаг вперёд',
-                        onPressed: v.canRedo ? () => uc.redo() : null,
-                        foregroundColor: chromeIconFg,
-                        backgroundColor: buttonBg,
-                        outlineSide: lightOutline,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Tooltip(
-                      message: _editorClipboardHasText
-                          ? 'Вставить из буфера'
-                          : 'Буфер пуст',
-                      child: IgnorePointer(
-                        ignoring: !_editorClipboardHasText,
-                        child: Opacity(
-                          opacity: _editorClipboardHasText ? 1 : 0.38,
-                          child: ChromeNavTextButton(
-                            label: 'Вставить',
-                            onPressed: () => unawaited(
-                              _pasteFromClipboardToEditor(),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerRight,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Builder(
+                builder: (context) {
+                  final uc = _editorKey?.currentState?.undoHistoryController;
+                  if (uc == null) return const SizedBox.shrink();
+                  return ListenableBuilder(
+                    listenable: uc,
+                    builder: (context, _) {
+                      final v = uc.value;
+                      return Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Opacity(
+                            opacity: v.canUndo ? 1 : 0.38,
+                            child: ChromeIconButton(
+                              icon: Icons.undo,
+                              tooltip: 'Шаг назад',
+                              onPressed: v.canUndo ? () => uc.undo() : null,
+                              foregroundColor: chromeIconFg,
+                              backgroundColor: buttonBg,
+                              outlineSide: lightOutline,
                             ),
-                            foregroundColor: chromeIconFg,
-                            backgroundColor: buttonBg,
-                            outlineSide: lightOutline,
-                            width: (chrome * 2.85).clamp(78.0, 118.0),
-                            height: chrome,
                           ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                  ],
-                );
-              },
-            );
-          },
-        ),
-        AppChromeOverflowMenu(
-          iconColor: chromeIconFg,
-          backgroundColor: buttonBg,
-          shapeSide: lightOutline,
+                          SizedBox(width: gap),
+                          Opacity(
+                            opacity: v.canRedo ? 1 : 0.38,
+                            child: ChromeIconButton(
+                              icon: Icons.redo,
+                              tooltip: 'Шаг вперёд',
+                              onPressed: v.canRedo ? () => uc.redo() : null,
+                              foregroundColor: chromeIconFg,
+                              backgroundColor: buttonBg,
+                              outlineSide: lightOutline,
+                            ),
+                          ),
+                          SizedBox(width: gap),
+                          Tooltip(
+                            message: _editorClipboardHasText
+                                ? 'Вставить из буфера'
+                                : 'Буфер пуст',
+                            child: IgnorePointer(
+                              ignoring: !_editorClipboardHasText,
+                              child: Opacity(
+                                opacity: _editorClipboardHasText ? 1 : 0.38,
+                                child: ChromeNavTextButton(
+                                  label: 'Вставить',
+                                  onPressed: () => unawaited(
+                                    _pasteFromClipboardToEditor(),
+                                  ),
+                                  foregroundColor: chromeIconFg,
+                                  backgroundColor: buttonBg,
+                                  outlineSide: lightOutline,
+                                  width: pasteWidth,
+                                  height: chrome,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  );
+                },
+              ),
+              SizedBox(width: gap),
+              AppChromeOverflowMenu(
+                iconColor: chromeIconFg,
+                backgroundColor: buttonBg,
+                shapeSide: lightOutline,
+              ),
+            ],
+          ),
         ),
         SizedBox(width: rightInset),
       ],

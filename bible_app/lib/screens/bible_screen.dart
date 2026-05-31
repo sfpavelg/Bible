@@ -18,6 +18,7 @@ import 'package:bible_app/widgets/chrome_frost_glass_panel.dart';
 import 'package:bible_app/widgets/chrome_outline.dart';
 import 'package:bible_app/widgets/chrome_toolbar_button.dart';
 import 'package:bible_app/widgets/main_chrome_tab_bar.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void _showTransientOverlayMessage(
@@ -929,7 +930,7 @@ class BibleScreen extends StatefulWidget {
 }
 
 class _BibleScreenState extends State<BibleScreen> {
-  final ScrollController _scrollController = ScrollController();
+  final ItemScrollController _verseItemScrollController = ItemScrollController();
 
   Future<void> _showVerseNoteDialog(String noteText) async {
     if (!mounted) return;
@@ -1075,6 +1076,9 @@ class _BibleScreenState extends State<BibleScreen> {
   /// Сброс [GlobalKey] строк при смене главы или параметров вёрстки списка стихов.
   String _verseListLayoutRef = '';
 
+  /// Стих для мгновенного [initialScrollIndex] при открытии главы из поиска/плана.
+  int? _pendingScrollVerse;
+
   /// Отменяет устаревшие вызовы [_scrollToVerse] при быстрых повторных переходах.
   int _scrollToVerseGeneration = 0;
 
@@ -1121,7 +1125,6 @@ class _BibleScreenState extends State<BibleScreen> {
     for (var i = 0; i < 80; i++) {
       if (!mounted) return;
       if (app.currentBook == r.book && app.currentChapter == r.chapter) {
-        _highlightVerseTemporarily(r.verse);
         await _scrollToVerse(r.verse);
         return;
       }
@@ -1270,7 +1273,6 @@ class _BibleScreenState extends State<BibleScreen> {
       bibleVerseJumpRequest.removeListener(lj);
     }
     _highlightTimer?.cancel();
-    _scrollController.dispose();
     super.dispose();
   }
 
@@ -1289,76 +1291,52 @@ class _BibleScreenState extends State<BibleScreen> {
     });
   }
 
+  int? _verseListIndex(List<Map<String, dynamic>> verses, int verseNum) {
+    for (var i = 0; i < verses.length; i++) {
+      final vn = verses[i]['verse'];
+      final n = vn is int ? vn : (vn as num).toInt();
+      if (n == verseNum) return i;
+    }
+    return null;
+  }
+
+  void _jumpToVerseCentered(int verseNum) {
+    final verses =
+        Provider.of<AppProvider>(context, listen: false).getCurrentVerses();
+    final index = _verseListIndex(verses, verseNum);
+    if (index == null || index < 0) return;
+    if (!_verseItemScrollController.isAttached) return;
+    _verseItemScrollController.jumpTo(index: index, alignment: 0.5);
+  }
+
+  void _scheduleVerseFocus(
+    int verseNum,
+    int generation, {
+    bool expectInitialScroll = false,
+  }) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || generation != _scrollToVerseGeneration) return;
+      if (!expectInitialScroll) {
+        _jumpToVerseCentered(verseNum);
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || generation != _scrollToVerseGeneration) return;
+        _jumpToVerseCentered(verseNum);
+        _pendingScrollVerse = null;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || generation != _scrollToVerseGeneration) return;
+          _highlightVerseTemporarily(verseNum);
+        });
+      });
+    });
+  }
+
   Future<void> _scrollToVerse(int verseNum) async {
     if (!mounted) return;
     final generation = ++_scrollToVerseGeneration;
-    final app = Provider.of<AppProvider>(context, listen: false);
-    var verses = <Map<String, dynamic>>[];
-    var index = -1;
-
-    // Дождаться списка после смены главы; rough jump — иначе у строки вне экрана
-    // у GlobalKey ещё нет context (ListView.builder не построил элемент).
-    for (var wait = 0; wait < 16; wait++) {
-      if (generation != _scrollToVerseGeneration) return;
-      await WidgetsBinding.instance.endOfFrame;
-      if (!mounted || generation != _scrollToVerseGeneration) return;
-      verses = app.getCurrentVerses();
-      if (verses.isEmpty) {
-        await Future<void>.delayed(const Duration(milliseconds: 24));
-        continue;
-      }
-      index = -1;
-      for (var i = 0; i < verses.length; i++) {
-        final vn = verses[i]['verse'];
-        final n = vn is int ? vn : (vn as num).toInt();
-        if (n == verseNum) {
-          index = i;
-          break;
-        }
-      }
-      if (index >= 0 && _scrollController.hasClients) break;
-      await Future<void>.delayed(const Duration(milliseconds: 24));
-    }
-
-    if (!mounted || generation != _scrollToVerseGeneration) return;
-
-    // Грубый jump только если строка ещё не в дереве. После успешного центрирования
-    // линейная оценка часто уводит список в сторону и GlobalKey теряет context
-    // (прокрутка «через раз» при повторном выборе из поиска).
-    final hasRowContext = () {
-      final ctx = _verseRowKeys[verseNum]?.currentContext;
-      return ctx != null && ctx.mounted;
-    }();
-
-    if (!hasRowContext &&
-        index >= 0 &&
-        verses.isNotEmpty &&
-        _scrollController.hasClients &&
-        verses.length > 1) {
-      final pos = _scrollController.position;
-      final max = pos.maxScrollExtent;
-      final t = index / (verses.length - 1);
-      pos.jumpTo((max * t).clamp(0.0, max));
-      await WidgetsBinding.instance.endOfFrame;
-    }
-
-    if (!mounted || generation != _scrollToVerseGeneration) return;
-    for (var attempt = 0; attempt < 12; attempt++) {
-      if (generation != _scrollToVerseGeneration) return;
-      await WidgetsBinding.instance.endOfFrame;
-      if (!mounted || generation != _scrollToVerseGeneration) return;
-      final ctx = _verseRowKeys[verseNum]?.currentContext;
-      if (ctx != null && ctx.mounted) {
-        await Scrollable.ensureVisible(
-          ctx,
-          alignment: 0.5,
-          duration: const Duration(milliseconds: 320),
-          curve: Curves.easeOut,
-        );
-        return;
-      }
-      await Future<void>.delayed(const Duration(milliseconds: 40));
-    }
+    _pendingScrollVerse = verseNum;
+    setState(() {});
+    _scheduleVerseFocus(verseNum, generation);
   }
 
   String? _verseText(List<Map<String, dynamic>> verses, int verseNum) {
@@ -1744,91 +1722,109 @@ class _BibleScreenState extends State<BibleScreen> {
             : Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  ListView.builder(
-                    key: ValueKey(
-                      '${appProvider.currentBook}_${appProvider.currentChapter}_${appProvider.verseFontPreset}',
-                    ),
-                    controller: _scrollController,
-                    itemCount: verses.length,
-                    itemBuilder: (context, index) {
-                      final verse = verses[index];
-                      final num = verse['verse'] as int;
-                      final payload = _bibleVerseDisplayPayloadFromRaw(
-                        (verse['text'] ?? '').toString(),
-                      );
-                      final verseTextWithMarkers =
-                          '$num. ${payload.textWithMarkers}';
-                      Color textColor = verseTextColor;
-                      final highlighted = _highlightVerse == num;
-                      final selected = _selectedVerses.contains(num);
-                      Color rowBg = verseBg;
-                      if (highlighted || selected) {
-                        rowBg = _bibleScreenVerseHighlightBg(context);
+                  Builder(
+                    builder: (context) {
+                      final pending = _pendingScrollVerse;
+                      var initialIndex = 0;
+                      var initialAlignment = 0.0;
+                      if (pending != null) {
+                        final idx = _verseListIndex(verses, pending);
+                        if (idx != null && idx >= 0) {
+                          initialIndex = idx;
+                          initialAlignment = 0.5;
+                        }
                       }
-                      final multiSelect = _selectedVerses.isNotEmpty;
-                      final gap = index < verses.length - 1
-                          ? appProvider.verseSpacing
-                          : 0.0;
-                      final showDivider = index < verses.length - 1;
-                      final dividerColor = isDark
-                          ? BibleDarkPalette.divider
-                          : BibleLightPalette.verseDivider;
-                      return KeyedSubtree(
-                        key: _verseRowKeys.putIfAbsent(
-                          num,
-                          GlobalKey.new,
+                      return ScrollablePositionedList.builder(
+                        key: ValueKey(
+                          '${appProvider.currentBook}_${appProvider.currentChapter}_'
+                          '${appProvider.verseFontPreset}',
                         ),
-                        child: Padding(
-                          padding: EdgeInsets.only(bottom: gap),
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: rowBg,
-                              border: showDivider
-                                  ? Border(
-                                      bottom: BorderSide(
-                                        color: dividerColor,
-                                        width: 1,
-                                      ),
-                                    )
-                                  : null,
+                        itemCount: verses.length,
+                        itemScrollController: _verseItemScrollController,
+                        initialScrollIndex: initialIndex,
+                        initialAlignment: initialAlignment,
+                        itemBuilder: (context, index) {
+                          final verse = verses[index];
+                          final num = verse['verse'] as int;
+                          final payload = _bibleVerseDisplayPayloadFromRaw(
+                            (verse['text'] ?? '').toString(),
+                          );
+                          final verseTextWithMarkers =
+                              '$num. ${payload.textWithMarkers}';
+                          Color textColor = verseTextColor;
+                          final highlighted = _highlightVerse == num;
+                          final selected = _selectedVerses.contains(num);
+                          Color rowBg = verseBg;
+                          if (highlighted || selected) {
+                            rowBg = _bibleScreenVerseHighlightBg(context);
+                          }
+                          final multiSelect = _selectedVerses.isNotEmpty;
+                          final gap = index < verses.length - 1
+                              ? appProvider.verseSpacing
+                              : 0.0;
+                          final showDivider = index < verses.length - 1;
+                          final dividerColor = isDark
+                              ? BibleDarkPalette.divider
+                              : BibleLightPalette.verseDivider;
+                          return KeyedSubtree(
+                            key: _verseRowKeys.putIfAbsent(
+                              num,
+                              GlobalKey.new,
                             ),
-                            child: Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                onTap: multiSelect
-                                    ? () {
-                                        setState(() {
-                                          if (_selectedVerses.contains(num)) {
-                                            _selectedVerses.remove(num);
-                                          } else {
-                                            _selectedVerses.add(num);
+                            child: Padding(
+                              padding: EdgeInsets.only(bottom: gap),
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: rowBg,
+                                  border: showDivider
+                                      ? Border(
+                                          bottom: BorderSide(
+                                            color: dividerColor,
+                                            width: 1,
+                                          ),
+                                        )
+                                      : null,
+                                ),
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: multiSelect
+                                        ? () {
+                                            setState(() {
+                                              if (_selectedVerses
+                                                  .contains(num)) {
+                                                _selectedVerses.remove(num);
+                                              } else {
+                                                _selectedVerses.add(num);
+                                              }
+                                            });
                                           }
-                                        });
-                                      }
-                                    : null,
-                                onLongPress: () {
-                                  setState(() {
-                                    if (_selectedVerses.contains(num)) {
-                                      _selectedVerses.remove(num);
-                                    } else {
-                                      _selectedVerses.add(num);
-                                    }
-                                  });
-                                },
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 2,
-                                  ),
-                                  child: Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: Text.rich(
-                                      TextSpan(
-                                        children: _buildVerseInlineSpans(
-                                          appProvider,
-                                          verseTextWithMarkers,
-                                          payload.notes,
-                                          textColor: textColor,
+                                        : null,
+                                    onLongPress: () {
+                                      setState(() {
+                                        if (_selectedVerses.contains(num)) {
+                                          _selectedVerses.remove(num);
+                                        } else {
+                                          _selectedVerses.add(num);
+                                        }
+                                      });
+                                    },
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 2,
+                                      ),
+                                      child: Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: Text.rich(
+                                          TextSpan(
+                                            children: _buildVerseInlineSpans(
+                                              appProvider,
+                                              verseTextWithMarkers,
+                                              payload.notes,
+                                              textColor: textColor,
+                                            ),
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -1836,8 +1832,8 @@ class _BibleScreenState extends State<BibleScreen> {
                                 ),
                               ),
                             ),
-                          ),
-                        ),
+                          );
+                        },
                       );
                     },
                   ),
@@ -1941,12 +1937,21 @@ class _BibleScreenState extends State<BibleScreen> {
                     },
                     onPickResult: (book, chapter, verse) async {
                       Navigator.pop(dialogContext);
+                      final generation = ++_scrollToVerseGeneration;
+                      final expectInitialScroll =
+                          appProvider.currentBook != book ||
+                              appProvider.currentChapter != chapter;
+                      _pendingScrollVerse = verse;
                       await appProvider.changeBookAndChapter(book, chapter);
-                      if (!mounted) return;
-                      await WidgetsBinding.instance.endOfFrame;
-                      if (!mounted) return;
-                      _highlightVerseTemporarily(verse);
-                      await _scrollToVerse(verse);
+                      if (!mounted || generation != _scrollToVerseGeneration) {
+                        return;
+                      }
+                      setState(() {});
+                      _scheduleVerseFocus(
+                        verse,
+                        generation,
+                        expectInitialScroll: expectInitialScroll,
+                      );
                     },
                   ),
                 ),
