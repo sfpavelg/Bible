@@ -85,12 +85,24 @@ abstract final class BibleLightPalette {
   /// Техподдержка / инструкция: сплошной фон, без просвета к тексту Библии.
   static const Color modalPanelSolid = Color(0xFFF7F5FF);
 
+  /// Непрозрачная подложка блока внутри «Инструкция» / «Техподдержка» (светлая тема).
+  static const Color modalSectionCard = Color(0xFFFAFAFE);
+
+  static const Color modalSectionCardBorder = Color(0xFFDFDAF5);
+
   static BoxDecoration lightModalOpaquePanelDecoration({double radius = 14}) =>
       BoxDecoration(
         color: modalPanelSolid,
         borderRadius: BorderRadius.circular(radius),
         boxShadow: verseCardShadow,
-        border: Border.all(color: border, width: 1),
+        border: Border.fromBorderSide(chromePillOutlineSide),
+      );
+
+  static BoxDecoration lightModalSectionCardDecoration({double radius = 14}) =>
+      BoxDecoration(
+        color: modalSectionCard,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: modalSectionCardBorder, width: 1.1),
       );
 
   // Разделители
@@ -115,9 +127,12 @@ abstract final class BibleLightPalette {
   static const BorderSide chromePillOutlineSide =
       BorderSide(color: chromePillOutlineColor, width: 1.2);
 
-  /// Активная вкладка внизу — чуть светлее основного контура.
+  /// Обводка неактивной нижней вкладки (светлая тема).
+  static const Color chromeTabInactiveBorder = Color(0xFFACA5CC);
+
+  /// Активная вкладка внизу — тот же stroke, цвет ярче [chromePillOutlineSide].
   static const BorderSide chromePillOutlineActiveSide =
-      BorderSide(color: primary, width: 1.25);
+      BorderSide(color: primary, width: 1.2);
 
   /// Обводка элементов на сплошном светлом фоне (панели, поля).
   static const BorderSide chromeBorderSide =
@@ -201,7 +216,6 @@ abstract final class BibleLightPalette {
       BoxDecoration(
         gradient: settingsFrostGlassPanelGradient,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: settingsGlassBorder, width: 1.2),
       );
 
   /// Фиолетовое свечение подписей в glass-настройках.

@@ -454,12 +454,16 @@ class BibleService {
     );
   }
 
+  /// Верхняя граница выдачи: полный обход Библии при «л» даёт десятки тысяч строк.
+  static const int searchResultsCap = 512;
+
   List<BibleVerse> search(
     String query, {
     bool includeOldTestament = true,
     bool includeNewTestament = true,
     bool wholeWordsOnly = false,
     bool includeSeptuagintText = true,
+    int maxResults = searchResultsCap,
   }) {
     final trimmed = query.trim();
     if (trimmed.isEmpty) return [];
@@ -480,13 +484,18 @@ class BibleService {
     }
 
     final List<BibleVerse> results = [];
+    var scanComplete = false;
 
     void scan(
       Map<String, Map<String, Map<String, dynamic>>> testament,
     ) {
+      if (scanComplete) return;
       testament.forEach((book, chapters) {
+        if (scanComplete) return;
         chapters.forEach((chapter, verses) {
+          if (scanComplete) return;
           verses.forEach((verse, verseData) {
+            if (scanComplete) return;
             final vd = verseData is Map<String, dynamic>
                 ? verseData
                 : <String, dynamic>{};
@@ -525,6 +534,9 @@ class BibleService {
                 type: (vd['type'] ?? 'narrative').toString(),
                 speaker: vd['speaker'] as String?,
               ));
+              if (results.length >= maxResults) {
+                scanComplete = true;
+              }
             }
           });
         });

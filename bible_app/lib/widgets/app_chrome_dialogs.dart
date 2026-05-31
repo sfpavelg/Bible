@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:bible_app/journal/faith_reading_plan_data.dart';
 import 'package:bible_app/journal/love_reading_plan_data.dart';
 import 'package:bible_app/providers/app_provider.dart';
 import 'package:bible_app/theme/bible_dark_palette.dart';
 import 'package:bible_app/theme/bible_light_palette.dart';
 import 'package:bible_app/widgets/chrome_frost_glass_panel.dart';
+import 'package:bible_app/widgets/chrome_outline.dart';
 import 'package:bible_app/widgets/chrome_pill_two_segment_control.dart';
 import 'package:bible_app/widgets/notebook_chrome_dialog_button.dart';
 import 'package:flutter/material.dart';
@@ -90,9 +92,12 @@ enum ChromePanelLightSurface {
 }
 
 /// Корпус боковых панелей «Настройки», «Техподдержка», «Инструкция».
+/// Радиус внешней оболочки боковых панелей ([_chromePanelShell]).
+const double _kChromePanelShellRadius = 12;
+
 Widget _chromePanelShell({
   required bool isDark,
-  double borderRadius = 12,
+  double borderRadius = _kChromePanelShellRadius,
   ChromePanelLightSurface lightSurface = ChromePanelLightSurface.chromeCardGlass,
   required Widget child,
 }) {
@@ -109,6 +114,19 @@ Widget _chromePanelShell({
       child: child,
     );
   }
+  if (lightSurface == ChromePanelLightSurface.modalOpaque) {
+    return Material(
+      color: BibleLightPalette.modalPanelSolid,
+      elevation: 8,
+      shadowColor: const Color(0x287B6DFF),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(borderRadius),
+        side: BibleLightPalette.chromePillOutlineSide,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: child,
+    );
+  }
   final BoxDecoration decoration = switch (lightSurface) {
     ChromePanelLightSurface.settingsPanel =>
       BibleLightPalette.lightSettingsPanelDecoration(radius: borderRadius),
@@ -116,7 +134,7 @@ Widget _chromePanelShell({
     ChromePanelLightSurface.settingsFrostGlassStatic =>
       const BoxDecoration(color: Colors.transparent),
     ChromePanelLightSurface.modalOpaque =>
-      BibleLightPalette.lightModalOpaquePanelDecoration(radius: borderRadius),
+      const BoxDecoration(color: Colors.transparent),
     ChromePanelLightSurface.chromeCardGlass =>
       BibleLightPalette.lightPanelShellDecoration(radius: borderRadius),
   };
@@ -440,16 +458,53 @@ Future<void> _openApkDownloadUrl(
   );
 }
 
-Widget _settingsGlassSectionCard({required List<Widget> children}) {
-  return Container(
-    width: double.infinity,
-    margin: const EdgeInsets.only(bottom: 8),
-    padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-    decoration: BibleLightPalette.settingsGlassCardDecoration(),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: children,
+Widget _chromeSidePanelSectionCard({
+  required bool isDark,
+  required List<Widget> children,
+}) {
+  const radius = 14.0;
+  final outline = isDark
+      ? BorderSide(color: BibleDarkPalette.cardBorderGold, width: 1)
+      : BibleLightPalette.chromePillOutlineSide;
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Material(
+      color: isDark
+          ? BibleDarkPalette.modalSectionCardBg
+          : BibleLightPalette.modalSectionCard,
+      elevation: 0,
+      shadowColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(radius),
+        side: outline,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: children,
+        ),
+      ),
     ),
+  );
+}
+
+Widget _chromeSupportSectionCard({
+  required bool isDark,
+  required String? sectionTitle,
+  required TextStyle sectionStyle,
+  required List<Widget> children,
+}) {
+  return _chromeSidePanelSectionCard(
+    isDark: isDark,
+    children: [
+      if (sectionTitle != null) ...[
+        Text(sectionTitle, style: sectionStyle),
+        const SizedBox(height: 6),
+      ],
+      ...children,
+    ],
   );
 }
 
@@ -1334,9 +1389,9 @@ class _ChromeSidePanelTextTheme {
         color: primary,
       ),
       sectionStyle: label(
-        size: (uiFs * 0.82).clamp(11.0, 18.0),
-        weight: FontWeight.w500,
-        color: secondary,
+        size: (uiFs * 0.92).clamp(12.0, 22.0),
+        weight: FontWeight.w700,
+        color: isDark ? BibleDarkPalette.titleGold : secondary,
       ),
       tocStyle: label(
         size: (uiFs * 0.95).clamp(12.0, 26.0),
@@ -1363,19 +1418,26 @@ Widget _chromeSidePanelDismissBarrier(
   );
 }
 
-/// Боковая панель: затемнение, frost-glass, фиксированный заголовок, прокрутка.
+  /// Боковая панель: затемнение, frost-glass, фиксированный заголовок, прокрутка.
 Widget _chromeSidePanelScaffold({
   required BuildContext dialogContext,
   required bool isDark,
   required _ChromePanelLayout layout,
   required String title,
   required TextStyle titleStyle,
-  required Widget scrollChild,
+  Widget? scrollChild,
+  List<Widget>? scrollSlivers,
   ScrollController? scrollController,
+  List<Widget> pinnedBelowTitle = const [],
+  bool embedScrollChild = false,
   List<Widget> footer = const [],
   ChromePanelLightSurface lightSurface =
       ChromePanelLightSurface.settingsFrostGlass,
 }) {
+  assert(
+    scrollChild != null || scrollSlivers != null,
+    'scrollChild or scrollSlivers required',
+  );
   final glass = !isDark &&
       (lightSurface == ChromePanelLightSurface.settingsFrostGlass ||
           lightSurface == ChromePanelLightSurface.settingsFrostGlassStatic);
@@ -1402,13 +1464,23 @@ Widget _chromeSidePanelScaffold({
                 children: [
                   Text(title, style: titleStyle),
                   const SizedBox(height: 6),
+                  ...pinnedBelowTitle,
                   Flexible(
                     fit: FlexFit.loose,
-                    child: SingleChildScrollView(
-                      controller: scrollController,
-                      physics: const ClampingScrollPhysics(),
-                      child: RepaintBoundary(child: scrollChild),
-                    ),
+                    child: scrollSlivers != null
+                        ? CustomScrollView(
+                            controller: scrollController,
+                            physics: const ClampingScrollPhysics(),
+                            slivers: scrollSlivers,
+                          )
+                        : embedScrollChild
+                            ? RepaintBoundary(child: scrollChild!)
+                            : SingleChildScrollView(
+                                controller: scrollController,
+                                physics: const ClampingScrollPhysics(),
+                                clipBehavior: Clip.none,
+                                child: RepaintBoundary(child: scrollChild!),
+                              ),
                   ),
                   ...footer,
                 ],
@@ -1421,28 +1493,11 @@ Widget _chromeSidePanelScaffold({
   );
 }
 
-Widget _chromeGlassSectionLabel(String text, TextStyle style) => Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Text(text, style: style),
-    );
+const double _kChromeSidePanelSectionRadius = 14;
 
-Widget _chromeGlassSection({
-  required bool glass,
-  required String? sectionTitle,
-  required TextStyle sectionStyle,
-  required List<Widget> children,
-}) {
-  final body = Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      if (sectionTitle != null)
-        _chromeGlassSectionLabel(sectionTitle, sectionStyle),
-      ...children,
-    ],
-  );
-  if (!glass) return body;
-  return _settingsGlassSectionCard(children: [body]);
-}
+Color _chromeSidePanelSectionFill(bool isDark) => isDark
+    ? BibleDarkPalette.modalSectionCardBg
+    : BibleLightPalette.modalSectionCard;
 
 /// Раскрывающийся блок без ExpansionTile (избегаем серой подложки Material 3).
 class _SupportCollapsibleBlock extends StatefulWidget {
@@ -1695,9 +1750,11 @@ class _SupportDialogRouteBodyState extends State<_SupportDialogRouteBody> {
         _versionCodeFromPackageVersion('$currentVersion+$currentBuild');
     final hasRemote = remoteRelease != null;
     final hasUpdate = hasRemote && remoteRelease!.versionCode > currentCode;
+    final changelogVersions =
+        data?.changelog ?? const <_SupportChangelogEntry>[];
 
-    final aboutSection = _chromeGlassSection(
-      glass: text.glass,
+    final aboutSection = _chromeSupportSectionCard(
+      isDark: isDark,
       sectionTitle: 'О проекте',
       sectionStyle: text.sectionStyle,
       children: [
@@ -1726,9 +1783,8 @@ class _SupportDialogRouteBodyState extends State<_SupportDialogRouteBody> {
       ],
     );
 
-    final changelogVersions = data?.changelog ?? const <_SupportChangelogEntry>[];
-    final changelogSection = _chromeGlassSection(
-      glass: text.glass,
+    final changelogSection = _chromeSupportSectionCard(
+      isDark: isDark,
       sectionTitle: changelogVersions.isEmpty ? 'История версий' : null,
       sectionStyle: text.sectionStyle,
       children: [
@@ -1767,8 +1823,8 @@ class _SupportDialogRouteBodyState extends State<_SupportDialogRouteBody> {
       ],
     );
 
-    final updateSection = _chromeGlassSection(
-      glass: text.glass,
+    final updateSection = _chromeSupportSectionCard(
+      isDark: isDark,
       sectionTitle: 'Обновление',
       sectionStyle: text.sectionStyle,
       children: [
@@ -1861,9 +1917,7 @@ class _SupportDialogRouteBodyState extends State<_SupportDialogRouteBody> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           aboutSection,
-          const SizedBox(height: 8),
           changelogSection,
-          const SizedBox(height: 8),
           updateSection,
         ],
       ),
@@ -1881,7 +1935,7 @@ class _SupportDialogRouteBodyState extends State<_SupportDialogRouteBody> {
           consumerContext,
           app.chromeButtonSize,
         );
-        const panelSurface = ChromePanelLightSurface.settingsFrostGlassStatic;
+        const panelSurface = ChromePanelLightSurface.modalOpaque;
         final text = _ChromeSidePanelTextTheme.create(
           fontSize: app.fontSize,
           lineHeight: app.lineHeight,
@@ -1961,6 +2015,511 @@ Widget _helpBullet(String text, TextStyle style) => Padding(
       child: Text('• $text', style: style),
     );
 
+/// Без теней и подчёркиваний — иначе в светлой теме наследуются «жёлтые» линии.
+TextStyle _helpPanelPlainStyle(TextStyle base) => TextStyle(
+      inherit: false,
+      fontSize: base.fontSize,
+      fontWeight: base.fontWeight,
+      fontStyle: base.fontStyle,
+      color: base.color,
+      height: base.height,
+      letterSpacing: base.letterSpacing,
+      decoration: TextDecoration.none,
+      decorationColor: null,
+      backgroundColor: null,
+      shadows: const [],
+    );
+
+BorderSide _helpInstructionOutlineSide(bool isDark) => isDark
+    ? const BorderSide(color: BibleDarkPalette.cardBorderGold, width: 1)
+    : BibleLightPalette.chromePillOutlineSide;
+
+/// Кнопка раздела «Инструкция» — как пункт меню «⋯», без внешнего отступа под «тень».
+Widget _helpInstructionMenuButton({
+  required BuildContext context,
+  required bool isDark,
+  required String label,
+  required TextStyle labelStyle,
+  VoidCallback? onTap,
+  bool showClose = false,
+  VoidCallback? onClose,
+}) {
+  final chrome = context.watch<AppProvider>().chromeButtonSize;
+  final hPad = (chrome * 0.30).clamp(10.0, 16.0);
+  final vPad = (chrome * 0.18).clamp(7.0, 11.0);
+  final labelFs = labelStyle.fontSize ?? 14.0;
+  final labelLine = labelFs * (labelStyle.height ?? 1.2);
+  final minHeight = math.max(
+    (chrome * 0.96).clamp(42.0, 62.0),
+    labelLine + vPad * 2 + 8,
+  );
+  final inner = isDark
+      ? BibleDarkPalette.cardBg
+      : BibleLightPalette.settingsGlassCard;
+  final outline = _helpInstructionOutlineSide(isDark);
+  final iconColor = isDark
+      ? BibleDarkPalette.iconActive
+      : BibleLightPalette.settingsGlassPrimary;
+  final iconSize = (labelFs * 1.1).clamp(18.0, 30.0);
+  const r = _kChromePanelShellRadius;
+
+  return Material(
+    color: Colors.transparent,
+    elevation: 0,
+    shadowColor: Colors.transparent,
+    surfaceTintColor: Colors.transparent,
+    child: Ink(
+      decoration: BoxDecoration(
+        color: inner,
+        borderRadius: BorderRadius.circular(r),
+        border: Border.fromBorderSide(outline),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(r),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: minHeight),
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: hPad, vertical: vPad),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    label,
+                    style: labelStyle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (showClose) ...[
+                  SizedBox(width: (chrome * 0.2).clamp(6.0, 12.0)),
+                  InkWell(
+                    onTap: onClose,
+                    borderRadius: BorderRadius.circular(20),
+                    child: Padding(
+                      padding: const EdgeInsets.all(2),
+                      child: Icon(
+                        Icons.arrow_back,
+                        color: iconColor,
+                        size: iconSize,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+Widget _helpInstructionScrollableContentPanel({
+  required bool isDark,
+  required ScrollController controller,
+  required Widget child,
+}) {
+  final outline = _helpInstructionOutlineSide(isDark);
+  const r = _kChromeSidePanelSectionRadius;
+  return DecoratedBox(
+    decoration: BoxDecoration(
+      color: _chromeSidePanelSectionFill(isDark),
+      borderRadius: BorderRadius.circular(r),
+      border: Border.fromBorderSide(outline),
+    ),
+    child: SingleChildScrollView(
+      controller: controller,
+      physics: const ClampingScrollPhysics(),
+      clipBehavior: Clip.hardEdge,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      child: child,
+    ),
+  );
+}
+
+List<Widget> _helpContentBible({
+  required TextStyle bodyStyle,
+  required TextStyle tocStyle,
+}) {
+  return [
+    Text('Навигация', style: tocStyle),
+    const SizedBox(height: 4),
+    _helpBullet(
+      'Книгу и главу выбирают кнопки в верхней полосе.',
+      bodyStyle,
+    ),
+    _helpBullet(
+      'Листать главу за главой можно жестом влево или вправо.',
+      bodyStyle,
+    ),
+    _helpBullet(
+      'Долгое касание стиха включает выделение; коротким касанием отмечают ещё стихи.',
+      bodyStyle,
+    ),
+    _helpBullet(
+      '«Избранное» в шапке сохраняет выбранные стихи и открывает их перечень.',
+      bodyStyle,
+    ),
+    _helpBullet(
+      'Окна выбора книги, главы, поиска и избранного закрываются '
+      'системной кнопкой «Назад» или тапом по затемнённой области вокруг окна.',
+      bodyStyle,
+    ),
+    const SizedBox(height: 10),
+    Text('Поиск', style: tocStyle),
+    const SizedBox(height: 4),
+    _helpBullet(
+      'Введите одно слово или несколько — поиск выполняется автоматически по мере набора.',
+      bodyStyle,
+    ),
+    _helpBullet(
+      'Флажки «ВЗ» и «НЗ» ограничивают поиск Ветхим или Новым Заветом.',
+      bodyStyle,
+    ),
+    _helpBullet(
+      'При включённом «Целом слове» находятся только отдельные слова целиком; '
+      'если выключить, подойдёт и вхождение внутри слова '
+      '(например, по «рад» откроется и «радость»).',
+      bodyStyle,
+    ),
+    _helpBullet(
+      'По строке из списка результатов открывается соответствующий стих.',
+      bodyStyle,
+    ),
+  ];
+}
+
+List<Widget> _helpContentNotebook({
+  required TextStyle bodyStyle,
+  required TextStyle tocStyle,
+}) {
+  return [
+    Text('Список файлов и папок', style: tocStyle),
+    const SizedBox(height: 4),
+    _helpBullet(
+      'Стрелка «Назад» слева в папке возвращает к внешнему списку.',
+      bodyStyle,
+    ),
+    _helpBullet(
+      '«Новая папка» создаёт каталог там, где вы сейчас просматриваете список.',
+      bodyStyle,
+    ),
+    _helpBullet(
+      '«Новый документ» — новая текстовая заметка; после создания откроется редактор.',
+      bodyStyle,
+    ),
+    _helpBullet(
+      'Три точки справа в шапке открывают общее меню приложения '
+      '(настройки, инструкция, выход и другое).',
+      bodyStyle,
+    ),
+    _helpBullet(
+      'В настройках можно сменить тему, шрифт и интервалы в Библии, красные буквы, '
+      'величину кнопок панели и включить «Не выключать экран».',
+      bodyStyle,
+    ),
+    _helpBullet(
+      'Короткое касание открывает файл или папку.',
+      bodyStyle,
+    ),
+    _helpBullet(
+      'Долгое касание файла или папки открывает меню справа: для файла — '
+      'поделиться, сохранить копию, переименовать или удалить; '
+      'для папки — переименовать или удалить.',
+      bodyStyle,
+    ),
+    _helpBullet(
+      'Перемещение файла: долгим касанием откройте меню файла, выберите '
+      '«Переместить в…», затем перейдите в нужную папку в дереве и нажмите '
+      '«Переместить сюда». Исходная папка отмечена серым цветом.',
+      bodyStyle,
+    ),
+    const SizedBox(height: 8),
+    Text('Редактор документа', style: tocStyle),
+    const SizedBox(height: 4),
+    _helpBullet(
+      '«Закрыть» (стрелка) — сохранить изменения и вернуться к списку.',
+      bodyStyle,
+    ),
+    _helpBullet(
+      'После паузы в наборе текст автоматически записывается на диск; '
+      'кнопка «Сохранить» в шапке сохраняет немедленно.',
+      bodyStyle,
+    ),
+    _helpBullet(
+      '«Шаг назад» и «Шаг вперёд» отменяют или возвращают последние правки в тексте.',
+      bodyStyle,
+    ),
+    _helpBullet(
+      'В списке при входе в папку внизу показана строка «Папка:» — путь от корня блокнота; '
+      'по сегментам пути можно нажимать и быстро переходить в выбранную папку '
+      '(с возвратом на нужный уровень).',
+      bodyStyle,
+    ),
+    _helpBullet(
+      'В редакторе строка «Документ:» внизу напоминает полный путь к заметке, '
+      'со всеми вложенными папками.',
+      bodyStyle,
+    ),
+    _helpBullet(
+      'Вертикальные три точки в шапке редактора ведут в то же общее меню приложения.',
+      bodyStyle,
+    ),
+    _helpBullet(
+      'Текст набирается во всю ширину экрана; стихи из вкладки «Библия» можно '
+      'скопировать и вставить сюда.',
+      bodyStyle,
+    ),
+    _helpBullet(
+      'После копирования и вставки текст в буфере сохраняется, '
+      'поэтому его можно вставлять повторно при необходимости.',
+      bodyStyle,
+    ),
+  ];
+}
+
+List<Widget> _helpContentReadingPlan({
+  required TextStyle bodyStyle,
+  required TextStyle tocStyle,
+  required int n,
+}) {
+  return [
+    _helpBullet(
+      'Для годовых планов сначала показаны четыре квартала; для тематических («Вера», «Надежда», «Любовь») — по одному кварталу; '
+      'для плана «Для начинающих» — тоже четыре квартала, но с поэтапным маршрутом для новичка. '
+      'Число дней в маршруте: «Вера» и «Надежда» — $kFaithPlanDayCount, «Любовь» — $kLovePlanDayCount. '
+      'Внутри квартала — дни подряд (для годовых планов номера 1…$n по году; для тематических — дни по номерам этого маршрута). '
+      'На экране кварталов в шапке — выбор плана и меню; внутри квартала — прокрутка списка '
+      'и переход к началу или концу перечня.',
+      bodyStyle,
+    ),
+    const SizedBox(height: 8),
+    Text('Параллельный план', style: tocStyle),
+    const SizedBox(height: 4),
+    Text(
+      'Ветхий Завет, Псалтирь и Новый Завет читаются рядом, по заранее выстроенному '
+      'порядку глав на каждый день. Нумерация дней идёт подряд (1…$n), без привязки к датам '
+      'календаря. Отметки «прочитано» хранятся на вашем устройстве.',
+      style: bodyStyle,
+    ),
+    const SizedBox(height: 10),
+    Text('Хронологический план', style: tocStyle),
+    const SizedBox(height: 4),
+    Text(
+      'Здесь порядок глав приближён к ходу событий и к сопутствующим текстам. '
+      'Дни снова идут подряд (1…$n), вне календарных дат. '
+      'Отметки «прочитано» не смешиваются с параллельным планом.',
+      style: bodyStyle,
+    ),
+    const SizedBox(height: 10),
+    Text('Последовательный план', style: tocStyle),
+    const SizedBox(height: 4),
+    Text(
+      'Все книги и главы Библии по каноническому порядку (от Бытия до Откровения) '
+      'равномерно распределены по $n дням. Отметки «прочитано» хранятся отдельно от '
+      'параллельного и хронологического планов.',
+      style: bodyStyle,
+    ),
+    const SizedBox(height: 10),
+    Text(
+      'Тематические планы («Вера», «Надежда», «Любовь»)',
+      style: tocStyle,
+    ),
+    const SizedBox(height: 4),
+    Text(
+      'У каждого тематического плана — маршрут из нескольких дней ($kFaithPlanDayCount или $kLovePlanDayCount) с темой и пояснениями к отрывкам: '
+      'на экране выбора один квартал и блок советов по чтению. В списке дней слева — ссылки на стихи, '
+      'справа — краткая мысль. Отметки «прочитано» для каждого тематического плана хранятся раздельно и отдельно от остальных планов.',
+      style: bodyStyle,
+    ),
+    const SizedBox(height: 10),
+    Text('План «Для начинающих»', style: tocStyle),
+    const SizedBox(height: 4),
+    Text(
+      'Этот план разбит на четыре последовательных квартала для плавного входа в чтение: '
+      '1-й квартал — Евангелие от Иоанна, 2-й — Деяния, 3-й — Римлянам, 4-й — Галатам. '
+      'Внутри каждого квартала дни идут по порядку, с отдельным прогрессом по дням и кварталам. '
+      'Отметки «прочитано» в плане «Для начинающих» хранятся отдельно от всех остальных планов.',
+      style: bodyStyle,
+    ),
+  ];
+}
+
+class _HelpInstructionSection {
+  const _HelpInstructionSection({
+    required this.id,
+    required this.title,
+    required this.buildContent,
+  });
+
+  final String id;
+  final String title;
+  final List<Widget> Function() buildContent;
+}
+
+class _HelpDialogRouteBody extends StatefulWidget {
+  const _HelpDialogRouteBody({required this.dialogContext});
+
+  final BuildContext dialogContext;
+
+  @override
+  State<_HelpDialogRouteBody> createState() => _HelpDialogRouteBodyState();
+}
+
+class _HelpDialogRouteBodyState extends State<_HelpDialogRouteBody> {
+  String? _selectedSectionId;
+  final ScrollController _contentScrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _contentScrollController.dispose();
+    super.dispose();
+  }
+
+  void _openSection(String id) {
+    setState(() => _selectedSectionId = id);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_contentScrollController.hasClients) {
+        _contentScrollController.jumpTo(0);
+      }
+    });
+  }
+
+  void _closeSection() {
+    setState(() => _selectedSectionId = null);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<AppProvider>(
+      builder: (consumerContext, app, _) {
+        final isDark = Theme.of(consumerContext).brightness == Brightness.dark;
+        const panelSurface = ChromePanelLightSurface.modalOpaque;
+        final layout = _ChromePanelLayout.fromContext(
+          consumerContext,
+          app.chromeButtonSize,
+        );
+        final text = _ChromeSidePanelTextTheme.create(
+          fontSize: app.fontSize,
+          lineHeight: app.lineHeight,
+          isDark: isDark,
+          glassTypography: false,
+        );
+        final helpAccentColor = isDark
+            ? BibleDarkPalette.titleGold
+            : BibleLightPalette.primaryDark;
+        final bodyStyle = _helpPanelPlainStyle(text.bodyStyle);
+        final tocStyle = _helpPanelPlainStyle(
+          text.tocStyle.copyWith(color: helpAccentColor),
+        );
+        final titleStyle = _helpPanelPlainStyle(
+          text.titleStyle.copyWith(color: helpAccentColor),
+        );
+        const n = 365;
+        final pillLabelStyle = _helpPanelPlainStyle(
+          text.sectionStyle.copyWith(
+            fontWeight: FontWeight.w600,
+            color: helpAccentColor,
+          ),
+        );
+
+        final sections = <_HelpInstructionSection>[
+          _HelpInstructionSection(
+            id: 'bible',
+            title: 'Библия',
+            buildContent: () => _helpContentBible(
+              bodyStyle: bodyStyle,
+              tocStyle: tocStyle,
+            ),
+          ),
+          _HelpInstructionSection(
+            id: 'notebook',
+            title: 'Блокнот',
+            buildContent: () => _helpContentNotebook(
+              bodyStyle: bodyStyle,
+              tocStyle: tocStyle,
+            ),
+          ),
+          _HelpInstructionSection(
+            id: 'reading_plan',
+            title: 'План чтения',
+            buildContent: () => _helpContentReadingPlan(
+              bodyStyle: bodyStyle,
+              tocStyle: tocStyle,
+              n: n,
+            ),
+          ),
+        ];
+
+        _HelpInstructionSection? selected;
+        if (_selectedSectionId != null) {
+          for (final section in sections) {
+            if (section.id == _selectedSectionId) {
+              selected = section;
+              break;
+            }
+          }
+        }
+
+        final pinnedBelowTitle = selected == null
+            ? const <Widget>[]
+            : <Widget>[
+                _helpInstructionMenuButton(
+                  context: consumerContext,
+                  isDark: isDark,
+                  label: selected.title,
+                  labelStyle: pillLabelStyle,
+                  showClose: true,
+                  onClose: _closeSection,
+                ),
+                const SizedBox(height: 6),
+              ];
+
+        final scrollChild = selected == null
+            ? SingleChildScrollView(
+                physics: const ClampingScrollPhysics(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var i = 0; i < sections.length; i++) ...[
+                      _helpInstructionMenuButton(
+                        context: consumerContext,
+                        isDark: isDark,
+                        label: sections[i].title,
+                        labelStyle: pillLabelStyle,
+                        onTap: () => _openSection(sections[i].id),
+                      ),
+                      if (i < sections.length - 1) const SizedBox(height: 4),
+                    ],
+                  ],
+                ),
+              )
+            : _helpInstructionScrollableContentPanel(
+                isDark: isDark,
+                controller: _contentScrollController,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: selected.buildContent(),
+                ),
+              );
+
+        return _chromeSidePanelScaffold(
+          dialogContext: widget.dialogContext,
+          isDark: isDark,
+          layout: layout,
+          title: 'Инструкция',
+          titleStyle: titleStyle,
+          lightSurface: panelSurface,
+          pinnedBelowTitle: pinnedBelowTitle,
+          embedScrollChild: selected != null,
+          scrollChild: scrollChild,
+        );
+      },
+    );
+  }
+}
+
 void showAppHelpDialog(BuildContext context) {
   showGeneralDialog<void>(
     context: context,
@@ -1969,244 +2528,7 @@ void showAppHelpDialog(BuildContext context) {
     barrierColor: Colors.transparent,
     transitionDuration: const Duration(milliseconds: 160),
     pageBuilder: (dialogContext, animation, secondaryAnimation) {
-      final app = Provider.of<AppProvider>(dialogContext, listen: false);
-      final isDark = Theme.of(dialogContext).brightness == Brightness.dark;
-      const panelSurface = ChromePanelLightSurface.settingsFrostGlassStatic;
-      final layout = _ChromePanelLayout.fromContext(
-        dialogContext,
-        app.chromeButtonSize,
-      );
-      final text = _ChromeSidePanelTextTheme.create(
-        fontSize: app.fontSize,
-        lineHeight: app.lineHeight,
-        isDark: isDark,
-      );
-      final bodyStyle = text.bodyStyle;
-      final tocStyle = text.tocStyle;
-      const n = 365;
-
-      return _chromeSidePanelScaffold(
-        dialogContext: dialogContext,
-        isDark: isDark,
-        layout: layout,
-        title: 'Инструкция',
-        titleStyle: text.titleStyle,
-        lightSurface: panelSurface,
-        scrollChild: DefaultTextStyle(
-              style: bodyStyle,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _chromeGlassSection(
-                    glass: text.glass,
-                    sectionTitle: 'Библия',
-                    sectionStyle: text.sectionStyle,
-                    children: [
-                      Text('Навигация', style: tocStyle),
-                      const SizedBox(height: 4),
-                      _helpBullet(
-                        'Книгу и главу выбирают кнопки в верхней полосе.',
-                        bodyStyle,
-                      ),
-                      _helpBullet(
-                        'Листать главу за главой можно жестом влево или вправо.',
-                        bodyStyle,
-                      ),
-                      _helpBullet(
-                        'Долгое касание стиха включает выделение; коротким касанием отмечают ещё стихи.',
-                        bodyStyle,
-                      ),
-                      _helpBullet(
-                        '«Избранное» в шапке сохраняет выбранные стихи и открывает их перечень.',
-                        bodyStyle,
-                      ),
-                      _helpBullet(
-                        'Окна выбора книги, главы, поиска и избранного закрываются '
-                        'системной кнопкой «Назад» или тапом по затемнённой области вокруг окна.',
-                        bodyStyle,
-                      ),
-                      const SizedBox(height: 10),
-                      Text('Поиск', style: tocStyle),
-                      const SizedBox(height: 4),
-                      _helpBullet(
-                        'Введите одно слово или несколько — поиск выполняется автоматически по мере набора.',
-                        bodyStyle,
-                      ),
-                      _helpBullet(
-                        'Флажки «ВЗ» и «НЗ» ограничивают поиск Ветхим или Новым Заветом.',
-                        bodyStyle,
-                      ),
-                      _helpBullet(
-                        'При включённом «Целом слове» находятся только отдельные слова целиком; '
-                        'если выключить, подойдёт и вхождение внутри слова '
-                        '(например, по «рад» откроется и «радость»).',
-                        bodyStyle,
-                      ),
-                      _helpBullet(
-                        'По строке из списка результатов открывается соответствующий стих.',
-                        bodyStyle,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  _chromeGlassSection(
-                    glass: text.glass,
-                    sectionTitle: 'Блокнот',
-                    sectionStyle: text.sectionStyle,
-                    children: [
-                      Text('Список файлов и папок', style: tocStyle),
-                      const SizedBox(height: 4),
-                      _helpBullet(
-                        'Стрелка «Назад» слева в папке возвращает к внешнему списку.',
-                        bodyStyle,
-                      ),
-                      _helpBullet(
-                        '«Новая папка» создаёт каталог там, где вы сейчас просматриваете список.',
-                        bodyStyle,
-                      ),
-                      _helpBullet(
-                        '«Новый документ» — новая текстовая заметка; после создания откроется редактор.',
-                        bodyStyle,
-                      ),
-                      _helpBullet(
-                        'Три точки справа в шапке открывают общее меню приложения '
-                        '(настройки, инструкция, выход и другое).',
-                        bodyStyle,
-                      ),
-                      _helpBullet(
-                        'В настройках можно сменить тему, шрифт и интервалы в Библии, красные буквы, '
-                        'величину кнопок панели и включить «Не выключать экран».',
-                        bodyStyle,
-                      ),
-                      _helpBullet(
-                        'Короткое касание открывает файл или папку.',
-                        bodyStyle,
-                      ),
-                      _helpBullet(
-                        'Долгое касание файла или папки открывает меню справа: для файла — '
-                        'поделиться, сохранить копию, переименовать или удалить; '
-                        'для папки — переименовать или удалить.',
-                        bodyStyle,
-                      ),
-                      _helpBullet(
-                        'Перемещение файла: долгим касанием откройте меню файла, выберите '
-                        '«Переместить в…», затем перейдите в нужную папку в дереве и нажмите '
-                        '«Переместить сюда». Исходная папка отмечена серым цветом.',
-                        bodyStyle,
-                      ),
-                      const SizedBox(height: 8),
-                      Text('Редактор документа', style: tocStyle),
-                      const SizedBox(height: 4),
-                      _helpBullet(
-                        '«Закрыть» (стрелка) — сохранить изменения и вернуться к списку.',
-                        bodyStyle,
-                      ),
-                      _helpBullet(
-                        'После паузы в наборе текст автоматически записывается на диск; '
-                        'кнопка «Сохранить» в шапке сохраняет немедленно.',
-                        bodyStyle,
-                      ),
-                      _helpBullet(
-                        '«Шаг назад» и «Шаг вперёд» отменяют или возвращают последние правки в тексте.',
-                        bodyStyle,
-                      ),
-                      _helpBullet(
-                        'В списке при входе в папку внизу показана строка «Папка:» — путь от корня блокнота; '
-                        'по сегментам пути можно нажимать и быстро переходить в выбранную папку '
-                        '(с возвратом на нужный уровень).',
-                        bodyStyle,
-                      ),
-                      _helpBullet(
-                        'В редакторе строка «Документ:» внизу напоминает полный путь к заметке, '
-                        'со всеми вложенными папками.',
-                        bodyStyle,
-                      ),
-                      _helpBullet(
-                        'Вертикальные три точки в шапке редактора ведут в то же общее меню приложения.',
-                        bodyStyle,
-                      ),
-                      _helpBullet(
-                        'Текст набирается во всю ширину экрана; стихи из вкладки «Библия» можно '
-                        'скопировать и вставить сюда.',
-                        bodyStyle,
-                      ),
-                      _helpBullet(
-                        'После копирования и вставки текст в буфере сохраняется, '
-                        'поэтому его можно вставлять повторно при необходимости.',
-                        bodyStyle,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  _chromeGlassSection(
-                    glass: text.glass,
-                    sectionTitle: 'План чтения',
-                    sectionStyle: text.sectionStyle,
-                    children: [
-                      _helpBullet(
-                        'Для годовых планов сначала показаны четыре квартала; для тематических («Вера», «Надежда», «Любовь») — по одному кварталу; '
-                        'для плана «Для начинающих» — тоже четыре квартала, но с поэтапным маршрутом для новичка. '
-                        'Число дней в маршруте: «Вера» и «Надежда» — $kFaithPlanDayCount, «Любовь» — $kLovePlanDayCount. '
-                        'Внутри квартала — дни подряд (для годовых планов номера 1…$n по году; для тематических — дни по номерам этого маршрута). '
-                        'На экране кварталов в шапке — выбор плана и меню; внутри квартала — прокрутка списка '
-                        'и переход к началу или концу перечня.',
-                        bodyStyle,
-                      ),
-                      const SizedBox(height: 8),
-                      Text('Параллельный план', style: tocStyle),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Ветхий Завет, Псалтирь и Новый Завет читаются рядом, по заранее выстроенному '
-                        'порядку глав на каждый день. Нумерация дней идёт подряд (1…$n), без привязки к датам '
-                        'календаря. Отметки «прочитано» хранятся на вашем устройстве.',
-                        style: bodyStyle,
-                      ),
-                      const SizedBox(height: 10),
-                      Text('Хронологический план', style: tocStyle),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Здесь порядок глав приближён к ходу событий и к сопутствующим текстам. '
-                        'Дни снова идут подряд (1…$n), вне календарных дат. '
-                        'Отметки «прочитано» не смешиваются с параллельным планом.',
-                        style: bodyStyle,
-                      ),
-                      const SizedBox(height: 10),
-                      Text('Последовательный план', style: tocStyle),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Все книги и главы Библии по каноническому порядку (от Бытия до Откровения) '
-                        'равномерно распределены по $n дням. Отметки «прочитано» хранятся отдельно от '
-                        'параллельного и хронологического планов.',
-                        style: bodyStyle,
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        'Тематические планы («Вера», «Надежда», «Любовь»)',
-                        style: tocStyle,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'У каждого тематического плана — маршрут из нескольких дней ($kFaithPlanDayCount или $kLovePlanDayCount) с темой и пояснениями к отрывкам: '
-                        'на экране выбора один квартал и блок советов по чтению. В списке дней слева — ссылки на стихи, '
-                        'справа — краткая мысль. Отметки «прочитано» для каждого тематического плана хранятся раздельно и отдельно от остальных планов.',
-                        style: bodyStyle,
-                      ),
-                      const SizedBox(height: 10),
-                      Text('План «Для начинающих»', style: tocStyle),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Этот план разбит на четыре последовательных квартала для плавного входа в чтение: '
-                        '1-й квартал — Евангелие от Иоанна, 2-й — Деяния, 3-й — Римлянам, 4-й — Галатам. '
-                        'Внутри каждого квартала дни идут по порядку, с отдельным прогрессом по дням и кварталам. '
-                        'Отметки «прочитано» в плане «Для начинающих» хранятся отдельно от всех остальных планов.',
-                        style: bodyStyle,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          );
+      return _HelpDialogRouteBody(dialogContext: dialogContext);
     },
     transitionBuilder: (ctx, animation, secondaryAnimation, child) =>
         FadeTransition(

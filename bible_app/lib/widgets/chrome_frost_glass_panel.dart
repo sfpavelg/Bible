@@ -18,19 +18,29 @@ Widget chromeFrostGlassPanelShell({
     ),
     child: child,
   );
-  return Container(
-    decoration: BoxDecoration(
+  return Material(
+    color: Colors.transparent,
+    elevation: 0,
+    shadowColor: Colors.transparent,
+    shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(borderRadius),
-      boxShadow: BibleLightPalette.settingsGlassPanelShadow,
+      side: BibleLightPalette.chromePillOutlineSide,
     ),
-    child: ClipRRect(
-      borderRadius: BorderRadius.circular(borderRadius),
-      child: backdropBlur
-          ? BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
-              child: frosted,
-            )
-          : frosted,
+    clipBehavior: Clip.antiAlias,
+    child: Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(borderRadius),
+        boxShadow: BibleLightPalette.settingsGlassPanelShadow,
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(borderRadius),
+        child: backdropBlur
+            ? BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+                child: frosted,
+              )
+            : frosted,
+      ),
     ),
   );
 }

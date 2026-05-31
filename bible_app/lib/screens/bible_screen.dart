@@ -98,6 +98,117 @@ Color _bibleSearchControlPanelTrackColor(BuildContext context) =>
         ? BibleDarkPalette.cardBg
         : BibleLightPalette.disabledBg;
 
+/// Непрозрачный фон выпадающего списка и области результатов поиска (без cardFillSecondary 70 %).
+Color _bibleSearchSolidSurfaceBg(BuildContext context) =>
+    _bibleScreenIsDark(context)
+        ? BibleDarkPalette.cardBg
+        : BibleLightPalette.topBarBg;
+
+const int _kBibleSearchResultsCap = BibleService.searchResultsCap;
+
+/// Усечённое окно превью стиха в списке поиска — не рисуем весь текст целиком.
+({int start, int end}) _bibleSearchPreviewWindowRange(
+  String fullText,
+  List<String> segments, {
+  required bool wholeWordsOnly,
+}) {
+  const padBefore = 52;
+  const padAfter = 88;
+  const maxWindow = 280;
+  const fallbackLen = 120;
+
+  if (fullText.isEmpty) return (start: 0, end: 0);
+
+  if (segments.isEmpty) {
+    final end = fullText.length < fallbackLen ? fullText.length : fallbackLen;
+    return (start: 0, end: end);
+  }
+
+  final merged = bibleMergedQueryMatches(
+    fullText,
+    segments,
+    wholeWordsOnly: wholeWordsOnly,
+  );
+  if (merged.isEmpty) {
+    final end = fullText.length < fallbackLen ? fullText.length : fallbackLen;
+    return (start: 0, end: end);
+  }
+
+  var start = merged.first.start - padBefore;
+  var end = merged.last.end + padAfter;
+  if (start < 0) start = 0;
+  if (end > fullText.length) end = fullText.length;
+  if (end - start > maxWindow) {
+    final m = merged.first;
+    start = m.start - padBefore;
+    end = m.end + padAfter;
+    if (start < 0) start = 0;
+    if (end > fullText.length) end = fullText.length;
+    if (end - start > maxWindow) {
+      end = start + maxWindow;
+      if (end > fullText.length) end = fullText.length;
+    }
+  }
+  if (end <= start) {
+    final endSafe =
+        fullText.length < fallbackLen ? fullText.length : fallbackLen;
+    return (start: 0, end: endSafe);
+  }
+  return (start: start, end: end);
+}
+
+List<InlineSpan> _bibleSearchPreviewSpans({
+  required String fullText,
+  required TextStyle baseStyle,
+  required TextStyle hiStyle,
+  required List<String> segments,
+  required bool wholeWordsOnly,
+}) {
+  if (fullText.isEmpty) {
+    return [TextSpan(text: '', style: baseStyle)];
+  }
+
+  final window = _bibleSearchPreviewWindowRange(
+    fullText,
+    segments,
+    wholeWordsOnly: wholeWordsOnly,
+  );
+  final sliceStart = window.start;
+  final sliceEnd = window.end;
+  final slice = fullText.substring(sliceStart, sliceEnd);
+
+  final merged = bibleMergedQueryMatches(
+    slice,
+    segments,
+    wholeWordsOnly: wholeWordsOnly,
+  );
+
+  final spans = <InlineSpan>[];
+  if (sliceStart > 0) {
+    spans.add(TextSpan(text: '… ', style: baseStyle));
+  }
+
+  var cursor = 0;
+  for (final m in merged) {
+    if (m.start > cursor) {
+      spans.add(
+        TextSpan(text: slice.substring(cursor, m.start), style: baseStyle),
+      );
+    }
+    spans.add(
+      TextSpan(text: slice.substring(m.start, m.end), style: hiStyle),
+    );
+    cursor = m.end;
+  }
+  if (cursor < slice.length) {
+    spans.add(TextSpan(text: slice.substring(cursor), style: baseStyle));
+  }
+  if (sliceEnd < fullText.length) {
+    spans.add(TextSpan(text: ' …', style: baseStyle));
+  }
+  return spans;
+}
+
 BorderSide _bibleChromeOutlineSide(BuildContext context) =>
     _bibleScreenIsDark(context)
         ? BibleDarkPalette.chromeButtonOutline
@@ -635,6 +746,177 @@ class _BookmarkTab {
     return _BookmarkTab.legacy(
       text: _legacyPlain ?? '',
       createdAt: createdAt,
+    );
+  }
+}
+
+/// Горизонтальный жест с видимым сдвигом главы; смена только после порога или быстрого свайпа.
+class _BibleChapterSwipeSurface extends StatefulWidget {
+  const _BibleChapterSwipeSurface({
+    required this.enabled,
+    required this.canGoPrev,
+    required this.canGoNext,
+    required this.onGoPrev,
+    required this.onGoNext,
+    required this.chapterKey,
+    required this.child,
+  });
+
+  final bool enabled;
+  final bool canGoPrev;
+  final bool canGoNext;
+  final Future<void> Function() onGoPrev;
+  final Future<void> Function() onGoNext;
+  final String chapterKey;
+  final Widget child;
+
+  @override
+  State<_BibleChapterSwipeSurface> createState() =>
+      _BibleChapterSwipeSurfaceState();
+}
+
+class _BibleChapterSwipeSurfaceState extends State<_BibleChapterSwipeSurface>
+    with SingleTickerProviderStateMixin {
+  static const _snapDuration = Duration(milliseconds: 320);
+  static const _commitDuration = Duration(milliseconds: 240);
+  static const _velocityThreshold = 420.0;
+  static const _distanceFactor = 0.2;
+
+  late final AnimationController _settleController;
+  Animation<double>? _settleAnim;
+  double _dragOffset = 0;
+  bool _transitioning = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _settleController = AnimationController(vsync: this)
+      ..addListener(() {
+        final anim = _settleAnim;
+        if (anim != null && mounted) {
+          setState(() => _dragOffset = anim.value);
+        }
+      });
+  }
+
+  @override
+  void didUpdateWidget(covariant _BibleChapterSwipeSurface oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.chapterKey != widget.chapterKey && !_transitioning) {
+      _settleController.stop();
+      _settleController.reset();
+      _dragOffset = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _settleController.dispose();
+    super.dispose();
+  }
+
+  double _maxDrag(double width) => width * 0.42;
+
+  double _rubberBand(double overflow) => overflow * 0.16;
+
+  Future<void> _animateTo(
+    double target, {
+    required Duration duration,
+    Curve curve = Curves.easeOutCubic,
+  }) async {
+    if (!mounted) return;
+    if ((_dragOffset - target).abs() < 0.5) {
+      setState(() => _dragOffset = target);
+      return;
+    }
+    _settleController.duration = duration;
+    _settleAnim = Tween<double>(begin: _dragOffset, end: target).animate(
+      CurvedAnimation(parent: _settleController, curve: curve),
+    );
+    _settleController.reset();
+    await _settleController.forward();
+    if (mounted) setState(() => _dragOffset = target);
+  }
+
+  Future<void> _snapBack() =>
+      _animateTo(0, duration: _snapDuration, curve: Curves.easeOutCubic);
+
+  void _onDragUpdate(DragUpdateDetails details, double width) {
+    if (!widget.enabled || _transitioning) return;
+    var next = _dragOffset + details.delta.dx;
+    if (next > 0 && !widget.canGoPrev) {
+      next = _rubberBand(next);
+    } else if (next < 0 && !widget.canGoNext) {
+      next = -_rubberBand(-next);
+    }
+    final max = _maxDrag(width);
+    setState(() => _dragOffset = next.clamp(-max, max));
+  }
+
+  Future<void> _onDragEnd(DragEndDetails details, double width) async {
+    if (!widget.enabled || _transitioning) return;
+    final velocity = details.primaryVelocity ?? 0;
+
+    final commitPrev = widget.canGoPrev &&
+        (_dragOffset > width * _distanceFactor || velocity > _velocityThreshold);
+    final commitNext = widget.canGoNext &&
+        (_dragOffset < -width * _distanceFactor ||
+            velocity < -_velocityThreshold);
+
+    if (commitPrev) {
+      await _commitChapter(toPrev: true, width: width);
+    } else if (commitNext) {
+      await _commitChapter(toPrev: false, width: width);
+    } else {
+      await _snapBack();
+    }
+  }
+
+  Future<void> _commitChapter({required bool toPrev, required double width}) async {
+    if (_transitioning) return;
+    _transitioning = true;
+    final exitTarget = toPrev ? width : -width;
+    await _animateTo(
+      exitTarget,
+      duration: _commitDuration,
+      curve: Curves.easeInCubic,
+    );
+    if (!mounted) return;
+    HapticFeedback.lightImpact();
+    setState(() => _dragOffset = -exitTarget * 0.92);
+    if (toPrev) {
+      await widget.onGoPrev();
+    } else {
+      await widget.onGoNext();
+    }
+    if (!mounted) return;
+    await _animateTo(0, duration: _snapDuration, curve: Curves.easeOutCubic);
+    _transitioning = false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final dragT = width <= 0 ? 0.0 : (_dragOffset.abs() / width).clamp(0.0, 1.0);
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onHorizontalDragUpdate: (d) => _onDragUpdate(d, width),
+          onHorizontalDragEnd: (d) => unawaited(_onDragEnd(d, width)),
+          onHorizontalDragCancel: () => unawaited(_snapBack()),
+          child: ClipRect(
+            child: Transform.translate(
+              offset: Offset(_dragOffset, 0),
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 80),
+                opacity: 1.0 - dragT * 0.07,
+                child: widget.child,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -1367,101 +1649,76 @@ class _BibleScreenState extends State<BibleScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
-            child: isDark
-                ? Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(20),
-                        color: BibleDarkPalette.cardBg,
-                        border: Border.all(
-                          color: BibleDarkPalette.cardBorderGold,
-                          width: 1,
-                        ),
-                        boxShadow: BibleDarkPalette.verseCardShadow,
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
-                        child: IgnorePointer(
-                          ignoring: !_isBibleInteractionActive,
-                          child: GestureDetector(
-                            onHorizontalDragEnd: (details) async {
-                              if (!_isBibleInteractionActive) return;
-                              if (details.primaryVelocity == null) return;
-                              if (details.primaryVelocity! > 0) {
-                                if (appProvider.canGoPrevBible) {
-                                  await appProvider.goPrev();
-                                }
-                              } else if (details.primaryVelocity! < 0) {
-                                if (appProvider.canGoNextBible) {
-                                  await appProvider.goNext();
-                                }
-                              }
-                            },
-                            child: _bibleVerseBody(
-                              appProvider: appProvider,
-                              verses: verses,
-                              verseBg: verseBg,
-                              verseTextColor: verseTextColor,
-                              isDark: isDark,
-                              chromeTextColor: chromeTextColor,
-                              buttonBg: buttonBg,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  )
-                : Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(20),
-                        gradient: BibleLightPalette.verseCardGradient,
-                        border: Border.all(
-                          color: BibleLightPalette.border,
-                          width: 1,
-                        ),
-                        boxShadow: BibleLightPalette.verseCardShadow,
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
-                        child: IgnorePointer(
-                          ignoring: !_isBibleInteractionActive,
-                          child: GestureDetector(
-                            onHorizontalDragEnd: (details) async {
-                              if (!_isBibleInteractionActive) return;
-                              if (details.primaryVelocity == null) return;
-                              if (details.primaryVelocity! > 0) {
-                                if (appProvider.canGoPrevBible) {
-                                  await appProvider.goPrev();
-                                }
-                              } else if (details.primaryVelocity! < 0) {
-                                if (appProvider.canGoNextBible) {
-                                  await appProvider.goNext();
-                                }
-                              }
-                            },
-                            child: _bibleVerseBody(
-                              appProvider: appProvider,
-                              verses: verses,
-                              verseBg: verseBg,
-                              verseTextColor: verseTextColor,
-                              isDark: isDark,
-                              chromeTextColor: chromeTextColor,
-                              buttonBg: buttonBg,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+            child: _buildBibleChapterCard(
+              isDark: isDark,
+              appProvider: appProvider,
+              verses: verses,
+              verseBg: verseBg,
+              verseTextColor: verseTextColor,
+              chromeTextColor: chromeTextColor,
+              buttonBg: buttonBg,
+            ),
           ),
         ],
       ),
     );
 
     return scaffold;
+  }
+
+  Widget _buildBibleChapterCard({
+    required bool isDark,
+    required AppProvider appProvider,
+    required List<Map<String, dynamic>> verses,
+    required Color verseBg,
+    required Color verseTextColor,
+    required Color chromeTextColor,
+    required Color buttonBg,
+  }) {
+    final chapterKey =
+        '${appProvider.currentBook}_${appProvider.currentChapter}';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          color: isDark ? BibleDarkPalette.cardBg : null,
+          gradient: isDark ? null : BibleLightPalette.verseCardGradient,
+          border: Border.all(
+            color: isDark
+                ? BibleDarkPalette.cardBorderGold
+                : BibleLightPalette.border,
+            width: 1,
+          ),
+          boxShadow: isDark
+              ? BibleDarkPalette.verseCardShadow
+              : BibleLightPalette.verseCardShadow,
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: IgnorePointer(
+            ignoring: !_isBibleInteractionActive,
+            child: _BibleChapterSwipeSurface(
+              enabled: _isBibleInteractionActive,
+              canGoPrev: appProvider.canGoPrevBible,
+              canGoNext: appProvider.canGoNextBible,
+              onGoPrev: appProvider.goPrev,
+              onGoNext: appProvider.goNext,
+              chapterKey: chapterKey,
+              child: _bibleVerseBody(
+                appProvider: appProvider,
+                verses: verses,
+                verseBg: verseBg,
+                verseTextColor: verseTextColor,
+                isDark: isDark,
+                chromeTextColor: chromeTextColor,
+                buttonBg: buttonBg,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _bibleVerseBody({
@@ -2364,27 +2621,11 @@ class _BibleSearchQueryPanelShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = _bibleScreenIsDark(context);
-    final panelRadius = _bibleSearchControlPanelRadius(panelRowHeight);
-    final segTrack = _bibleSearchControlPanelTrackColor(context);
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: segTrack,
-        borderRadius: BorderRadius.circular(panelRadius),
-        border: Border.all(
-          color: isDark
-              ? BibleDarkPalette.cardBorderGold
-              : BibleLightPalette.chromePillOutlineColor,
-          width: ChromeOutline.width,
-        ),
-      ),
-      child: SizedBox(
-        height: panelRowHeight,
-        child: Align(
-          alignment: Alignment.center,
-          child: child,
-        ),
+    return SizedBox(
+      height: panelRowHeight,
+      child: Align(
+        alignment: Alignment.center,
+        child: child,
       ),
     );
   }
@@ -2428,7 +2669,8 @@ class _BibleSearchDialog extends StatefulWidget {
   State<_BibleSearchDialog> createState() => _BibleSearchDialogState();
 }
 
-class _BibleSearchDialogState extends State<_BibleSearchDialog> {
+class _BibleSearchDialogState extends State<_BibleSearchDialog>
+    with WidgetsBindingObserver {
   late final TextEditingController _queryCtrl;
   late final FocusNode _focusNode;
   late List<Map<String, dynamic>> _results;
@@ -2441,6 +2683,10 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
   final ScrollController _resultsScrollController = ScrollController();
   late double _trackedResultsScrollOffset;
   Timer? _searchDebounce;
+  double _lastViewInsetBottom = 0;
+  bool _showHistorySuggestions = false;
+  List<String> _querySegmentsCache = const [];
+  bool _resultsMayHaveMore = false;
 
   @override
   void initState() {
@@ -2455,15 +2701,67 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
     _history = List<String>.from(widget.history);
     _hasRunSearch = widget.initialQuery.trim().isNotEmpty ||
         widget.initialResults.isNotEmpty;
+    _querySegmentsCache = widget.initialQuery
+        .toLowerCase()
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((segment) => segment.isNotEmpty)
+        .toSet()
+        .toList();
+    _resultsMayHaveMore = _results.length >= _kBibleSearchResultsCap;
     _trackedResultsScrollOffset =
         widget.initialScrollOffset < 0 ? 0.0 : widget.initialScrollOffset;
     _resultsScrollController.addListener(_onResultsScroll);
+    WidgetsBinding.instance.addObserver(this);
     if (_trackedResultsScrollOffset > 0 && _results.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _applyRestoredScrollOffset();
+        _lastViewInsetBottom = MediaQuery.viewInsetsOf(context).bottom;
+      });
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _lastViewInsetBottom = MediaQuery.viewInsetsOf(context).bottom;
       });
     }
+  }
+
+  @override
+  void didChangeMetrics() {
+    if (!mounted) return;
+    _applyKeyboardInset(MediaQuery.viewInsetsOf(context).bottom);
+  }
+
+  void _applyKeyboardInset(double bottom) {
+    if (_lastViewInsetBottom > 48 && bottom < 48) {
+      _hideHistorySuggestions();
+    }
+    _lastViewInsetBottom = bottom;
+  }
+
+  void _hideHistorySuggestions() {
+    if (!_showHistorySuggestions || !mounted) return;
+    setState(() => _showHistorySuggestions = false);
+  }
+
+  void _maybeShowHistorySuggestions() {
+    if (_showHistorySuggestions || !mounted || !_focusNode.hasFocus) return;
+    if (MediaQuery.viewInsetsOf(context).bottom < 48) return;
+    setState(() => _showHistorySuggestions = true);
+    _watchKeyboardWhileSuggestionsOpen();
+  }
+
+  /// Пока открыт список подсказок — каждый кадр проверяем, не спрятали ли клавиатуру.
+  void _watchKeyboardWhileSuggestionsOpen() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_showHistorySuggestions) return;
+      if (MediaQuery.viewInsetsOf(context).bottom < 48) {
+        _hideHistorySuggestions();
+        return;
+      }
+      _watchKeyboardWhileSuggestionsOpen();
+    });
   }
 
   void _applyRestoredScrollOffset() {
@@ -2478,6 +2776,7 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
   @override
   void dispose() {
     _searchDebounce?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     widget.onClosing(
       _queryCtrl.text,
       _results.map((e) => Map<String, dynamic>.from(e)).toList(),
@@ -2499,7 +2798,6 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
     if (c.hasClients) {
       _trackedResultsScrollOffset = c.offset;
     }
-    if (mounted) setState(() {});
   }
 
   void _maybeRefreshSearch() {
@@ -2554,7 +2852,10 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
     if (mounted) setState(() {});
   }
 
-  void _runSearch({bool unfocus = true}) {
+  void _runSearch({bool unfocus = true, bool hideSuggestions = false}) {
+    if (hideSuggestions) {
+      _hideHistorySuggestions();
+    }
     if (unfocus) {
       FocusManager.instance.primaryFocus?.unfocus();
     }
@@ -2564,6 +2865,8 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
         _results = [];
         _hasRunSearch = false;
         _selectedResultIndices.clear();
+        _resultsMayHaveMore = false;
+        _querySegmentsCache = const [];
       });
       _trackedResultsScrollOffset = 0;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -2580,11 +2883,15 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
       includeOldTestament: _vz,
       includeNewTestament: _nz,
       wholeWordsOnly: _wholeWords,
+      maxResults: _kBibleSearchResultsCap,
     );
+    final segments = _querySegments();
     setState(() {
       _results = list;
       _hasRunSearch = true;
       _selectedResultIndices.clear();
+      _resultsMayHaveMore = list.length >= _kBibleSearchResultsCap;
+      _querySegmentsCache = segments;
     });
     _trackedResultsScrollOffset = 0;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -2635,138 +2942,12 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
         .toList();
   }
 
-  /// Диапазон [start, end) в полном тексте стиха для превью в списке поиска.
-  ({int start, int end}) _searchPreviewRange(String fullText) {
-    const padBefore = 52;
-    const padAfter = 88;
-    const maxWindow = 560;
-    const fallbackLen = 150;
-
-    if (fullText.isEmpty) return (start: 0, end: 0);
-
-    final segments = _querySegments();
-    if (segments.isEmpty) {
-      final end = fullText.length < fallbackLen ? fullText.length : fallbackLen;
-      return (start: 0, end: end);
-    }
-
-    final merged = bibleMergedQueryMatches(
-      fullText,
-      segments,
-      wholeWordsOnly: _wholeWords,
-    );
-    if (merged.isEmpty) {
-      final end = fullText.length < fallbackLen ? fullText.length : fallbackLen;
-      return (start: 0, end: end);
-    }
-
-    var start = merged.first.start - padBefore;
-    var end = merged.last.end + padAfter;
-    for (final m in merged) {
-      final a = m.start - padBefore;
-      final b = m.end + padAfter;
-      if (a < start) start = a;
-      if (b > end) end = b;
-    }
-    if (start < 0) start = 0;
-    if (end > fullText.length) end = fullText.length;
-    if (end <= start) {
-      final endSafe =
-          fullText.length < fallbackLen ? fullText.length : fallbackLen;
-      return (start: 0, end: endSafe);
-    }
-
-    if (end - start > maxWindow) {
-      final m = merged.first;
-      start = m.start - padBefore;
-      end = m.end + padAfter;
-      if (start < 0) start = 0;
-      if (end > fullText.length) end = fullText.length;
-      if (end - start > maxWindow) {
-        end = start + maxWindow;
-        if (end > fullText.length) {
-          end = fullText.length;
-          start = end > maxWindow ? end - maxWindow : 0;
-          if (start < 0) start = 0;
-        }
-      }
-    }
-    return (start: start, end: end);
-  }
-
-  List<({int start, int end})> _mergeMatchIntervals(
-    List<({int start, int end})> raw,
-  ) {
-    if (raw.isEmpty) return raw;
-    final sorted = [...raw]..sort((a, b) => a.start.compareTo(b.start));
-    final out = <({int start, int end})>[];
-    var cur = sorted.first;
-    for (var i = 1; i < sorted.length; i++) {
-      final n = sorted[i];
-      if (n.start > cur.end) {
-        out.add(cur);
-        cur = n;
-      } else {
-        final ne = n.end > cur.end ? n.end : cur.end;
-        cur = (start: cur.start, end: ne);
-      }
-    }
-    out.add(cur);
-    return out;
-  }
-
-  /// Полный текст стиха в выдаче поиска с подсветкой совпадений (без усечения).
-  List<InlineSpan> _buildSearchPreviewSpans(
-    BuildContext context,
-    String fullText,
-    TextStyle baseStyle,
-  ) {
-    if (fullText.isEmpty) {
-      return [TextSpan(text: '', style: baseStyle)];
-    }
-
-    final segments = _querySegments();
-    final hiBg = _bibleScreenSearchMatchHighlight(context);
-    final hiStyle = baseStyle.copyWith(
-      backgroundColor: hiBg,
-      fontWeight: FontWeight.w700,
-    );
-
-    final mergedFull = segments.isEmpty
-        ? <({int start, int end})>[]
-        : bibleMergedQueryMatches(
-            fullText,
-            segments,
-            wholeWordsOnly: _wholeWords,
-          );
-
-    final mergedRel = _mergeMatchIntervals(mergedFull);
-
-    final spans = <InlineSpan>[];
-    var cursor = 0;
-    for (final m in mergedRel) {
-      if (m.start > cursor) {
-        spans.add(
-          TextSpan(text: fullText.substring(cursor, m.start), style: baseStyle),
-        );
-      }
-      spans.add(
-        TextSpan(text: fullText.substring(m.start, m.end), style: hiStyle),
-      );
-      cursor = m.end;
-    }
-    if (cursor < fullText.length) {
-      spans.add(TextSpan(text: fullText.substring(cursor), style: baseStyle));
-    }
-    return spans;
-  }
-
   @override
   Widget build(BuildContext context) {
     final padBg = _bibleScreenButtonBg(context);
     final fg = _bibleScreenChromeFg(context);
     final headingFg = _bibleScreenPanelHeadingFg(context);
-    final verseBg = _bibleScreenVerseAreaBg(context);
+    final verseBg = _bibleSearchSolidSurfaceBg(context);
     final rowHi = _bibleScreenRowHighlight(context);
     final hintColor = _bibleScreenIsDark(context)
         ? BibleDarkPalette.secondaryText
@@ -2798,6 +2979,21 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
       color: hintColor,
       fontWeight: FontWeight.w400,
     );
+    final previewBase = app.bibleVerseTextStyle(
+      color: fg,
+      fontWeight: FontWeight.normal,
+    );
+    final previewHi = previewBase.copyWith(
+      backgroundColor: _bibleScreenSearchMatchHighlight(context),
+      fontWeight: FontWeight.w700,
+    );
+    final resultHeaderStyle = app.bibleVerseTextStyle(
+      color: fg,
+      fontWeight: FontWeight.w600,
+    );
+    final resultsCountLabel = _resultsMayHaveMore
+        ? 'Найдено совпадений: ${_results.length}+ (уточните запрос — в списке первые ${_results.length})'
+        : 'Найдено совпадений: ${_results.length}';
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 4, 10, 10),
@@ -3015,6 +3211,9 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
               textEditingController: _queryCtrl,
               focusNode: _focusNode,
               optionsBuilder: (TextEditingValue tev) {
+                if (!_showHistorySuggestions) {
+                  return const Iterable<String>.empty();
+                }
                 final normalized = tev.text.toLowerCase().trim();
                 if (normalized.isEmpty) {
                   return const Iterable<String>.empty();
@@ -3035,14 +3234,28 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                 _queryCtrl.text = s;
                 _queryCtrl.selection =
                     TextSelection.collapsed(offset: s.length);
-                _runSearch(unfocus: false);
+                _runSearch(unfocus: false, hideSuggestions: true);
               },
               fieldViewBuilder:
                   (context, controller, focusNode, onFieldSubmitted) {
                 final isDark = _bibleScreenIsDark(context);
-                final fieldFill = isDark
-                    ? BibleDarkPalette.accentGold.withValues(alpha: 0.1)
-                    : Colors.transparent;
+                final fieldFill = _bibleSearchControlPanelTrackColor(context);
+                final panelRadius =
+                    _bibleSearchControlPanelRadius(panelRowHeight);
+                final outlineIdle = isDark
+                    ? BibleDarkPalette.cardBorderGold
+                    : BibleLightPalette.chromePillOutlineColor;
+                final outlineFocus = isDark
+                    ? BibleDarkPalette.accentGold
+                    : BibleLightPalette.primary;
+                OutlineInputBorder fieldOutline(Color color) =>
+                    OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(panelRadius),
+                      borderSide: BorderSide(
+                        color: color,
+                        width: ChromeOutline.width,
+                      ),
+                    );
                 final fs = queryStyle.fontSize ?? 16.0;
                 final strutH = fs * (queryStyle.height ?? 1.35);
                 final iconSize = (fs * 0.95).clamp(18.0, 28.0);
@@ -3124,17 +3337,24 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                           minHeight: iconSlotH,
                           maxHeight: iconSlotH,
                         ),
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
+                        border: fieldOutline(outlineIdle),
+                        enabledBorder: fieldOutline(outlineIdle),
+                        focusedBorder: fieldOutline(outlineFocus),
                       ),
-                      onChanged: (_) => _scheduleDebouncedSearch(),
-                      onSubmitted: (_) => _runSearch(),
+                      onChanged: (_) {
+                        _maybeShowHistorySuggestions();
+                        _scheduleDebouncedSearch();
+                      },
+                      onSubmitted: (_) =>
+                          _runSearch(hideSuggestions: true),
                     );
                   },
                 );
               },
               optionsViewBuilder: (context, onSelected, options) {
+                if (!_showHistorySuggestions || options.isEmpty) {
+                  return const SizedBox.shrink();
+                }
                 return Align(
                   alignment: Alignment.topLeft,
                   child: Material(
@@ -3203,11 +3423,18 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                             child: Row(
                               children: [
                                 Expanded(
-                                  child: ScrollConfiguration(
-                                    behavior: ScrollConfiguration.of(context)
-                                        .copyWith(scrollbars: false),
-                                    child: ListView.separated(
+                                  child: NotificationListener<ScrollStartNotification>(
+                                    onNotification: (_) {
+                                      _hideHistorySuggestions();
+                                      return false;
+                                    },
+                                    child: ScrollConfiguration(
+                                      behavior: ScrollConfiguration.of(context)
+                                          .copyWith(scrollbars: false),
+                                      child: ListView.separated(
                                       controller: _resultsScrollController,
+                                      addAutomaticKeepAlives: false,
+                                      cacheExtent: 128,
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 2,
                                       ),
@@ -3227,12 +3454,8 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                                           _selectedResultIndices.isNotEmpty;
                                       final picked =
                                           _selectedResultIndices.contains(i);
-                                      final previewBase = widget.appProvider
-                                          .bibleVerseTextStyle(
-                                        color: fg,
-                                        fontWeight: FontWeight.normal,
-                                      );
-                                      return Material(
+                                      return RepaintBoundary(
+                                        child: Material(
                                         color: picked
                                             ? rowHi
                                             : Colors.transparent,
@@ -3276,20 +3499,20 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                                               children: [
                                                 Text(
                                                   '$book $ch:$v',
-                                                  style: widget.appProvider
-                                                      .bibleVerseTextStyle(
-                                                    color: fg,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
+                                                  style: resultHeaderStyle,
                                                 ),
                                                 const SizedBox(height: 4),
                                                 Text.rich(
                                                   TextSpan(
                                                     children:
-                                                        _buildSearchPreviewSpans(
-                                                      context,
-                                                      text,
-                                                      previewBase,
+                                                        _bibleSearchPreviewSpans(
+                                                      fullText: text,
+                                                      baseStyle: previewBase,
+                                                      hiStyle: previewHi,
+                                                      segments:
+                                                          _querySegmentsCache,
+                                                      wholeWordsOnly:
+                                                          _wholeWords,
                                                     ),
                                                   ),
                                                 ),
@@ -3297,10 +3520,12 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
                                             ),
                                           ),
                                         ),
+                                      ),
                                       );
                                       },
                                     ),
                                   ),
+                                ),
                                 ),
                                 const SizedBox(width: 4),
                                 _BibleRailScrollHandle(
@@ -3359,7 +3584,7 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog> {
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Text(
-                'Найдено совпадений: ${_results.length}',
+                resultsCountLabel,
                 style: TextStyle(
                   color: headingFg,
                   fontWeight: FontWeight.w600,

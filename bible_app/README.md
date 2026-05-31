@@ -3,7 +3,7 @@
 
 ## 🔔 Последний релиз
 
-- `1.1.1+24` (2026-05-31): финальный `applicationId` `ru.februaryidea.bible`, подпись release-APK через `key.properties`, название под иконкой «Библия»; материалы для RuStore (`docs/privacy_policy.html`, `docs/rustore-store-listing.md`).
+- `1.1.1+25` (2026-05-31): «Инструкция» с меню разделов и стрелкой возврата; ровные обводки и вкладки без теней; прокрутка к курсору после вставки в блокноте; лимит 512 результатов поиска и свайп главы в Библии.
 
 ## 🚀 Быстрый старт
 
@@ -17,6 +17,11 @@ cd "c:\Project\Bible\bible_app"
 # Сборка и деплой APK:
 # Готовый файл будет здесь: build/app/outputs/flutter-apk/app-release.apk
 flutter build apk --release
+```
+```bash
+# Обновление зависимостей
+# Не обязателен, если зависимости не менялись
+flutter pub get
 ```
 3.
 ```bash
@@ -32,6 +37,10 @@ flutter emulators
 ```bash
 # Установка (или переустановка) приложения на эмулчтор emulator-5554:
 flutter install -d emulator-5554
+```
+```bash
+# Команда полного сброса эмулятора в случае исключения:
+& "C:\Users\Papa\AppData\Local\Android\sdk\platform-tools\adb.exe" -s emulator-5554 emu kill; & "C:\Users\Papa\AppData\Local\Android\sdk\emulator\emulator.exe" -avd Pixel_XL_API_34 -wipe-data
 ```
 6.
 ```bash

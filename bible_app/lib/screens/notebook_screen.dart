@@ -665,24 +665,50 @@ class _NotebookScreenState extends State<NotebookScreen> {
     return parts.map(notebookFileDisplayName).join(' / ');
   }
 
-  Future<void> _shareNotebookFile(String relativePath) async {
+  Future<void> _shareNotebookFiles(List<String> relativePaths) async {
     final repo = _repo;
-    if (repo == null) return;
-    final name = p.basename(relativePath);
-    final displayName = notebookFileDisplayName(name);
+    if (repo == null || relativePaths.isEmpty) return;
     try {
-      final text = await repo.readFile(relativePath);
       if (repo.isFileSystemBacked) {
-        final path = await repo.nativeFilePath(relativePath);
-        if (path != null && File(path).existsSync()) {
-          await Share.shareXFiles(
-            [XFile(path, mimeType: 'text/plain', name: displayName)],
-            text: displayName,
-          );
+        final xFiles = <XFile>[];
+        for (final relativePath in relativePaths) {
+          final name = p.basename(relativePath);
+          final displayName = notebookFileDisplayName(name);
+          final path = await repo.nativeFilePath(relativePath);
+          if (path != null && File(path).existsSync()) {
+            xFiles.add(
+              XFile(path, mimeType: 'text/plain', name: displayName),
+            );
+          }
+        }
+        if (xFiles.isNotEmpty) {
+          final shareText = xFiles.length == 1
+              ? xFiles.first.name
+              : '${xFiles.length} файлов';
+          await Share.shareXFiles(xFiles, text: shareText);
           return;
         }
       }
-      await Share.share(text, subject: displayName);
+
+      if (relativePaths.length == 1) {
+        final relativePath = relativePaths.first;
+        final name = p.basename(relativePath);
+        final displayName = notebookFileDisplayName(name);
+        final text = await repo.readFile(relativePath);
+        await Share.share(text, subject: displayName);
+        return;
+      }
+
+      final parts = <String>[];
+      for (final relativePath in relativePaths) {
+        final displayName = notebookFileDisplayName(p.basename(relativePath));
+        final text = await repo.readFile(relativePath);
+        parts.add('--- $displayName ---\n$text');
+      }
+      await Share.share(
+        parts.join('\n\n'),
+        subject: '${relativePaths.length} файлов',
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -947,7 +973,9 @@ class _NotebookScreenState extends State<NotebookScreen> {
   Future<void> _runPanelShare() async {
     final a = _fileActionsAnchor;
     if (a == null || a.isFolder) return;
-    await _shareNotebookFile(a.relativePath);
+    final paths = _orderedBulkSelectedFilePaths();
+    if (paths.isEmpty) return;
+    await _shareNotebookFiles(paths);
     _closeFileActionsPanel();
   }
 
@@ -1081,7 +1109,9 @@ class _NotebookScreenState extends State<NotebookScreen> {
             if (!a.isFolder)
               _NotebookChromePanelActionButton(
                 icon: Icons.share_outlined,
-                label: 'Поделиться…',
+                label: _bulkSelectedFilePaths.length > 1
+                    ? 'Поделиться… (${_bulkSelectedFilePaths.length})'
+                    : 'Поделиться…',
                 onTap: () => unawaited(_runPanelShare()),
               )
             else ...[

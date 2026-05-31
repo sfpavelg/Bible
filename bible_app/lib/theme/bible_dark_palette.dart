@@ -44,4 +44,14 @@ abstract final class BibleDarkPalette {
 
   static BorderSide get cardOutline =>
       const BorderSide(color: cardBorderGold, width: 1);
+
+  /// Подложка блока «Библия» / «Блокнот» в «Инструкция» и «Техподдержка».
+  static const Color modalSectionCardBg = Color(0xFF2C2C2C);
+
+  static BoxDecoration modalSectionCardDecoration({double radius = 14}) =>
+      BoxDecoration(
+        color: modalSectionCardBg,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: cardBorderGold, width: 1),
+      );
 }

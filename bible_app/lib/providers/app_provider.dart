@@ -429,6 +429,7 @@ class AppProvider with ChangeNotifier {
     bool includeOldTestament = true,
     bool includeNewTestament = true,
     bool wholeWordsOnly = false,
+    int maxResults = BibleService.searchResultsCap,
   }) {
     final results = _bibleService.search(
       query,
@@ -436,6 +437,7 @@ class AppProvider with ChangeNotifier {
       includeNewTestament: includeNewTestament,
       wholeWordsOnly: wholeWordsOnly,
       includeSeptuagintText: _showSeptuagintText,
+      maxResults: maxResults,
     );
     return results.map((verse) => verse.toMap()).toList();
   }
