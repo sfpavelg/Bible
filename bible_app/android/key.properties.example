@@ -1,0 +1,13 @@
+# Скопируйте в android/key.properties и заполните (файл в .gitignore).
+# Путь storeFile — относительно папки android/app/ (модуль приложения).
+#
+# Пример: keystore в c:\Key\Bible\upload-keystore.jks
+# storeFile=C:/Key/Bible/upload-keystore.jks
+#
+# Пример: keystore в корне bible_app/
+# storeFile=../../upload-keystore.jks
+
+storePassword=ВАШ_STORE_PASSWORD
+keyPassword=ВАШ_KEY_PASSWORD
+keyAlias=upload
+storeFile=C:/Key/Bible/upload-keystore.jks

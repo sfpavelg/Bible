@@ -8,7 +8,7 @@
         </intent>
     </queries>
     <application
-        android:label="Bible"
+        android:label="Библия"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:largeHeap="true">

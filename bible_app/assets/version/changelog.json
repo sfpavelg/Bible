@@ -2,6 +2,16 @@
   "versions": [
     {
       "version_name": "1.1.1",
+      "version_code": 24,
+      "date": "2026-05-31",
+      "changes": [
+        "Для установки на телефон и будущего RuStore зафиксирован постоянный идентификатор приложения `ru.februaryidea.bible` вместо прежнего `com.example.bible_app`: это новая установка поверх старых APK с Drive, не обновление «поверх» — после заливки проверьте, что приложение называется «Библия» под иконкой и открывается с вашими данными в блокноте только если вы не меняли каталог вручную.",
+        "Release-сборки (`flutter build apk --release`) теперь подписываются вашим upload-keystore через локальный файл `android/key.properties` (в репозитории только образец `key.properties.example`, без паролей). Перед заливкой APK на Drive или телефон убедитесь командой `keytool -printcert -jarfile app-release.apk`, что владелец сертификата — Pavel Sofein, а не Android Debug; сохраните keystore и SHA256 для всех будущих обновлений.",
+        "В репозиторий добавлены материалы под будущую публикацию: политика конфиденциальности в `docs/privacy_policy.html` и готовые тексты карточки RuStore в `docs/rustore-store-listing.md`; в README — краткий раздел «RuStore и Google Play — подготовка». Саму публикацию в магазин можно отложить — APK для тестов собирается тем же pipeline."
+      ]
+    },
+    {
+      "version_name": "1.1.1",
       "version_code": 23,
       "date": "2026-05-19",
       "changes": [

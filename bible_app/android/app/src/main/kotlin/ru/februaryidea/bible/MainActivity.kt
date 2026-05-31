@@ -1,4 +1,4 @@
-package com.example.bible_app
+package ru.februaryidea.bible
 
 import android.os.Bundle
 import androidx.core.view.WindowCompat

@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## 1.1.1+24 - 2026-05-31
+
+- **Android для release и RuStore**: `applicationId` зафиксирован как `ru.februaryidea.bible`; release-сборка подписывается через `android/key.properties` и upload-keystore (шаблон `key.properties.example`). Под иконкой на лаунчере — «Библия».
+- **Документы магазина**: политика конфиденциальности (`docs/privacy_policy.html`) и тексты карточки RuStore (`docs/rustore-store-listing.md`); в README — раздел подготовки к RuStore/Google Play.
+- **Проверка перед заливкой на телефон**: соберите `flutter build apk --release` и убедитесь, что `keytool -printcert` показывает ваш сертификат, не Android Debug.
+
 ## 1.1.1+23 - 2026-05-19
 
 - **Поиск → стих**: переход из выдачи снова каждый раз центрирует и подсвечивает нужный стих (исправлен эффект «через раз» из‑за грубого сдвига списка и параллельных прокруток). Проверьте повторные переходы в ту же главу.
