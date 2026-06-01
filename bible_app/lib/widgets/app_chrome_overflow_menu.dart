@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:bible_app/inspiration/inspiration_notifications.dart';
 import 'package:bible_app/providers/app_provider.dart';
 import 'package:bible_app/theme/bible_dark_palette.dart';
 import 'package:bible_app/theme/bible_light_palette.dart';
@@ -11,6 +12,19 @@ import 'package:bible_app/widgets/chrome_outline.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+/// Пункт дополнительного меню «⋯» (например, на экране «Стих для вдохновения»).
+class AppChromeOverflowExtraItem {
+  const AppChromeOverflowExtraItem({
+    required this.route,
+    required this.label,
+    required this.icon,
+  });
+
+  final String route;
+  final String label;
+  final IconData icon;
+}
+
 /// Меню «⋯»: кнопка наследует цвета хрома ([iconColor] / [backgroundColor]),
 /// выпадающий список следует светлой/тёмной теме приложения.
 class AppChromeOverflowMenu extends StatefulWidget {
@@ -20,6 +34,7 @@ class AppChromeOverflowMenu extends StatefulWidget {
     this.backgroundColor = BibleLightPalette.chromePillFill,
     this.tileWidth,
     this.shapeSide,
+    this.extraItems,
   });
 
   /// Иконка и фон **квадратной кнопки** «⋯» (как у ChromeIconButton).
@@ -31,6 +46,9 @@ class AppChromeOverflowMenu extends StatefulWidget {
 
   /// Обводка кнопки; по умолчанию [ChromeOutline.side].
   final BorderSide? shapeSide;
+
+  /// Дополнительные пункты перед «Выход» (контекст экрана плана и т. п.).
+  final List<AppChromeOverflowExtraItem>? extraItems;
 
   @override
   State<AppChromeOverflowMenu> createState() => _AppChromeOverflowMenuState();
@@ -79,6 +97,11 @@ class _AppChromeOverflowMenuState extends State<AppChromeOverflowMenu> {
               ),
               const SizedBox(height: 4),
               menuTile('help', 'Инструкция', Icons.help_outline_rounded),
+              if (widget.extraItems != null)
+                for (final extra in widget.extraItems!) ...[
+                  const SizedBox(height: 4),
+                  menuTile(extra.route, extra.label, extra.icon),
+                ],
               const SizedBox(height: 4),
               menuTile('exit', 'Выход', Icons.logout_rounded),
             ],
@@ -135,6 +158,11 @@ class _AppChromeOverflowMenuState extends State<AppChromeOverflowMenu> {
       showAppSupportDialog(context);
     } else if (value == 'help') {
       showAppHelpDialog(context);
+    } else if (value == 'inspiration_help') {
+      showAppHelpDialog(context, initialSectionId: 'inspiration_verse');
+    } else if (value == 'inspiration_notify') {
+      await InspirationNotificationService.instance
+          .showPermissionCheckNotice(context);
     } else if (value == 'exit') {
       requestAppExit();
     }

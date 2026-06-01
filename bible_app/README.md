@@ -807,6 +807,7 @@ Target audience / News / COVID (если применимо).
 | **applicationId** | `ru.februaryidea.bible` (задан в `android/app/build.gradle`) |
 | Политика конфиденциальности | `docs/privacy_policy.html` → опубликовать URL в консоли |
 | Тексты карточки RuStore | `docs/rustore-store-listing.md` |
+| ТЗ «Стих для вдохновения» | `docs/inspiration-verse-plan-spec.md` |
 | Пример подписи | `android/key.properties.example` → скопировать в `android/key.properties` |
 
 Сборка для RuStore (нужен `android/key.properties` с путём к keystore):

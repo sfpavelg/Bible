@@ -23,7 +23,8 @@ void showAppBottomNotice(
     return;
   }
 
-  final bottom = mainChromeTabBarTotalHeight(context);
+  final bottom =
+      mainChromeTabBarTotalHeight(context) + MediaQuery.viewInsetsOf(context).bottom;
 
   late final OverlayEntry entry;
   entry = OverlayEntry(

@@ -1122,6 +1122,9 @@ class _BibleScreenState extends State<BibleScreen> {
   /// План «Вера» и др.: после смены главы из журнала — подсветка первого стиха, как из поиска.
   Future<void> _consumeBibleVerseJumpFromPlan(BibleVerseJumpRequest r) async {
     final app = Provider.of<AppProvider>(context, listen: false);
+    if (app.currentBook != r.book || app.currentChapter != r.chapter) {
+      await app.changeBookAndChapter(r.book, r.chapter);
+    }
     for (var i = 0; i < 80; i++) {
       if (!mounted) return;
       if (app.currentBook == r.book && app.currentChapter == r.chapter) {

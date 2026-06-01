@@ -12,6 +12,7 @@
 - `docs/06_web_layer.md` - Web-слой.
 - `docs/07_windows_layer.md` - Windows-слой.
 - `docs/08_generated_and_service_layer.md` - служебные и генерируемые файлы/папки.
+- `docs/inspiration-verse-plan-spec.md` - ТЗ плана «Стих для вдохновения» (локальные уведомления, календари, UX).
 
 ## Принцип описания
 

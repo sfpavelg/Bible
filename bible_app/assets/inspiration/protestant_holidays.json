@@ -1,0 +1,113 @@
+[
+  {
+    "id": "christmas",
+    "name": "Рождество Христово",
+    "tradition": "protestant",
+    "dateRule": { "type": "fixed", "month": 12, "day": 25 },
+    "verseRefs": [
+      { "book": "Луки", "chapter": 2, "verse": 11 },
+      { "book": "Луки", "chapter": 2, "verse": 14 },
+      { "book": "Матфея", "chapter": 1, "verse": 23 },
+      { "book": "Исаия", "chapter": 9, "verse": 6 },
+      { "book": "Иоанна", "chapter": 1, "verse": 14 }
+    ]
+  },
+  {
+    "id": "epiphany",
+    "name": "Богоявление",
+    "tradition": "protestant",
+    "dateRule": { "type": "fixed", "month": 1, "day": 6 },
+    "verseRefs": [
+      { "book": "Матфея", "chapter": 2, "verse": 11 },
+      { "book": "Матфея", "chapter": 2, "verse": 2 },
+      { "book": "Исаия", "chapter": 60, "verse": 3 },
+      { "book": "Луки", "chapter": 2, "verse": 32 }
+    ]
+  },
+  {
+    "id": "ash_wednesday",
+    "name": "Пепельная среда",
+    "tradition": "protestant",
+    "dateRule": { "type": "easter", "offsetDays": -46 },
+    "verseRefs": [
+      { "book": "Иоиль", "chapter": 2, "verse": 12 },
+      { "book": "Иоиль", "chapter": 2, "verse": 13 },
+      { "book": "Матфея", "chapter": 6, "verse": 16 },
+      { "book": "Псалтирь", "chapter": 50, "verse": 19 }
+    ]
+  },
+  {
+    "id": "palm_sunday",
+    "name": "Вербное воскресенье",
+    "tradition": "protestant",
+    "dateRule": { "type": "easter", "offsetDays": -7 },
+    "verseRefs": [
+      { "book": "Матфея", "chapter": 21, "verse": 9 },
+      { "book": "Иоанна", "chapter": 12, "verse": 13 },
+      { "book": "Марка", "chapter": 11, "verse": 9 },
+      { "book": "Захария", "chapter": 9, "verse": 9 }
+    ]
+  },
+  {
+    "id": "good_friday",
+    "name": "Страстная пятница",
+    "tradition": "protestant",
+    "dateRule": { "type": "easter", "offsetDays": -2 },
+    "verseRefs": [
+      { "book": "Иоанна", "chapter": 19, "verse": 30 },
+      { "book": "Матфея", "chapter": 27, "verse": 50 },
+      { "book": "Исаия", "chapter": 53, "verse": 5 },
+      { "book": "1 Петра", "chapter": 2, "verse": 24 }
+    ]
+  },
+  {
+    "id": "easter",
+    "name": "Пасха",
+    "tradition": "protestant",
+    "dateRule": { "type": "easter", "offsetDays": 0 },
+    "verseRefs": [
+      { "book": "Марка", "chapter": 16, "verse": 6 },
+      { "book": "Матфея", "chapter": 28, "verse": 6 },
+      { "book": "Луки", "chapter": 24, "verse": 6 },
+      { "book": "Иоанна", "chapter": 11, "verse": 25 },
+      { "book": "1 Коринфянам", "chapter": 15, "verse": 55 },
+      { "book": "Римлянам", "chapter": 6, "verse": 9 }
+    ]
+  },
+  {
+    "id": "ascension",
+    "name": "Вознесение",
+    "tradition": "protestant",
+    "dateRule": { "type": "easter", "offsetDays": 39 },
+    "verseRefs": [
+      { "book": "Деяния", "chapter": 1, "verse": 9 },
+      { "book": "Луки", "chapter": 24, "verse": 51 },
+      { "book": "Марка", "chapter": 16, "verse": 19 },
+      { "book": "Ефесянам", "chapter": 4, "verse": 8 }
+    ]
+  },
+  {
+    "id": "pentecost",
+    "name": "Троица",
+    "tradition": "protestant",
+    "dateRule": { "type": "easter", "offsetDays": 49 },
+    "verseRefs": [
+      { "book": "Деяния", "chapter": 2, "verse": 4 },
+      { "book": "Деяния", "chapter": 2, "verse": 38 },
+      { "book": "Иоиль", "chapter": 2, "verse": 28 },
+      { "book": "Иоанна", "chapter": 14, "verse": 26 }
+    ]
+  },
+  {
+    "id": "reformation",
+    "name": "День Реформации",
+    "tradition": "protestant",
+    "dateRule": { "type": "fixed", "month": 10, "day": 31 },
+    "verseRefs": [
+      { "book": "Римлянам", "chapter": 3, "verse": 28 },
+      { "book": "Ефесянам", "chapter": 2, "verse": 8 },
+      { "book": "Галатам", "chapter": 2, "verse": 16 },
+      { "book": "Римлянам", "chapter": 1, "verse": 17 }
+    ]
+  }
+]

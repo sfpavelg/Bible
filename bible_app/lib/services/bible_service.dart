@@ -581,4 +581,37 @@ class BibleService {
     );
     return bookObj.abbreviation;
   }
+
+  List<BibleVersePointer>? _globalVerseIndex;
+
+  void _ensureGlobalVerseIndex() {
+    if (_globalVerseIndex != null) return;
+    final list = <BibleVersePointer>[];
+    for (final book in BibleBook.books) {
+      for (var ch = 1; ch <= book.chapters; ch++) {
+        for (final v in getVerses(book.name, ch)) {
+          list.add(
+            BibleVersePointer(
+              book: book.name,
+              chapter: ch,
+              verse: v.verse,
+            ),
+          );
+        }
+      }
+    }
+    _globalVerseIndex = list;
+  }
+
+  int get totalVerseCount {
+    _ensureGlobalVerseIndex();
+    return _globalVerseIndex!.length;
+  }
+
+  BibleVersePointer? verseAtGlobalIndex(int index) {
+    _ensureGlobalVerseIndex();
+    final list = _globalVerseIndex!;
+    if (index < 0 || index >= list.length) return null;
+    return list[index];
+  }
 }

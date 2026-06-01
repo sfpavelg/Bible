@@ -10,6 +10,7 @@ import 'package:bible_app/journal/love_reading_plan_data.dart';
 import 'package:bible_app/journal/thematic_reading_plan_models.dart';
 import 'package:bible_app/journal/parallel_reading_plan_data.dart';
 import 'package:bible_app/journal/sequential_reading_plan.dart';
+import 'package:bible_app/screens/inspiration_plan_screen.dart';
 import 'package:bible_app/models/bible_model.dart';
 import 'package:bible_app/navigation/app_tab_switcher.dart';
 import 'package:bible_app/providers/app_provider.dart';
@@ -32,6 +33,7 @@ enum _JournalPlanKind {
   hope,
   love,
   beginner,
+  inspiration,
 }
 
 bool _journalPlanIsThematic(_JournalPlanKind p) =>
@@ -48,6 +50,7 @@ List<int> _quarterDayCountsForPlan(_JournalPlanKind p) => switch (p) {
       _JournalPlanKind.faith => [kFaithPlanDayCount],
       _JournalPlanKind.hope => [kHopePlanDayCount],
       _JournalPlanKind.love => [kLovePlanDayCount],
+      _JournalPlanKind.inspiration => const <int>[],
     };
 
 int _quarterStartDayIndexForPlan(_JournalPlanKind p, int quarterIndex) {
@@ -560,6 +563,8 @@ class _JournalScreenState extends State<JournalScreen>
       case _JournalPlanKind.beginner:
         _scrollQuarterBeginner[q] = offset;
         break;
+      case _JournalPlanKind.inspiration:
+        break;
     }
   }
 
@@ -671,6 +676,7 @@ class _JournalScreenState extends State<JournalScreen>
       _JournalPlanKind.love =>
         _scrollQuarterLove.isNotEmpty ? _scrollQuarterLove[0] : 0.0,
       _JournalPlanKind.beginner => _scrollQuarterBeginner[q],
+      _JournalPlanKind.inspiration => 0.0,
     };
 
     void tryJump(int attempt) {
@@ -734,6 +740,7 @@ class _JournalScreenState extends State<JournalScreen>
       _JournalPlanKind.hope => _hopeDone,
       _JournalPlanKind.love => _loveDone,
       _JournalPlanKind.beginner => _beginnerDone,
+      _JournalPlanKind.inspiration => const <int>{},
     };
     return done.where((i) => i >= start && i < end).length;
   }
@@ -810,6 +817,7 @@ class _JournalScreenState extends State<JournalScreen>
       'hope' => _JournalPlanKind.hope,
       'love' => _JournalPlanKind.love,
       'beginner' => _JournalPlanKind.beginner,
+      'inspiration' => _JournalPlanKind.inspiration,
       _ => _JournalPlanKind.parallel,
     };
   }
@@ -822,6 +830,7 @@ class _JournalScreenState extends State<JournalScreen>
         _JournalPlanKind.hope => 'hope',
         _JournalPlanKind.love => 'love',
         _JournalPlanKind.beginner => 'beginner',
+        _JournalPlanKind.inspiration => 'inspiration',
       };
 
   void _persistPlanKind(_JournalPlanKind k) {
@@ -1139,6 +1148,8 @@ class _JournalScreenState extends State<JournalScreen>
             .rows
             .map((r) => r.refDisplay)
             .toList(growable: false);
+      case _JournalPlanKind.inspiration:
+        return const [];
     }
   }
 
@@ -1237,6 +1248,7 @@ class _JournalScreenState extends State<JournalScreen>
       _JournalPlanKind.hope => _hopeDoneItems[dayIndex] ?? <String>{},
       _JournalPlanKind.love => _loveDoneItems[dayIndex] ?? <String>{},
       _JournalPlanKind.beginner => _beginnerDoneItems[dayIndex] ?? <String>{},
+      _JournalPlanKind.inspiration => const <String>{},
     };
   }
 
@@ -1254,6 +1266,7 @@ class _JournalScreenState extends State<JournalScreen>
         _JournalPlanKind.hope => _hopeDoneItems,
         _JournalPlanKind.love => _loveDoneItems,
         _JournalPlanKind.beginner => _beginnerDoneItems,
+        _JournalPlanKind.inspiration => <int, Set<String>>{},
       };
       final selected = (map[dayIndex] ?? <String>{}).toSet();
       if (done) {
@@ -1276,6 +1289,7 @@ class _JournalScreenState extends State<JournalScreen>
         _JournalPlanKind.hope => _hopeDone,
         _JournalPlanKind.love => _loveDone,
         _JournalPlanKind.beginner => _beginnerDone,
+        _JournalPlanKind.inspiration => <int>{},
       };
       if (dayIsDone) {
         doneSet.add(dayIndex);
@@ -1305,6 +1319,8 @@ class _JournalScreenState extends State<JournalScreen>
         break;
       case _JournalPlanKind.beginner:
         await _persistBeginner();
+        break;
+      case _JournalPlanKind.inspiration:
         break;
     }
   }
@@ -1465,6 +1481,7 @@ class _JournalScreenState extends State<JournalScreen>
       _JournalPlanKind.hope => _hopeChapterItemsByDay[dayIndex],
       _JournalPlanKind.love => _loveChapterItemsByDay[dayIndex],
       _JournalPlanKind.beginner => _beginnerChapterItemsByDay[dayIndex],
+      _JournalPlanKind.inspiration => const <_PlanChapterItem>[],
     };
   }
 
@@ -1484,6 +1501,7 @@ class _JournalScreenState extends State<JournalScreen>
       case _JournalPlanKind.parallel:
       case _JournalPlanKind.chronological:
       case _JournalPlanKind.sequential:
+      case _JournalPlanKind.inspiration:
         throw StateError('not thematic');
     }
   }
@@ -1498,6 +1516,7 @@ class _JournalScreenState extends State<JournalScreen>
         return kLoveReadingPlanDays[dayIndex].rows[rowIndex].idea;
       case _JournalPlanKind.beginner:
         return kBeginnerReadingPlanDays[dayIndex].rows[rowIndex].idea;
+      case _JournalPlanKind.inspiration:
       case _JournalPlanKind.parallel:
       case _JournalPlanKind.chronological:
       case _JournalPlanKind.sequential:
@@ -1762,6 +1781,7 @@ class _JournalScreenState extends State<JournalScreen>
     _JournalPlanKind.hope => kHopePlanDayCount,
     _JournalPlanKind.love => kLovePlanDayCount,
     _JournalPlanKind.beginner => kBeginnerPlanDayCount,
+    _JournalPlanKind.inspiration => 0,
   };
 
   int get _planDoneCount => switch (_plan) {
@@ -1772,6 +1792,7 @@ class _JournalScreenState extends State<JournalScreen>
     _JournalPlanKind.hope => _hopeDone.length,
     _JournalPlanKind.love => _loveDone.length,
     _JournalPlanKind.beginner => _beginnerDone.length,
+    _JournalPlanKind.inspiration => 0,
   };
 
   int _dayCountInOpenQuarter() {
@@ -1970,6 +1991,21 @@ class _JournalScreenState extends State<JournalScreen>
                           _selectPlanKind(_JournalPlanKind.beginner);
                         },
                       ),
+                      const SizedBox(height: 8),
+                      _planRectButton(
+                        label: 'Стих для вдохновения',
+                        height: chromeHeight,
+                        selected: _plan == _JournalPlanKind.inspiration,
+                        isDark: isDark,
+                        unselectedBg: unselectedBtn,
+                        chromeFg: chromeFg,
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          if (_plan != _JournalPlanKind.inspiration) {
+                            _selectPlanKind(_JournalPlanKind.inspiration);
+                          }
+                        },
+                      ),
                           ],
                         ),
                       ),
@@ -2001,11 +2037,12 @@ class _JournalScreenState extends State<JournalScreen>
       _JournalPlanKind.love => _thematicReadingChromeSuffix(kLovePlanPickerButtonLabel),
       _JournalPlanKind.beginner =>
         _thematicReadingChromeSuffix(kBeginnerPlanPickerButtonLabel),
+      _JournalPlanKind.inspiration => 'Стих для вдохновения',
     };
     final titleStyle = TextStyle(
       color: chromeFg,
       fontWeight: FontWeight.w600,
-      fontSize: (chromeSize * 0.42).clamp(14.0, 22.0),
+      fontSize: AppProvider.chromeLabelFontSize(chromeSize),
       height: 1.0,
     );
     return FittedBox(
@@ -2369,41 +2406,13 @@ class _JournalScreenState extends State<JournalScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _journalPlanDayHeadingWidget(
-                            context: context,
-                            dayNumber: n,
-                            style: dayTitleStyle,
-                          ),
-                          SizedBox(height: compactGap),
-                          Text(dayData.theme, style: themeLineStyle),
-                        ],
-                      ),
-                    ),
-                    Flexible(
-                      child: Text(
-                        chapterItems.isEmpty
-                            ? '—'
-                            : 'Отмечено: $doneCount из ${chapterItems.length}',
-                        textAlign: TextAlign.right,
-                        style: app.bibleVerseTextStyle(
-                          color: bodyColor,
-                          fontWeight: FontWeight.w600,
-                        ).copyWith(
-                          fontSize: (app.fontSize * app.verseFontSizeScale * 0.92)
-                              .clamp(11.0, 26.0),
-                          height: 1.0,
-                        ),
-                      ),
-                    ),
-                  ],
+                _journalPlanDayHeadingWidget(
+                  context: context,
+                  dayNumber: n,
+                  style: dayTitleStyle,
                 ),
+                SizedBox(height: compactGap),
+                Text(dayData.theme, style: themeLineStyle),
                 for (var i = 0; i < dayData.rows.length; i++) ...[
                   SizedBox(
                     height: i == 0 ? rowGapFirst : rowGapNext,
@@ -2429,6 +2438,19 @@ class _JournalScreenState extends State<JournalScreen>
                     ],
                   ),
                 ],
+                SizedBox(height: rowGapNext),
+                Text(
+                  chapterItems.isEmpty
+                      ? '—'
+                      : 'Отмечено: $doneCount из ${chapterItems.length}',
+                  style: app.bibleVerseTextStyle(
+                    color: bodyColor,
+                    fontWeight: FontWeight.w600,
+                  ).copyWith(
+                    fontSize: refStyle.fontSize,
+                    height: refStyle.height,
+                  ),
+                ),
                 if (done) ...[
                   SizedBox(height: rowGapNext),
                   Align(
@@ -2522,6 +2544,9 @@ class _JournalScreenState extends State<JournalScreen>
                   color: bodyColor,
                   fontWeight: done ? FontWeight.w600 : FontWeight.normal,
                 ).copyWith(height: 1.06);
+                final markedStyle = readingsStyle.copyWith(
+                  fontWeight: FontWeight.w600,
+                );
                 final doneLabelStyle = app.bibleVerseTextStyle(
                   color: titleColor,
                   fontWeight: FontWeight.w700,
@@ -2569,59 +2594,29 @@ class _JournalScreenState extends State<JournalScreen>
                         onTap: () => _openDayChapterChecklist(index),
                         child: Padding(
                           padding: const EdgeInsets.fromLTRB(8, 10, 12, 10),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                    crossAxisAlignment: CrossAxisAlignment.center,
-                                      children: [
-                                        Expanded(
-                                          child:
-                                              _journalPlanDayHeadingWidget(
-                                            context: context,
-                                            dayNumber: n,
-                                            style: app
-                                                .bibleVerseTextStyle(
-                                                  color: titleColor,
-                                                  fontWeight: FontWeight.w800,
-                                                )
-                                                .copyWith(
-                                                  fontSize: app.fontSize *
-                                                      app.verseFontSizeScale *
-                                                      1.06,
-                                                  height: 1.0,
-                                                ),
-                                          ),
-                                        ),
-                                      Text(
-                                        chapterItems.isEmpty
-                                            ? 'Нет глав для отметки'
-                                            : 'Отмечено глав: $doneCount из ${chapterItems.length}',
-                                        textAlign: TextAlign.right,
-                                        style: app.bibleVerseTextStyle(
-                                          color: bodyColor,
-                                          fontWeight: FontWeight.w600,
-                                        ).copyWith(
-                                          fontSize: (app.fontSize *
-                                                  app.verseFontSizeScale *
-                                                  0.92)
-                                              .clamp(11.0, 26.0),
-                                          height: 1.0,
-                                        ),
-                                      ),
-                                      ],
+                              _journalPlanDayHeadingWidget(
+                                context: context,
+                                dayNumber: n,
+                                style: app
+                                    .bibleVerseTextStyle(
+                                      color: titleColor,
+                                      fontWeight: FontWeight.w800,
+                                    )
+                                    .copyWith(
+                                      fontSize: app.fontSize *
+                                          app.verseFontSizeScale *
+                                          1.06,
+                                      height: 1.0,
                                     ),
-                                    SizedBox(height: (lineGap + 2).clamp(4.0, 14.0)),
-                                  Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Expanded(
-                                        child: LayoutBuilder(
-                                          builder: (ctx, constraints) {
+                              ),
+                              SizedBox(
+                                height: (lineGap + 2).clamp(4.0, 14.0),
+                              ),
+                              LayoutBuilder(
+                                builder: (ctx, constraints) {
                                             if (readingBlocks.isEmpty) {
                                               return Text(
                                                 'Нет чтений для дня',
@@ -2851,11 +2846,14 @@ class _JournalScreenState extends State<JournalScreen>
                                             );
                                           },
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                  ],
-                                ),
+                              SizedBox(
+                                height: (lineGap * 0.5).clamp(2.0, 8.0),
+                              ),
+                              Text(
+                                chapterItems.isEmpty
+                                    ? 'Нет глав для отметки'
+                                    : 'Отмечено глав: $doneCount из ${chapterItems.length}',
+                                style: markedStyle,
                               ),
                             ],
                           ),
@@ -3075,13 +3073,29 @@ class _JournalScreenState extends State<JournalScreen>
               tileWidth: inQuarter
                   ? quarterIconWFirst
                   : math.min(chromeSize, 44.0),
+              extraItems: _plan == _JournalPlanKind.inspiration
+                  ? const [
+                      AppChromeOverflowExtraItem(
+                        route: 'inspiration_help',
+                        label: 'Стих для вдохновения',
+                        icon: Icons.auto_stories_outlined,
+                      ),
+                      AppChromeOverflowExtraItem(
+                        route: 'inspiration_notify',
+                        label: 'Разрешения уведомлений',
+                        icon: Icons.notifications_active_outlined,
+                      ),
+                    ]
+                  : null,
             ),
           ),
         ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : (inQuarter
+          : (_plan == _JournalPlanKind.inspiration
+              ? const InspirationPlanScreen()
+              : (inQuarter
               ? _buildPlanListWithRail(
                   app,
                   chromeSize,
@@ -3109,9 +3123,11 @@ class _JournalScreenState extends State<JournalScreen>
                       cardTodoBg: hubCardBg,
                       cardMutedFg: hubMutedFg,
                       titleColor: hubTitleColor,
-                    )),
-      bottomNavigationBar:
-          _loading ? null : _readProgressFooter(app, isDark: isDark),
+                    ))),
+      bottomNavigationBar: _loading ||
+              _plan == _JournalPlanKind.inspiration
+          ? null
+          : _readProgressFooter(app, isDark: isDark),
     );
   }
 }

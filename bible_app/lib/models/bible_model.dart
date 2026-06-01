@@ -197,3 +197,16 @@ class BibleVerse {
     return '$book $chapter:$verse - $text';
   }
 }
+
+/// Ссылка на стих без текста (индекс по всей Библии).
+class BibleVersePointer {
+  const BibleVersePointer({
+    required this.book,
+    required this.chapter,
+    required this.verse,
+  });
+
+  final String book;
+  final int chapter;
+  final int verse;
+}

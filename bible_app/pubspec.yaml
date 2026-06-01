@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.1.1+26
+version: 1.1.1+27
 
 environment:
   sdk: '>=3.1.4 <4.0.0'
@@ -59,6 +59,9 @@ dependencies:
   http: ^1.6.0
   package_info_plus: ^9.0.1
   scrollable_positioned_list: ^0.3.8
+  flutter_local_notifications: ^20.1.0
+  timezone: ^0.10.1
+  flutter_timezone: ^5.1.0
 
 dependency_overrides:
   # path_provider_windows / share_plus pull win32; 5.1.x breaks on Dart 3.11 (typed_data API).
@@ -130,6 +133,8 @@ flutter:
     - assets/bible/new_testament_correct.json
     - assets/branding/launch_logo.png
     - assets/version/changelog.json
+    - assets/inspiration/orthodox_holidays.json
+    - assets/inspiration/protestant_holidays.json
   fonts:
     - family: AppSans
       fonts:

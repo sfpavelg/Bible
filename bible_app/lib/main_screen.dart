@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:bible_app/screens/bible_screen.dart';
@@ -8,6 +10,10 @@ import 'package:bible_app/navigation/app_tab_switcher.dart';
 import 'package:bible_app/theme/bible_light_palette.dart';
 import 'package:bible_app/widgets/main_chrome_tab_bar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:bible_app/inspiration/inspiration_engine.dart';
+import 'package:bible_app/inspiration/inspiration_notifications.dart';
+import 'package:bible_app/inspiration/inspiration_repository.dart';
+import 'package:flutter/foundation.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -55,6 +61,22 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       final appProvider = Provider.of<AppProvider>(context, listen: false);
       appProvider.persistLastPosition();
     }
+    if (state == AppLifecycleState.resumed && !kIsWeb) {
+      unawaited(_rescheduleInspirationNotifications());
+    }
+  }
+
+  Future<void> _rescheduleInspirationNotifications() async {
+    final prefs = await SharedPreferences.getInstance();
+    final repo = InspirationRepository(prefs);
+    final settings = repo.loadSettings();
+    if (!settings.remindersEnabled) return;
+    await InspirationNotificationService.instance.rescheduleIfNeeded(
+      repository: repo,
+      engine: InspirationEngine(),
+      settings: settings,
+      customDays: repo.loadCustomDays(),
+    );
   }
 
   Future<void> _loadSelectedTab() async {

@@ -1,0 +1,137 @@
+[
+  {
+    "id": "christmas",
+    "name": "Рождество Христово",
+    "tradition": "orthodox",
+    "dateRule": { "type": "fixed", "month": 1, "day": 7 },
+    "verseRefs": [
+      { "book": "Луки", "chapter": 2, "verse": 11 },
+      { "book": "Матфея", "chapter": 2, "verse": 1 },
+      { "book": "Исаия", "chapter": 9, "verse": 6 },
+      { "book": "Луки", "chapter": 2, "verse": 7 },
+      { "book": "Матфея", "chapter": 1, "verse": 23 }
+    ]
+  },
+  {
+    "id": "theophany",
+    "name": "Крещение Господне",
+    "tradition": "orthodox",
+    "dateRule": { "type": "fixed", "month": 1, "day": 19 },
+    "verseRefs": [
+      { "book": "Матфея", "chapter": 3, "verse": 16 },
+      { "book": "Марка", "chapter": 1, "verse": 11 },
+      { "book": "Иоанна", "chapter": 1, "verse": 32 },
+      { "book": "Исаия", "chapter": 40, "verse": 3 }
+    ]
+  },
+  {
+    "id": "annunciation",
+    "name": "Благовещение Пресвятой Богородицы",
+    "tradition": "orthodox",
+    "dateRule": { "type": "fixed", "month": 4, "day": 7 },
+    "verseRefs": [
+      { "book": "Луки", "chapter": 1, "verse": 28 },
+      { "book": "Луки", "chapter": 1, "verse": 31 },
+      { "book": "Луки", "chapter": 1, "verse": 38 },
+      { "book": "Исаия", "chapter": 7, "verse": 14 }
+    ]
+  },
+  {
+    "id": "palm_sunday",
+    "name": "Вход Господень в Иерусалим",
+    "tradition": "orthodox",
+    "dateRule": { "type": "easter", "offsetDays": -7 },
+    "verseRefs": [
+      { "book": "Матфея", "chapter": 21, "verse": 9 },
+      { "book": "Иоанна", "chapter": 12, "verse": 13 },
+      { "book": "Марка", "chapter": 11, "verse": 9 },
+      { "book": "Захария", "chapter": 9, "verse": 9 }
+    ]
+  },
+  {
+    "id": "easter",
+    "name": "Пасха",
+    "tradition": "orthodox",
+    "dateRule": { "type": "easter", "offsetDays": 0 },
+    "verseRefs": [
+      { "book": "Матфея", "chapter": 28, "verse": 6 },
+      { "book": "Марка", "chapter": 16, "verse": 6 },
+      { "book": "Луки", "chapter": 24, "verse": 6 },
+      { "book": "Иоанна", "chapter": 20, "verse": 18 },
+      { "book": "1 Коринфянам", "chapter": 15, "verse": 20 },
+      { "book": "Римлянам", "chapter": 6, "verse": 9 }
+    ]
+  },
+  {
+    "id": "ascension",
+    "name": "Вознесение Господне",
+    "tradition": "orthodox",
+    "dateRule": { "type": "easter", "offsetDays": 39 },
+    "verseRefs": [
+      { "book": "Деяния", "chapter": 1, "verse": 9 },
+      { "book": "Луки", "chapter": 24, "verse": 51 },
+      { "book": "Марка", "chapter": 16, "verse": 19 },
+      { "book": "Ефесянам", "chapter": 4, "verse": 8 }
+    ]
+  },
+  {
+    "id": "pentecost",
+    "name": "День Святой Троицы",
+    "tradition": "orthodox",
+    "dateRule": { "type": "easter", "offsetDays": 49 },
+    "verseRefs": [
+      { "book": "Деяния", "chapter": 2, "verse": 4 },
+      { "book": "Деяния", "chapter": 2, "verse": 38 },
+      { "book": "Иоиль", "chapter": 2, "verse": 28 },
+      { "book": "Иоанна", "chapter": 14, "verse": 26 }
+    ]
+  },
+  {
+    "id": "transfiguration",
+    "name": "Преображение Господне",
+    "tradition": "orthodox",
+    "dateRule": { "type": "fixed", "month": 8, "day": 19 },
+    "verseRefs": [
+      { "book": "Матфея", "chapter": 17, "verse": 2 },
+      { "book": "Марка", "chapter": 9, "verse": 2 },
+      { "book": "Луки", "chapter": 9, "verse": 29 },
+      { "book": "2 Петра", "chapter": 1, "verse": 18 }
+    ]
+  },
+  {
+    "id": "dormition",
+    "name": "Успение Пресвятой Богородицы",
+    "tradition": "orthodox",
+    "dateRule": { "type": "fixed", "month": 8, "day": 28 },
+    "verseRefs": [
+      { "book": "Луки", "chapter": 1, "verse": 46 },
+      { "book": "Луки", "chapter": 1, "verse": 48 },
+      { "book": "Луки", "chapter": 2, "verse": 35 },
+      { "book": "Откровение", "chapter": 12, "verse": 1 }
+    ]
+  },
+  {
+    "id": "nativity_bvm",
+    "name": "Рождество Пресвятой Богородицы",
+    "tradition": "orthodox",
+    "dateRule": { "type": "fixed", "month": 9, "day": 21 },
+    "verseRefs": [
+      { "book": "Луки", "chapter": 1, "verse": 28 },
+      { "book": "Луки", "chapter": 1, "verse": 42 },
+      { "book": "Галатам", "chapter": 4, "verse": 4 },
+      { "book": "Исаия", "chapter": 7, "verse": 14 }
+    ]
+  },
+  {
+    "id": "exaltation",
+    "name": "Воздвижение Креста Господня",
+    "tradition": "orthodox",
+    "dateRule": { "type": "fixed", "month": 9, "day": 27 },
+    "verseRefs": [
+      { "book": "Иоанна", "chapter": 19, "verse": 17 },
+      { "book": "Иоанна", "chapter": 19, "verse": 18 },
+      { "book": "Галатам", "chapter": 6, "verse": 14 },
+      { "book": "1 Коринфянам", "chapter": 1, "verse": 18 }
+    ]
+  }
+]

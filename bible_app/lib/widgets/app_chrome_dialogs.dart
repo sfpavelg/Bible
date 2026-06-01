@@ -2075,7 +2075,7 @@ Widget _helpInstructionMenuButton({
         border: Border.fromBorderSide(outline),
       ),
       child: InkWell(
-        onTap: onTap,
+        onTap: showClose ? onClose : onTap,
         borderRadius: BorderRadius.circular(r),
         child: ConstrainedBox(
           constraints: BoxConstraints(minHeight: minHeight),
@@ -2093,17 +2093,10 @@ Widget _helpInstructionMenuButton({
                 ),
                 if (showClose) ...[
                   SizedBox(width: (chrome * 0.2).clamp(6.0, 12.0)),
-                  InkWell(
-                    onTap: onClose,
-                    borderRadius: BorderRadius.circular(20),
-                    child: Padding(
-                      padding: const EdgeInsets.all(2),
-                      child: Icon(
-                        Icons.arrow_back,
-                        color: iconColor,
-                        size: iconSize,
-                      ),
-                    ),
+                  Icon(
+                    Icons.arrow_back,
+                    color: iconColor,
+                    size: iconSize,
                   ),
                 ],
               ],
@@ -2343,6 +2336,73 @@ List<Widget> _helpContentReadingPlan({
       'Отметки «прочитано» в плане «Для начинающих» хранятся отдельно от всех остальных планов.',
       style: bodyStyle,
     ),
+    const SizedBox(height: 10),
+    Text('Стих для вдохновения', style: tocStyle),
+    const SizedBox(height: 4),
+    Text(
+      'Отдельный план без кварталов: ежедневное напоминание, церковные календари и личные особые дни. '
+      'Подробности — в разделе «Стих для вдохновения» в списке ниже.',
+      style: bodyStyle,
+    ),
+  ];
+}
+
+List<Widget> _helpContentInspirationVerse({
+  required TextStyle bodyStyle,
+  required TextStyle tocStyle,
+}) {
+  return [
+    _helpBullet(
+      'План «Стих для вдохновения» находится во вкладке «План»: в шапке нажмите название текущего плана '
+      'и выберите «Стих для вдохновения». Это не квартальный маршрут, а настройки напоминаний и особых дней.',
+      bodyStyle,
+    ),
+    const SizedBox(height: 8),
+    Text('Ежедневное напоминание', style: tocStyle),
+    const SizedBox(height: 4),
+    Text(
+      'Переключатель «Включить напоминания» запрашивает разрешение системы только после вашего согласия. '
+      'Время задаётся кнопкой под переключателем. В уведомлении — ссылка на стих (например, «Быт 24:67 — откройте для размышления»), '
+      'без полного текста стиха. Нажатие на уведомление открывает Библию с подсветкой нужного места.',
+      style: bodyStyle,
+    ),
+    const SizedBox(height: 10),
+    Text('Обычный день', style: tocStyle),
+    const SizedBox(height: 4),
+    Text(
+      'Если на дату не приходится церковный праздник из включённых календарей и нет вашего особого дня, '
+      'приложение выбирает один стих из всей Библии. Выбор детерминированный: в течение одного календарного дня '
+      'стих не меняется.',
+      style: bodyStyle,
+    ),
+    const SizedBox(height: 10),
+    Text('Церковные праздники', style: tocStyle),
+    const SizedBox(height: 4),
+    Text(
+      'Можно включить православный и/или протестантский календарь. На дату праздника стих берётся только '
+      'из тематического списка этого праздника (если в списке несколько отрывков — выбирается один по правилу дня). '
+      'Общий «стих дня» по всей Библии в такой день не назначается. Кнопка «Посмотреть список праздников» '
+      'показывает даты на текущий год.',
+      style: bodyStyle,
+    ),
+    const SizedBox(height: 10),
+    Text('Мои особые дни', style: tocStyle),
+    const SizedBox(height: 4),
+    Text(
+      'Добавьте дату (день и месяц, ежегодно), название и один стих или режим «Случайный» (стих из всей Библии '
+      'только для этого дня). Если дата совпадает с церковным праздником, приложение предупредит — '
+      'в этот день могут прийти несколько напоминаний. Список особых дней — «Просмотреть список дней».',
+      style: bodyStyle,
+    ),
+    const SizedBox(height: 10),
+    Text('Планирование и данные', style: tocStyle),
+    const SizedBox(height: 4),
+    Text(
+      'Напоминания ставятся на 14 дней вперёд. Если приложение долго не открывать, новые дни не добавятся, '
+      'пока вы снова не запустите «Библию». Настройки, особые дни и расписание хранятся только на этом устройстве; '
+      'интернет для напоминаний не нужен. Разрешения уведомлений можно проверить в меню «⋯» на экране плана.',
+      style: bodyStyle,
+    ),
   ];
 }
 
@@ -2359,9 +2419,13 @@ class _HelpInstructionSection {
 }
 
 class _HelpDialogRouteBody extends StatefulWidget {
-  const _HelpDialogRouteBody({required this.dialogContext});
+  const _HelpDialogRouteBody({
+    required this.dialogContext,
+    this.initialSectionId,
+  });
 
   final BuildContext dialogContext;
+  final String? initialSectionId;
 
   @override
   State<_HelpDialogRouteBody> createState() => _HelpDialogRouteBodyState();
@@ -2370,6 +2434,12 @@ class _HelpDialogRouteBody extends StatefulWidget {
 class _HelpDialogRouteBodyState extends State<_HelpDialogRouteBody> {
   String? _selectedSectionId;
   final ScrollController _contentScrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedSectionId = widget.initialSectionId;
+  }
 
   @override
   void dispose() {
@@ -2450,6 +2520,14 @@ class _HelpDialogRouteBodyState extends State<_HelpDialogRouteBody> {
               n: n,
             ),
           ),
+          _HelpInstructionSection(
+            id: 'inspiration_verse',
+            title: 'Стих для вдохновения',
+            buildContent: () => _helpContentInspirationVerse(
+              bodyStyle: bodyStyle,
+              tocStyle: tocStyle,
+            ),
+          ),
         ];
 
         _HelpInstructionSection? selected;
@@ -2520,7 +2598,10 @@ class _HelpDialogRouteBodyState extends State<_HelpDialogRouteBody> {
   }
 }
 
-void showAppHelpDialog(BuildContext context) {
+void showAppHelpDialog(
+  BuildContext context, {
+  String? initialSectionId,
+}) {
   showGeneralDialog<void>(
     context: context,
     barrierDismissible: true,
@@ -2528,7 +2609,10 @@ void showAppHelpDialog(BuildContext context) {
     barrierColor: Colors.transparent,
     transitionDuration: const Duration(milliseconds: 160),
     pageBuilder: (dialogContext, animation, secondaryAnimation) {
-      return _HelpDialogRouteBody(dialogContext: dialogContext);
+      return _HelpDialogRouteBody(
+        dialogContext: dialogContext,
+        initialSectionId: initialSectionId,
+      );
     },
     transitionBuilder: (ctx, animation, secondaryAnimation, child) =>
         FadeTransition(

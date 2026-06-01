@@ -8,11 +8,13 @@ import 'package:bible_app/main_screen.dart';
 import 'package:bible_app/providers/app_provider.dart';
 import 'package:bible_app/theme/bible_dark_palette.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:bible_app/inspiration/inspiration_notifications.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   if (!kIsWeb) {
     await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    await InspirationNotificationService.instance.initialize();
   }
   final prefs = await SharedPreferences.getInstance();
   final initialBook = prefs.getString('last_book') ?? 'Бытие';

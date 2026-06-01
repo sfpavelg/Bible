@@ -22,6 +22,18 @@ class AppProvider with ChangeNotifier {
   static double toolbarHeightForChrome(double chrome) =>
       (chrome + 10).clamp(chromeButtonSizeMin + 8, chromeButtonSizeMax + 22);
 
+  /// Размер подписи на кнопках хрома и в плане «Стих для вдохновения».
+  static double chromeLabelFontSize(double chrome) =>
+      (chrome * 0.42).clamp(14.0, 22.0);
+
+  /// Заголовки панелей и диалогов — чуть крупнее основного текста.
+  static double panelTitleFontSize(double fontSize) =>
+      (fontSize * 1.12).clamp(15.0, 32.0);
+
+  /// Подсказки и вторичный текст в панелях — меньше основного.
+  static double panelHintFontSize(double fontSize) =>
+      (fontSize * 0.88).clamp(11.0, 24.0);
+
   final BibleService _bibleService = BibleService();
   final DatabaseHelper _databaseHelper = DatabaseHelper();
 
