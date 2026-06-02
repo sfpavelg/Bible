@@ -5,6 +5,7 @@ import 'package:bible_app/inspiration/inspiration_hash.dart';
 import 'package:bible_app/inspiration/inspiration_models.dart';
 import 'package:bible_app/inspiration/inspiration_repository.dart';
 import 'package:bible_app/navigation/app_tab_switcher.dart';
+import 'package:bible_app/services/bible_service.dart';
 import 'package:bible_app/widgets/app_bottom_notice.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -186,6 +187,7 @@ class InspirationNotificationService {
 
     await initialize();
     await cancelAllScheduled();
+    await BibleService().loadBibleData();
 
     final scheduledIds = <int>[];
     final now = DateTime.now();
@@ -214,6 +216,7 @@ class InspirationNotificationService {
         final id = notificationIdForEvent(
           '${inspirationDateSeed(day)}|${event.eventId}',
         );
+        final title = engine.notificationTitle(event);
         final body = engine.notificationBody(event);
         final payload = jsonEncode({
           'book': event.verseRef.book,
@@ -227,12 +230,16 @@ class InspirationNotificationService {
           channelDescription: 'Ежедневный стих для размышления',
           importance: Importance.defaultImportance,
           priority: Priority.defaultPriority,
+          styleInformation: BigTextStyleInformation(
+            body,
+            contentTitle: title,
+          ),
         );
         const iosDetails = DarwinNotificationDetails();
 
         await _plugin.zonedSchedule(
           id: id,
-          title: 'Библия',
+          title: title,
           body: body,
           scheduledDate: scheduledTime,
           notificationDetails: NotificationDetails(

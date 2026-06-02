@@ -122,12 +122,31 @@ class InspirationEngine {
     return '$abbr ${ref.chapter}:${ref.verse}';
   }
 
-  String notificationBody(InspirationDayEvent event) {
+  String verseTextForNotification(InspirationVerseRef ref) {
+    final verse = _bible.getVerse(ref.book, ref.chapter, ref.verse);
+    if (verse == null) return '';
+    return BibleService.normalizeVerseTextForDisplay(
+      verse.book,
+      verse.chapter,
+      verse.verse,
+      verse.text,
+      showSeptuagintText: false,
+      stripMarkup: true,
+    ).trim();
+  }
+
+  /// Заголовок push: ссылка; для праздника/особого дня — с названием события.
+  String notificationTitle(InspirationDayEvent event) {
     final ref = formatReference(event.verseRef);
-    if (event.kind == InspirationEventKind.dailyRandom) {
-      return '$ref — откройте для размышления';
-    }
-    return '$ref — откройте для размышления, сегодня ${event.displayName}!';
+    if (event.kind == InspirationEventKind.dailyRandom) return ref;
+    return '${event.displayName} — $ref';
+  }
+
+  /// Тело push: полный текст стиха (без разметки).
+  String notificationBody(InspirationDayEvent event) {
+    final text = verseTextForNotification(event.verseRef);
+    if (text.isNotEmpty) return text;
+    return formatReference(event.verseRef);
   }
 
   /// Праздники на дату для предупреждения при создании личного дня.

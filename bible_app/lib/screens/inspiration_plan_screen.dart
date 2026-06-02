@@ -199,9 +199,8 @@ class _InspirationPlanScreenState extends State<InspirationPlanScreen> {
                 ),
                 const SizedBox(height: _panelDialogBlockGap),
                 Text(
-                  'В выбранное время придёт короткое сообщение, например:\n'
-                  '«Быт 24:67 — откройте для размышления»\n'
-                  'или «…, сегодня Пасха!»\n\n'
+                  'В выбранное время придёт уведомление с полным текстом стиха '
+                  '(например, «Ин 3:16» и текст ниже).\n\n'
                   'Данные хранятся только на этом устройстве.',
                   style: _panelDialogBodyStyle(ctx, fg).copyWith(height: 1.2),
                 ),
