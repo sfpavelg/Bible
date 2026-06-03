@@ -102,10 +102,12 @@ class _InspirationPlanScreenState extends State<InspirationPlanScreen> {
     final repo = InspirationRepository(prefs);
     final settings = repo.loadSettings();
     final custom = repo.loadCustomDays();
+    final deviceSeed = await repo.getOrCreateDeviceSeed();
     final today = await _engine.eventsForDate(
       DateTime.now(),
       settings,
       custom,
+      deviceSeed: deviceSeed,
     );
     if (!mounted) return;
     setState(() {
@@ -132,10 +134,12 @@ class _InspirationPlanScreenState extends State<InspirationPlanScreen> {
     if (repo == null) return;
     await repo.saveSettings(_settings);
     await repo.saveCustomDays(_customDays);
+    final deviceSeed = await repo.getOrCreateDeviceSeed();
     final today = await _engine.eventsForDate(
       DateTime.now(),
       _settings,
       _customDays,
+      deviceSeed: deviceSeed,
     );
     if (!mounted) return;
     setState(() => _todayEvents = today);
@@ -235,11 +239,12 @@ class _InspirationPlanScreenState extends State<InspirationPlanScreen> {
     final app = Provider.of<AppProvider>(context, listen: false);
     await app.changeBookAndChapter(ref.book, ref.chapter);
     if (!mounted) return;
-    appTabSwitchRequest.value = 0;
-    bibleVerseJumpRequest.value = BibleVerseJumpRequest(
-      book: ref.book,
-      chapter: ref.chapter,
-      verse: ref.verse,
+    requestOpenBibleVerse(
+      BibleVerseJumpRequest(
+        book: ref.book,
+        chapter: ref.chapter,
+        verse: ref.verse,
+      ),
     );
   }
 

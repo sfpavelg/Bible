@@ -1686,15 +1686,18 @@ class _JournalScreenState extends State<JournalScreen>
                     if (_journalPlanIsThematic(_plan)) {
                       final v = item.startVerse;
                       if (v != null) {
-                        bibleVerseJumpRequest.value = BibleVerseJumpRequest(
-                          book: item.book,
-                          chapter: item.chapter,
-                          verse: v,
+                        requestOpenBibleVerse(
+                          BibleVerseJumpRequest(
+                            book: item.book,
+                            chapter: item.chapter,
+                            verse: v,
+                          ),
                         );
                       }
+                    } else {
+                      appTabSwitchRequest.value = 0;
                     }
                     dialogNavigator.pop();
-                    appTabSwitchRequest.value = 0;
                   },
                   child: Padding(
                     padding: EdgeInsets.symmetric(

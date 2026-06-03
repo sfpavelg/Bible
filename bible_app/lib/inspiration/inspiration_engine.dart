@@ -17,8 +17,10 @@ class InspirationEngine {
   Future<List<InspirationDayEvent>> eventsForDate(
     DateTime date,
     InspirationPlanSettings settings,
-    List<InspirationCustomDay> customDays,
-  ) async {
+    List<InspirationCustomDay> customDays, {
+    required String deviceSeed,
+  }) async {
+    await _bible.loadBibleData();
     final local = DateTime(date.year, date.month, date.day);
     final out = <InspirationDayEvent>[];
 
@@ -54,6 +56,7 @@ class InspirationEngine {
         ref = _pickDailyRandom(
           local,
           seedSuffix: 'custom_random_${d.id}',
+          deviceSeed: deviceSeed,
         );
       } else {
         if (d.verseRefs.isEmpty) continue;
@@ -73,7 +76,7 @@ class InspirationEngine {
     // На церковный праздник — только стихи из списка праздника (и особые дни);
     // общий «стих дня» по всей Библии не выбирается.
     if (!hasChurchHolidayOnDate && out.isEmpty) {
-      final ref = _pickDailyRandom(local);
+      final ref = _pickDailyRandom(local, deviceSeed: deviceSeed);
       if (ref != null) {
         out.add(
           InspirationDayEvent(
@@ -101,12 +104,14 @@ class InspirationEngine {
   InspirationVerseRef? _pickDailyRandom(
     DateTime date, {
     String? seedSuffix,
+    required String deviceSeed,
   }) {
     final n = _bible.totalVerseCount;
     if (n <= 0) return null;
+    final datePart = inspirationDateSeed(date);
     final seed = seedSuffix == null
-        ? inspirationDateSeed(date)
-        : '${inspirationDateSeed(date)}|$seedSuffix';
+        ? '$datePart|$deviceSeed'
+        : '$datePart|$deviceSeed|$seedSuffix';
     final i = inspirationPickIndex(seed, n);
     final p = _bible.verseAtGlobalIndex(i);
     if (p == null) return null;

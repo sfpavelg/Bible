@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:bible_app/inspiration/inspiration_hash.dart';
 import 'package:bible_app/inspiration/inspiration_models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -8,6 +9,7 @@ class InspirationRepository {
 
   static const _settingsKey = 'inspiration_plan_settings_v1';
   static const _customDaysKey = 'inspiration_custom_days_v1';
+  static const _deviceSeedKey = 'inspiration_device_seed_v1';
 
   final SharedPreferences _prefs;
 
@@ -51,5 +53,15 @@ class InspirationRepository {
       _customDaysKey,
       jsonEncode(days.map((e) => e.toJson()).toList()),
     );
+  }
+
+  /// Соль устройства: у разных пользователей в один день разные «случайные» стихи.
+  Future<String> getOrCreateDeviceSeed() async {
+    var seed = _prefs.getString(_deviceSeedKey);
+    if (seed != null && seed.isNotEmpty) return seed;
+    seed =
+        '${DateTime.now().microsecondsSinceEpoch}_${inspirationHash32(DateTime.now().toIso8601String())}';
+    await _prefs.setString(_deviceSeedKey, seed);
+    return seed;
   }
 }

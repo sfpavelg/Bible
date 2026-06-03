@@ -10,7 +10,10 @@ int inspirationHash32(String input) {
 
 int inspirationPickIndex(String seed, int length) {
   if (length <= 0) return 0;
-  return inspirationHash32(seed) % length;
+  var h = inspirationHash32(seed);
+  h = inspirationHash32('mix|$h|$seed');
+  h = inspirationHash32('pick|$h');
+  return h % length;
 }
 
 String inspirationDateSeed(DateTime date) {

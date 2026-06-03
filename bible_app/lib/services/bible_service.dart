@@ -278,6 +278,7 @@ class BibleService {
   Future<void> loadBibleData() async {
     loadErrorOld = null;
     loadErrorNew = null;
+    _globalVerseIndex = null;
 
     await _loadOldTestament();
     await _loadNewTestament();

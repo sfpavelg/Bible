@@ -64,22 +64,39 @@ class InspirationNotificationService {
   }
 
   void _onNotificationTap(NotificationResponse response) {
-    final payload = response.payload;
-    if (payload == null || payload.isEmpty) return;
+    final jump = _jumpFromPayload(response.payload);
+    if (jump == null) return;
+    requestOpenBibleVerse(jump);
+  }
+
+  BibleVerseJumpRequest? _jumpFromPayload(String? payload) {
+    if (payload == null || payload.isEmpty) return null;
     try {
       final map = jsonDecode(payload);
-      if (map is! Map) return;
+      if (map is! Map) return null;
       final book = map['book'];
       final chapter = (map['chapter'] as num?)?.toInt();
       final verse = (map['verse'] as num?)?.toInt();
-      if (book is! String || chapter == null || verse == null) return;
-      appTabSwitchRequest.value = 0;
-      bibleVerseJumpRequest.value = BibleVerseJumpRequest(
+      if (book is! String || chapter == null || verse == null) return null;
+      return BibleVerseJumpRequest(
         book: book,
         chapter: chapter,
         verse: verse,
       );
-    } catch (_) {}
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Запуск по тапу на уведомление из холодного старта.
+  Future<void> applyLaunchNotificationNavigation() async {
+    if (kIsWeb) return;
+    await initialize();
+    final details = await _plugin.getNotificationAppLaunchDetails();
+    if (details?.didNotificationLaunchApp != true) return;
+    final jump = _jumpFromPayload(details?.notificationResponse?.payload);
+    if (jump == null) return;
+    requestOpenBibleVerse(jump);
   }
 
   Future<bool> notificationsEnabled() async {
@@ -188,6 +205,7 @@ class InspirationNotificationService {
     await initialize();
     await cancelAllScheduled();
     await BibleService().loadBibleData();
+    final deviceSeed = await repository.getOrCreateDeviceSeed();
 
     final scheduledIds = <int>[];
     final now = DateTime.now();
@@ -196,7 +214,12 @@ class InspirationNotificationService {
 
     for (var offset = 0; offset < _planningHorizonDays; offset++) {
       final day = DateTime(now.year, now.month, now.day + offset);
-      final events = await engine.eventsForDate(day, settings, customDays);
+      final events = await engine.eventsForDate(
+        day,
+        settings,
+        customDays,
+        deviceSeed: deviceSeed,
+      );
       var eventIndex = 0;
       for (final event in events) {
         var scheduledTime = tz.TZDateTime(

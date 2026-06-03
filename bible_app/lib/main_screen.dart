@@ -27,6 +27,18 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
   /// Вкладки монтируем лениво: не тянуть path_provider/ФС блокнота на старте (слабые API 23).
   final Set<int> _mountedTabs = {0};
+  bool _restoredLastTab = false;
+
+  void _syncBibleTabActive() {
+    bibleTabIsActive.value = _selectedIndex == 0;
+  }
+
+  void _deliverPendingBibleJump() {
+    if (_selectedIndex != 0) return;
+    if (bibleVerseJumpRequest.value != null) {
+      renotifyBibleVerseJumpRequest();
+    }
+  }
 
   void _onExternalTabSwitch() {
     final target = appTabSwitchRequest.value;
@@ -34,8 +46,29 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     if (!mounted) return;
     if (target >= 0 && target < 3) {
       _onItemTapped(target);
+      if (target == 0) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _deliverPendingBibleJump();
+        });
+      }
     }
     appTabSwitchRequest.value = null;
+  }
+
+  void _onBibleJumpRequest() {
+    final r = bibleVerseJumpRequest.value;
+    if (r == null) return;
+    if (!mounted) return;
+    if (_selectedIndex != 0) {
+      _onItemTapped(0);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _deliverPendingBibleJump();
+      });
+    } else {
+      _deliverPendingBibleJump();
+    }
   }
 
   @override
@@ -43,12 +76,34 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     appTabSwitchRequest.addListener(_onExternalTabSwitch);
-    _loadSelectedTab();
+    bibleVerseJumpRequest.addListener(_onBibleJumpRequest);
+    _syncBibleTabActive();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_onStartupNavigation());
+    });
+  }
+
+  Future<void> _onStartupNavigation() async {
+    if (!kIsWeb) {
+      await InspirationNotificationService.instance
+          .applyLaunchNotificationNavigation();
+    }
+    if (!mounted) return;
+    if (bibleVerseJumpRequest.value != null) {
+      _onItemTapped(0);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _deliverPendingBibleJump();
+      });
+      return;
+    }
+    await _loadSelectedTab();
   }
 
   @override
   void dispose() {
     appTabSwitchRequest.removeListener(_onExternalTabSwitch);
+    bibleVerseJumpRequest.removeListener(_onBibleJumpRequest);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -80,6 +135,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _loadSelectedTab() async {
+    if (_restoredLastTab) return;
+    _restoredLastTab = true;
     final prefs = await SharedPreferences.getInstance();
     final lastIndex = prefs.getInt('last_tab_index');
     if (lastIndex != null && lastIndex >= 0 && lastIndex < 3) {
@@ -100,6 +157,13 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       _selectedIndex = index;
       _mountedTabs.add(index);
     });
+    _syncBibleTabActive();
+    if (index == 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _deliverPendingBibleJump();
+      });
+    }
     SharedPreferences.getInstance().then((prefs) {
       prefs.setInt('last_tab_index', _selectedIndex);
     });

@@ -1108,6 +1108,7 @@ class _BibleScreenState extends State<BibleScreen> {
     super.initState();
     unawaited(_loadBookmarks());
     _bibleVerseJumpListener = () {
+      if (!bibleTabIsActive.value) return;
       final r = bibleVerseJumpRequest.value;
       if (r == null) return;
       bibleVerseJumpRequest.value = null;
