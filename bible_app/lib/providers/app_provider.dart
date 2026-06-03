@@ -343,11 +343,15 @@ class AppProvider with ChangeNotifier {
     }
   }
 
-  Future<void> changeBookAndChapter(String book, int chapter) async {
+  Future<void> changeBookAndChapter(
+    String book,
+    int chapter, {
+    bool persist = true,
+  }) async {
     _currentBook = book;
     _currentChapter = chapter;
     notifyListeners();
-    await _saveLastPosition();
+    if (persist) await _saveLastPosition();
   }
 
   BibleBook? _currentBookObj() {

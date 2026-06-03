@@ -28,7 +28,6 @@ final ValueNotifier<BibleVerseJumpRequest?> bibleVerseJumpRequest =
 /// Переключить на «Библию» и доставить переход к стиху (push, план, избранное).
 void requestOpenBibleVerse(BibleVerseJumpRequest request) {
   bibleVerseJumpRequest.value = request;
-  appTabSwitchRequest.value = 0;
 }
 
 /// Повторно уведомить слушателей (после смены вкладки на Библию).

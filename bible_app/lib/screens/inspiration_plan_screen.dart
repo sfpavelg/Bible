@@ -236,8 +236,6 @@ class _InspirationPlanScreenState extends State<InspirationPlanScreen> {
   }
 
   Future<void> _openInBible(InspirationVerseRef ref) async {
-    final app = Provider.of<AppProvider>(context, listen: false);
-    await app.changeBookAndChapter(ref.book, ref.chapter);
     if (!mounted) return;
     requestOpenBibleVerse(
       BibleVerseJumpRequest(

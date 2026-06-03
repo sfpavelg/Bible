@@ -46,26 +46,15 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     if (!mounted) return;
     if (target >= 0 && target < 3) {
       _onItemTapped(target);
-      if (target == 0) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          _deliverPendingBibleJump();
-        });
-      }
     }
     appTabSwitchRequest.value = null;
   }
 
   void _onBibleJumpRequest() {
     final r = bibleVerseJumpRequest.value;
-    if (r == null) return;
-    if (!mounted) return;
+    if (r == null || !mounted) return;
     if (_selectedIndex != 0) {
       _onItemTapped(0);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _deliverPendingBibleJump();
-      });
     } else {
       _deliverPendingBibleJump();
     }
@@ -91,10 +80,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     if (!mounted) return;
     if (bibleVerseJumpRequest.value != null) {
       _onItemTapped(0);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _deliverPendingBibleJump();
-      });
       return;
     }
     await _loadSelectedTab();
@@ -158,7 +143,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       _mountedTabs.add(index);
     });
     _syncBibleTabActive();
-    if (index == 0) {
+    if (index == 0 && bibleVerseJumpRequest.value != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _deliverPendingBibleJump();

@@ -1112,28 +1112,28 @@ class _BibleScreenState extends State<BibleScreen> {
       final r = bibleVerseJumpRequest.value;
       if (r == null) return;
       bibleVerseJumpRequest.value = null;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        unawaited(_consumeBibleVerseJumpFromPlan(r));
-      });
+      unawaited(_consumeBibleVerseJumpFromPlan(r));
     };
     bibleVerseJumpRequest.addListener(_bibleVerseJumpListener!);
   }
 
-  /// План «Вера» и др.: после смены главы из журнала — подсветка первого стиха, как из поиска.
+  /// План, push: быстрый переход без лишних кадров ожидания.
   Future<void> _consumeBibleVerseJumpFromPlan(BibleVerseJumpRequest r) async {
     final app = Provider.of<AppProvider>(context, listen: false);
     if (app.currentBook != r.book || app.currentChapter != r.chapter) {
-      await app.changeBookAndChapter(r.book, r.chapter);
+      await app.changeBookAndChapter(r.book, r.chapter, persist: false);
     }
-    for (var i = 0; i < 80; i++) {
+    for (var i = 0; i < 24; i++) {
       if (!mounted) return;
       if (app.currentBook == r.book && app.currentChapter == r.chapter) {
-        await _scrollToVerse(r.verse);
-        return;
+        final verses = app.getCurrentVerses();
+        if (verses.any((v) => v['verse'] == r.verse)) {
+          await _scrollToVerse(r.verse, quick: true);
+          unawaited(app.persistLastPosition());
+          return;
+        }
       }
       await WidgetsBinding.instance.endOfFrame;
-      await Future<void>.delayed(const Duration(milliseconds: 8));
     }
   }
 
@@ -1335,12 +1335,28 @@ class _BibleScreenState extends State<BibleScreen> {
     });
   }
 
-  Future<void> _scrollToVerse(int verseNum) async {
+  Future<void> _scrollToVerse(int verseNum, {bool quick = false}) async {
     if (!mounted) return;
     final generation = ++_scrollToVerseGeneration;
     _pendingScrollVerse = verseNum;
     setState(() {});
-    _scheduleVerseFocus(verseNum, generation);
+    if (quick) {
+      _scheduleVerseFocusQuick(verseNum, generation);
+    } else {
+      _scheduleVerseFocus(verseNum, generation);
+    }
+  }
+
+  void _scheduleVerseFocusQuick(int verseNum, int generation) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || generation != _scrollToVerseGeneration) return;
+      _jumpToVerseCentered(verseNum);
+      _pendingScrollVerse = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || generation != _scrollToVerseGeneration) return;
+        _highlightVerseTemporarily(verseNum);
+      });
+    });
   }
 
   String? _verseText(List<Map<String, dynamic>> verses, int verseNum) {
