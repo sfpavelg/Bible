@@ -32,6 +32,76 @@ double _pickerModalMaxHeight(
       .clamp(minHeight, screenHeight);
 }
 
+double pickerDialogInsetHorizontal(double uiFs) => (uiFs * 0.5).clamp(6.0, 14.0);
+
+/// Ширина контента диалога с учётом [Dialog.insetPadding], не только [dialogMaxW].
+double pickerEstimatedContentWidth({
+  required double screenWidth,
+  required double dialogMaxW,
+  required double horizontalPad,
+  required double uiFs,
+}) {
+  final inset = pickerDialogInsetHorizontal(uiFs);
+  final dialogW = math.min(dialogMaxW, screenWidth - inset * 2);
+  return math.max(0, dialogW - horizontalPad * 2);
+}
+
+/// Число колонок Wrap, гарантированно помещающихся в [maxWidth].
+int circlePickerGridColumnCount(double maxWidth, double cell, double gap) {
+  if (maxWidth <= 0) return 1;
+  var cols = math.max(1, ((maxWidth + gap) / (cell + gap)).floor());
+  while (cols > 1 && cols * cell + (cols - 1) * gap > maxWidth + 0.5) {
+    cols--;
+  }
+  return cols;
+}
+
+double circlePickerGridHeight(int itemCount, int cols, double cell, double gap) {
+  final rowCount = (itemCount + cols - 1) ~/ cols;
+  return rowCount * cell + math.max(0, rowCount - 1) * gap;
+}
+
+/// Высота тела сетки круглых кнопок по фактической ширине контента.
+({double bodyH, bool needsScroll}) layoutCirclePickerGridBody({
+  required double contentW,
+  required double bodyMaxH,
+  required int itemCount,
+  required double cell,
+  required double gap,
+  double scrollContentBottomPad = 12.0,
+}) {
+  final cols = circlePickerGridColumnCount(contentW, cell, gap);
+  final gridHeight = circlePickerGridHeight(itemCount, cols, cell, gap);
+  final gridContentH = gridHeight + scrollContentBottomPad;
+  final needsScroll = gridContentH > bodyMaxH;
+  return (bodyH: needsScroll ? bodyMaxH : gridContentH, needsScroll: needsScroll);
+}
+
+Widget buildCirclePickerGridBody({
+  required bool needsScroll,
+  required double bodyH,
+  required Widget grid,
+  double scrollContentBottomPad = 12.0,
+}) {
+  return SizedBox(
+    height: bodyH,
+    child: ClipRect(
+      child: needsScroll
+          ? SingleChildScrollView(
+              physics: const ClampingScrollPhysics(),
+              child: Padding(
+                padding: EdgeInsets.only(bottom: scrollContentBottomPad),
+                child: grid,
+              ),
+            )
+          : Padding(
+              padding: EdgeInsets.only(bottom: scrollContentBottomPad),
+              child: grid,
+            ),
+    ),
+  );
+}
+
 Widget _pickerDialogShell({
   required BuildContext context,
   required double borderRadius,
@@ -790,14 +860,12 @@ Future<int?> showBibleCircleNumberPickerDialog({
           const padTop = 16.0;
           const padBottom = 14.0;
           const gapAfterTitle = 10.0;
-          final contentW = dialogMaxW - padH * 2;
-          final cols = math.max(
-            1,
-            ((contentW + wrapGap) / (cell + wrapGap)).floor(),
+          final estimatedContentW = pickerEstimatedContentWidth(
+            screenWidth: w,
+            dialogMaxW: dialogMaxW,
+            horizontalPad: padH,
+            uiFs: uiFs,
           );
-          final rowCount = (count + cols - 1) ~/ cols;
-          final gridHeight =
-              rowCount * cell + math.max(0, rowCount - 1) * wrapGap;
           final titleStyle = TextStyle(
             fontSize: titleFs,
             fontWeight: FontWeight.w600,
@@ -809,13 +877,10 @@ Future<int?> showBibleCircleNumberPickerDialog({
             textDirection: TextDirection.ltr,
             maxLines: 4,
             textScaler: MediaQuery.textScalerOf(dialogContext),
-          )..layout(maxWidth: contentW);
+          )..layout(maxWidth: estimatedContentW);
           final headerH = padTop + titlePainter.height + gapAfterTitle;
           final bodyMaxH = (maxDialogH - headerH - padBottom).clamp(48.0, maxDialogH);
           const scrollContentBottomPad = 12.0;
-          final gridContentH = gridHeight + scrollContentBottomPad;
-          final needsScroll = gridContentH > bodyMaxH;
-          final bodyH = needsScroll ? bodyMaxH : gridContentH;
           final isLight = !_pickerIsDark(dialogContext);
           final buttons = List.generate(count, (index) {
             final number = index + 1;
@@ -827,6 +892,8 @@ Future<int?> showBibleCircleNumberPickerDialog({
                 onPressed: () => Navigator.pop(dialogContext, number),
                 style: ElevatedButton.styleFrom(
                   padding: EdgeInsets.zero,
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   shape: const CircleBorder(),
                   elevation: 0,
                   backgroundColor: isCurrent
@@ -878,7 +945,7 @@ Future<int?> showBibleCircleNumberPickerDialog({
           return Dialog(
             backgroundColor: Colors.transparent,
             insetPadding: EdgeInsets.symmetric(
-              horizontal: (uiFs * 0.5).clamp(6.0, 14.0),
+              horizontal: pickerDialogInsetHorizontal(uiFs),
               vertical: (uiFs * 0.375).clamp(4.0, 12.0),
             ),
             child: _pickerDialogShell(
@@ -896,32 +963,31 @@ Future<int?> showBibleCircleNumberPickerDialog({
                     padH,
                     padBottom,
                   ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(title, style: titleStyle),
-                      const SizedBox(height: gapAfterTitle),
-                      SizedBox(
-                        height: bodyH,
-                        child: needsScroll
-                            ? SingleChildScrollView(
-                                physics: const ClampingScrollPhysics(),
-                                child: Padding(
-                                  padding: const EdgeInsets.only(
-                                    bottom: scrollContentBottomPad,
-                                  ),
-                                  child: grid,
-                                ),
-                              )
-                            : Padding(
-                                padding: const EdgeInsets.only(
-                                  bottom: scrollContentBottomPad,
-                                ),
-                                child: grid,
-                              ),
-                      ),
-                    ],
+                  child: LayoutBuilder(
+                    builder: (context, box) {
+                      final layout = layoutCirclePickerGridBody(
+                        contentW: box.maxWidth,
+                        bodyMaxH: bodyMaxH,
+                        itemCount: count,
+                        cell: cell,
+                        gap: wrapGap,
+                        scrollContentBottomPad: scrollContentBottomPad,
+                      );
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(title, style: titleStyle),
+                          const SizedBox(height: gapAfterTitle),
+                          buildCirclePickerGridBody(
+                            needsScroll: layout.needsScroll,
+                            bodyH: layout.bodyH,
+                            scrollContentBottomPad: scrollContentBottomPad,
+                            grid: grid,
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ),

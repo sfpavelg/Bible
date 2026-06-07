@@ -2107,14 +2107,12 @@ class _BibleScreenState extends State<BibleScreen> {
             const padTop = 16.0;
             const padBottom = 14.0;
             const gapAfterTitle = 10.0;
-            final contentW = dialogMaxW - padH * 2;
-            final cols = math.max(
-              1,
-              ((contentW + wrapGap) / (chapterCell + wrapGap)).floor(),
+            final estimatedContentW = pickerEstimatedContentWidth(
+              screenWidth: w,
+              dialogMaxW: dialogMaxW,
+              horizontalPad: padH,
+              uiFs: uiFs,
             );
-            final rowCount = (chapterCount + cols - 1) ~/ cols;
-            final gridHeight = rowCount * chapterCell +
-                math.max(0, rowCount - 1) * wrapGap;
             final titleText =
                 'Выберите главу (${BibleBook.liturgicalDisplayName(selectedBook)})';
             final titleStyle = TextStyle(
@@ -2128,13 +2126,10 @@ class _BibleScreenState extends State<BibleScreen> {
               textDirection: TextDirection.ltr,
               maxLines: 4,
               textScaler: MediaQuery.textScalerOf(dialogContext),
-            )..layout(maxWidth: contentW);
+            )..layout(maxWidth: estimatedContentW);
             final headerH = padTop + titlePainter.height + gapAfterTitle;
             final bodyMaxH = (maxDialogH - headerH - padBottom).clamp(48.0, maxDialogH);
             const scrollContentBottomPad = 12.0;
-            final gridContentH = gridHeight + scrollContentBottomPad;
-            final needsScroll = gridContentH > bodyMaxH;
-            final bodyH = needsScroll ? bodyMaxH : gridContentH;
             final chapterButtons = List.generate(chapterCount, (index) {
                               final chapterNumber = index + 1;
                               final isCurrent = selectedBook == app.currentBook &&
@@ -2153,6 +2148,8 @@ class _BibleScreenState extends State<BibleScreen> {
                                   },
                                   style: ElevatedButton.styleFrom(
                                     padding: EdgeInsets.zero,
+                                    minimumSize: Size.zero,
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                     shape: const CircleBorder(),
                                     elevation: 0,
                                     backgroundColor: isCurrent
@@ -2205,7 +2202,7 @@ class _BibleScreenState extends State<BibleScreen> {
             return Dialog(
           backgroundColor: Colors.transparent,
           insetPadding: EdgeInsets.symmetric(
-            horizontal: (uiFs * 0.5).clamp(6.0, 14.0),
+            horizontal: pickerDialogInsetHorizontal(uiFs),
             vertical: (uiFs * 0.375).clamp(4.0, 12.0),
           ),
           child: _biblePickerDialogShell(
@@ -2223,35 +2220,34 @@ class _BibleScreenState extends State<BibleScreen> {
                   padH,
                   padBottom,
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      titleText,
-                      style: titleStyle,
-                    ),
-                    const SizedBox(height: gapAfterTitle),
-                    SizedBox(
-                      height: bodyH,
-                      child: needsScroll
-                          ? SingleChildScrollView(
-                              physics: const ClampingScrollPhysics(),
-                              child: Padding(
-                                padding: const EdgeInsets.only(
-                                  bottom: scrollContentBottomPad,
-                                ),
-                                child: chapterGrid,
-                              ),
-                            )
-                          : Padding(
-                              padding: const EdgeInsets.only(
-                                bottom: scrollContentBottomPad,
-                              ),
-                              child: chapterGrid,
-                            ),
-                    ),
-                  ],
+                child: LayoutBuilder(
+                  builder: (context, box) {
+                    final layout = layoutCirclePickerGridBody(
+                      contentW: box.maxWidth,
+                      bodyMaxH: bodyMaxH,
+                      itemCount: chapterCount,
+                      cell: chapterCell,
+                      gap: wrapGap,
+                      scrollContentBottomPad: scrollContentBottomPad,
+                    );
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          titleText,
+                          style: titleStyle,
+                        ),
+                        const SizedBox(height: gapAfterTitle),
+                        buildCirclePickerGridBody(
+                          needsScroll: layout.needsScroll,
+                          bodyH: layout.bodyH,
+                          scrollContentBottomPad: scrollContentBottomPad,
+                          grid: chapterGrid,
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ),
             ),
