@@ -61,6 +61,7 @@ class InspirationNotificationService {
     );
 
     _initialized = true;
+    await _applyLaunchNotificationIfNeeded();
   }
 
   void _onNotificationTap(NotificationResponse response) {
@@ -88,15 +89,22 @@ class InspirationNotificationService {
     }
   }
 
-  /// Запуск по тапу на уведомление из холодного старта.
-  Future<void> applyLaunchNotificationNavigation() async {
+  /// Запуск по тапу на уведомление из холодного старта (до runApp / initializeApp).
+  Future<void> _applyLaunchNotificationIfNeeded() async {
     if (kIsWeb) return;
-    await initialize();
     final details = await _plugin.getNotificationAppLaunchDetails();
     if (details?.didNotificationLaunchApp != true) return;
     final jump = _jumpFromPayload(details?.notificationResponse?.payload);
     if (jump == null) return;
     requestOpenBibleVerse(jump);
+  }
+
+  /// Повторная проверка из MainScreen (если initialize в main уже отработал).
+  Future<void> applyLaunchNotificationNavigation() async {
+    if (kIsWeb) return;
+    if (bibleVerseJumpRequest.value != null) return;
+    await initialize();
+    await _applyLaunchNotificationIfNeeded();
   }
 
   Future<bool> notificationsEnabled() async {

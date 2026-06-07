@@ -159,6 +159,135 @@ double _bookSelectionGridHeight({
   return rows.length * rowH + math.max(0, rows.length - 1) * verticalGap;
 }
 
+/// Сохранённая позиция прокрутки панели «Выберите книгу» между открытиями.
+double bookPickerSavedScrollOffset = 0;
+
+/// Смещение прокрутки к строке с [book] (если сохранённого offset ещё нет).
+double computeBookPickerScrollOffsetForBook({
+  required String? book,
+  required List<String> oldBooks,
+  required List<String> newBooks,
+  required double contentW,
+  required double wrapH,
+  required double wrapV,
+  required double padH,
+  required double padV,
+  required double bookAbbrFs,
+  required TextScaler textScaler,
+  required double oldSectionH,
+  required double newSectionH,
+  required double gapSm,
+  required double gapMd,
+  double leadHeight = 0,
+}) {
+  if (book == null || book.isEmpty) return 0;
+
+  double offsetInGrid(String target, List<String> books) {
+    final rows = _packBookRows(
+      books,
+      contentW,
+      wrapH,
+      padH,
+      bookAbbrFs,
+      textScaler,
+    );
+    final rowH = _bookChipRowHeight(bookAbbrFs, padV, textScaler);
+    for (var r = 0; r < rows.length; r++) {
+      if (rows[r].contains(target)) {
+        return r * (rowH + wrapV);
+      }
+    }
+    return 0;
+  }
+
+  if (!oldBooks.contains(book) && !newBooks.contains(book)) return 0;
+
+  var y = leadHeight + oldSectionH + gapSm;
+  if (oldBooks.contains(book)) {
+    y += offsetInGrid(book, oldBooks);
+    return math.max(0, y - 32);
+  }
+  y += _bookSelectionGridHeight(
+        books: oldBooks,
+        maxWidth: contentW,
+        horizontalGap: wrapH,
+        verticalGap: wrapV,
+        padH: padH,
+        padV: padV,
+        bookAbbrFs: bookAbbrFs,
+        textScaler: textScaler,
+      ) +
+      gapMd +
+      newSectionH +
+      gapSm;
+  y += offsetInGrid(book, newBooks);
+  return math.max(0, y - 32);
+}
+
+/// Прокрутка списка книг с запоминанием позиции между открытиями диалога.
+class BookPickerScrollMemory extends StatefulWidget {
+  const BookPickerScrollMemory({
+    super.key,
+    required this.needsScroll,
+    required this.initialScrollOffset,
+    required this.child,
+    this.scrollContentBottomPad = 12.0,
+  });
+
+  final bool needsScroll;
+  final double initialScrollOffset;
+  final Widget child;
+  final double scrollContentBottomPad;
+
+  @override
+  State<BookPickerScrollMemory> createState() => _BookPickerScrollMemoryState();
+}
+
+class _BookPickerScrollMemoryState extends State<BookPickerScrollMemory> {
+  late final ScrollController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = ScrollController(
+      initialScrollOffset: widget.initialScrollOffset,
+    );
+  }
+
+  void _persistOffset() {
+    if (_controller.hasClients) {
+      bookPickerSavedScrollOffset = _controller.offset;
+    }
+  }
+
+  @override
+  void dispose() {
+    _persistOffset();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final padded = Padding(
+      padding: EdgeInsets.only(bottom: widget.scrollContentBottomPad),
+      child: widget.child,
+    );
+    if (!widget.needsScroll) return padded;
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification is ScrollEndNotification) _persistOffset();
+        return false;
+      },
+      child: SingleChildScrollView(
+        controller: _controller,
+        physics: const ClampingScrollPhysics(),
+        child: padded,
+      ),
+    );
+  }
+}
+
 class _BookSelectionChipGrid extends StatelessWidget {
   const _BookSelectionChipGrid({
     required this.books,
@@ -404,9 +533,13 @@ Future<String?> showBibleBookPickerDialog({
             bookAbbrFs: bookAbbrFs,
             textScaler: textScaler,
           );
-          final bookListBodyH = (includeRandomOption
-                  ? _bookChipRowHeight(bookAbbrFs, padV, textScaler) + gapMd
-                  : 0.0) +
+          final headerH = padTop + titlePainter.height + gapSm;
+          final bodyMaxH = (maxH - headerH - padBottom).clamp(80.0, maxH);
+          const scrollContentBottomPad = 12.0;
+          final leadHeight = includeRandomOption
+              ? _bookChipRowHeight(bookAbbrFs, padV, textScaler) + gapMd
+              : 0.0;
+          final bookListBodyH = leadHeight +
               oldSectionPainter.height +
               gapSm +
               oldGridH +
@@ -414,13 +547,28 @@ Future<String?> showBibleBookPickerDialog({
               newSectionPainter.height +
               gapSm +
               newGridH;
-          final headerH = padTop + titlePainter.height + gapSm;
-          final bodyMaxH = (maxH - headerH - padBottom).clamp(80.0, maxH);
-          const scrollContentBottomPad = 12.0;
-          final needsScroll = bookListBodyH > bodyMaxH;
-          final bodyH = needsScroll
-              ? bodyMaxH
-              : bookListBodyH + scrollContentBottomPad;
+          final gridContentH = bookListBodyH + scrollContentBottomPad;
+          final needsScroll = gridContentH > bodyMaxH;
+          final bodyH = needsScroll ? bodyMaxH : gridContentH;
+          final initialScrollOffset = bookPickerSavedScrollOffset > 0
+              ? bookPickerSavedScrollOffset
+              : computeBookPickerScrollOffsetForBook(
+                  book: selectedBook,
+                  oldBooks: oldTestamentBooks,
+                  newBooks: newTestamentBooks,
+                  contentW: contentW,
+                  wrapH: wrapH,
+                  wrapV: wrapV,
+                  padH: padH,
+                  padV: padV,
+                  bookAbbrFs: bookAbbrFs,
+                  textScaler: textScaler,
+                  oldSectionH: oldSectionPainter.height,
+                  newSectionH: newSectionPainter.height,
+                  gapSm: gapSm,
+                  gapMd: gapMd,
+                  leadHeight: leadHeight,
+                );
           final bookList = Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
@@ -499,22 +647,12 @@ Future<String?> showBibleBookPickerDialog({
                       SizedBox(height: gapSm),
                       SizedBox(
                         height: bodyH,
-                        child: needsScroll
-                            ? SingleChildScrollView(
-                                physics: const ClampingScrollPhysics(),
-                                child: Padding(
-                                  padding: const EdgeInsets.only(
-                                    bottom: scrollContentBottomPad,
-                                  ),
-                                  child: bookList,
-                                ),
-                              )
-                            : Padding(
-                                padding: const EdgeInsets.only(
-                                  bottom: scrollContentBottomPad,
-                                ),
-                                child: bookList,
-                              ),
+                        child: BookPickerScrollMemory(
+                          needsScroll: needsScroll,
+                          initialScrollOffset: initialScrollOffset,
+                          scrollContentBottomPad: scrollContentBottomPad,
+                          child: bookList,
+                        ),
                       ),
                     ],
                   ),
@@ -674,11 +812,10 @@ Future<int?> showBibleCircleNumberPickerDialog({
           )..layout(maxWidth: contentW);
           final headerH = padTop + titlePainter.height + gapAfterTitle;
           final bodyMaxH = (maxDialogH - headerH - padBottom).clamp(48.0, maxDialogH);
-          final needsScroll = gridHeight > bodyMaxH;
           const scrollContentBottomPad = 12.0;
-          final bodyH = needsScroll
-              ? bodyMaxH
-              : gridHeight + scrollContentBottomPad;
+          final gridContentH = gridHeight + scrollContentBottomPad;
+          final needsScroll = gridContentH > bodyMaxH;
+          final bodyH = needsScroll ? bodyMaxH : gridContentH;
           final isLight = !_pickerIsDark(dialogContext);
           final buttons = List.generate(count, (index) {
             final number = index + 1;

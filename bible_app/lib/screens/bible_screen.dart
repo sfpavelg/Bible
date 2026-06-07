@@ -14,6 +14,7 @@ import 'package:bible_app/theme/bible_light_palette.dart';
 import 'package:bible_app/services/bible_service.dart';
 import 'package:bible_app/widgets/app_bottom_notice.dart';
 import 'package:bible_app/widgets/app_chrome_overflow_menu.dart';
+import 'package:bible_app/widgets/bible_reference_picker_dialogs.dart';
 import 'package:bible_app/widgets/chrome_frost_glass_panel.dart';
 import 'package:bible_app/widgets/chrome_outline.dart';
 import 'package:bible_app/widgets/chrome_toolbar_button.dart';
@@ -1117,13 +1118,15 @@ class _BibleScreenState extends State<BibleScreen> {
     bibleVerseJumpRequest.addListener(_bibleVerseJumpListener!);
   }
 
-  /// План, push: быстрый переход без лишних кадров ожидания.
+  /// План, push: быстрый переход; ждём загрузки Библии (ВЗ и НЗ), иначе НЗ не откроется.
   Future<void> _consumeBibleVerseJumpFromPlan(BibleVerseJumpRequest r) async {
     final app = Provider.of<AppProvider>(context, listen: false);
+    await app.waitUntilInitialized();
+    if (!mounted) return;
     if (app.currentBook != r.book || app.currentChapter != r.chapter) {
       await app.changeBookAndChapter(r.book, r.chapter, persist: false);
     }
-    for (var i = 0; i < 24; i++) {
+    for (var i = 0; i < 120; i++) {
       if (!mounted) return;
       if (app.currentBook == r.book && app.currentChapter == r.chapter) {
         final verses = app.getCurrentVerses();
@@ -2128,11 +2131,10 @@ class _BibleScreenState extends State<BibleScreen> {
             )..layout(maxWidth: contentW);
             final headerH = padTop + titlePainter.height + gapAfterTitle;
             final bodyMaxH = (maxDialogH - headerH - padBottom).clamp(48.0, maxDialogH);
-            final needsScroll = gridHeight > bodyMaxH;
             const scrollContentBottomPad = 12.0;
-            final bodyH = needsScroll
-                ? bodyMaxH
-                : gridHeight + scrollContentBottomPad;
+            final gridContentH = gridHeight + scrollContentBottomPad;
+            final needsScroll = gridContentH > bodyMaxH;
+            final bodyH = needsScroll ? bodyMaxH : gridContentH;
             final chapterButtons = List.generate(chapterCount, (index) {
                               final chapterNumber = index + 1;
                               final isCurrent = selectedBook == app.currentBook &&
@@ -2369,10 +2371,27 @@ class _BibleScreenState extends State<BibleScreen> {
             final bodyMaxH =
                 (maxH - headerH - padBottom).clamp(80.0, maxH);
             const scrollContentBottomPad = 12.0;
-            final needsScroll = bookListBodyH > bodyMaxH;
-            final bodyH = needsScroll
-                ? bodyMaxH
-                : bookListBodyH + scrollContentBottomPad;
+            final gridContentH = bookListBodyH + scrollContentBottomPad;
+            final needsScroll = gridContentH > bodyMaxH;
+            final bodyH = needsScroll ? bodyMaxH : gridContentH;
+            final initialScrollOffset = bookPickerSavedScrollOffset > 0
+                ? bookPickerSavedScrollOffset
+                : computeBookPickerScrollOffsetForBook(
+                    book: app.currentBook,
+                    oldBooks: oldTestamentBooks,
+                    newBooks: newTestamentBooks,
+                    contentW: contentW,
+                    wrapH: wrapH,
+                    wrapV: wrapV,
+                    padH: padH,
+                    padV: padV,
+                    bookAbbrFs: bookAbbrFs,
+                    textScaler: textScaler,
+                    oldSectionH: oldSectionPainter.height,
+                    newSectionH: newSectionPainter.height,
+                    gapSm: gapSm,
+                    gapMd: gapMd,
+                  );
             final bookList = Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
@@ -2436,22 +2455,12 @@ class _BibleScreenState extends State<BibleScreen> {
                         SizedBox(height: gapSm),
                         SizedBox(
                           height: bodyH,
-                          child: needsScroll
-                              ? SingleChildScrollView(
-                                  physics: const ClampingScrollPhysics(),
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(
-                                      bottom: scrollContentBottomPad,
-                                    ),
-                                    child: bookList,
-                                  ),
-                                )
-                              : Padding(
-                                  padding: const EdgeInsets.only(
-                                    bottom: scrollContentBottomPad,
-                                  ),
-                                  child: bookList,
-                                ),
+                          child: BookPickerScrollMemory(
+                            needsScroll: needsScroll,
+                            initialScrollOffset: initialScrollOffset,
+                            scrollContentBottomPad: scrollContentBottomPad,
+                            child: bookList,
+                          ),
                         ),
                       ],
                     ),

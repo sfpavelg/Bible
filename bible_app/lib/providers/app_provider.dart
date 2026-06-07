@@ -4,6 +4,7 @@ import 'package:bible_app/services/bible_service.dart';
 import 'package:bible_app/database/database_helper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:bible_app/models/bible_model.dart';
+import 'package:bible_app/navigation/app_tab_switcher.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 class AppProvider with ChangeNotifier {
@@ -72,6 +73,13 @@ class AppProvider with ChangeNotifier {
         _currentChapter = initialChapter,
         _prefs = prefs;
 
+  /// Дождаться окончания [initializeApp] (переход из push до загрузки JSON).
+  Future<void> waitUntilInitialized() async {
+    while (_isLoading) {
+      await Future<void>.delayed(const Duration(milliseconds: 16));
+    }
+  }
+
   Future<void> initializeApp() async {
     _isLoading = true;
     notifyListeners();
@@ -81,24 +89,35 @@ class AppProvider with ChangeNotifier {
       _loadUiSettings();
       await _syncWakelock();
 
-      final lastBook = _prefs!.getString('last_book');
-      final lastChapter = _prefs!.getInt('last_chapter');
-      if (lastBook != null &&
-          lastBook.isNotEmpty &&
-          lastChapter != null &&
-          lastChapter > 0) {
-        _currentBook = lastBook;
-        _currentChapter = lastChapter;
+      final pendingJump = bibleVerseJumpRequest.value;
+      if (pendingJump != null) {
+        _currentBook = pendingJump.book;
+        _currentChapter = pendingJump.chapter;
+      } else {
+        final lastBook = _prefs!.getString('last_book');
+        final lastChapter = _prefs!.getInt('last_chapter');
+        if (lastBook != null &&
+            lastBook.isNotEmpty &&
+            lastChapter != null &&
+            lastChapter > 0) {
+          _currentBook = lastBook;
+          _currentChapter = lastChapter;
+        }
       }
 
       await _bibleService.loadBibleData();
-      await _ensureReadableChapter();
+      if (pendingJump == null) {
+        await _ensureReadableChapter();
+      }
       await _databaseHelper.database;
     } catch (e) {
       print('Ошибка инициализации приложения: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
+      if (bibleVerseJumpRequest.value != null) {
+        renotifyBibleVerseJumpRequest();
+      }
     }
   }
 
