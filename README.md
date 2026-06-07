@@ -38,11 +38,11 @@ APK: `bible_app/build/app/outputs/flutter-apk/app-release.apk`
 
 | Документ | Путь |
 |----------|------|
-| Политика конфиденциальности | [bible_app/docs/privacy_policy.html](bible_app/docs/privacy_policy.html) |
+| Политика конфиденциальности (URL для RuStore) | https://github.com/sfpavelg/Bible/blob/main/bible_app/docs/privacy_policy.html |
 | Тексты карточки RuStore | [bible_app/docs/rustore-store-listing.md](bible_app/docs/rustore-store-listing.md) |
 | История изменений | [bible_app/CHANGELOG.md](bible_app/CHANGELOG.md) |
 
-Для RuStore нужен **публичный URL** политики конфиденциальности (GitHub Pages, отдельный хостинг или public-репозиторий).
+Политика опубликована в публичном репозитории — для RuStore используйте URL из таблицы выше.
 
 ## Подробная документация
 
