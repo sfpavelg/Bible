@@ -7,7 +7,7 @@ import 'package:bible_app/screens/notebook_screen.dart';
 import 'package:bible_app/screens/journal_screen.dart';
 import 'package:bible_app/providers/app_provider.dart';
 import 'package:bible_app/navigation/app_tab_switcher.dart';
-import 'package:bible_app/theme/bible_light_palette.dart';
+import 'package:bible_app/theme/app_theme_colors.dart';
 import 'package:bible_app/widgets/main_chrome_tab_bar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:bible_app/inspiration/inspiration_engine.dart';
@@ -196,8 +196,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     if (isDark) return shell;
 
     return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: BibleLightPalette.screenGradient,
+      decoration: BoxDecoration(
+        gradient: AppThemeColors.lightScreenGradient(context),
       ),
       child: shell,
     );

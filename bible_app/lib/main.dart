@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:bible_app/bootstrap_splash.dart';
 import 'package:bible_app/main_screen.dart';
 import 'package:bible_app/providers/app_provider.dart';
+import 'package:bible_app/theme/app_brightness_tuning.dart';
 import 'package:bible_app/theme/bible_dark_palette.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:bible_app/inspiration/inspiration_notifications.dart';
@@ -89,8 +90,14 @@ class MyApp extends StatelessWidget {
                 surfaceContainerHighest: BibleDarkPalette.cardBg,
                 primary: BibleDarkPalette.accentGold,
                 onPrimary: const Color(0xFF1A1A1A),
-                onSurface: BibleDarkPalette.primaryText,
-                onSurfaceVariant: BibleDarkPalette.secondaryText,
+                onSurface: AppBrightnessTuning.tuneText(
+                  BibleDarkPalette.primaryText,
+                  appProvider.darkTextBrightness,
+                ),
+                onSurfaceVariant: AppBrightnessTuning.tuneText(
+                  BibleDarkPalette.secondaryText,
+                  appProvider.darkTextBrightness,
+                ),
                 outline: BibleDarkPalette.divider,
                 outlineVariant: BibleDarkPalette.divider,
               ),

@@ -217,25 +217,6 @@ upload-keystore.jks
 # После настройки можно публиковать .aab в Google Play Console.
 
 
-## 📋 Содержание
-- lib/main.dart — точка входа
-- lib/src/app/app.dart — тема/MaterialApp
-- lib/src/features/calculator/application/calculator_controller.dart — логика ввода/состояние
-- lib/src/features/calculator/domain/calculator_engine.dart — вычисление выражений
-- lib/src/features/calculator/presentation/calculator_page.dart — экран калькулятора
-- lib/src/features/calculator/presentation/widgets/calc_button.dart — виджет кнопки
-
-# Что умеет
-- Операции: + , - , × , ÷ , десятичная точка
-- ± меняет знак последнего числа, % применяет процент к последнему числу
-- “живой” предпросмотр результата при вводе, = фиксирует результат
-
-# Проверка
-
-- flutter analyze — без ошибок
-- flutter test — проходит (тесты на вычисление в test/widget_test.dart )
-
-
 # Android (самый простой автономный запуск на телефоне)
 
 1) Подготовь телефон

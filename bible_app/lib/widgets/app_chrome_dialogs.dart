@@ -4,6 +4,8 @@ import 'dart:math' as math;
 import 'package:bible_app/journal/faith_reading_plan_data.dart';
 import 'package:bible_app/journal/love_reading_plan_data.dart';
 import 'package:bible_app/providers/app_provider.dart';
+import 'package:bible_app/theme/app_brightness_tuning.dart';
+import 'package:bible_app/theme/app_theme_colors.dart';
 import 'package:bible_app/theme/bible_dark_palette.dart';
 import 'package:bible_app/theme/bible_light_palette.dart';
 import 'package:bible_app/widgets/chrome_frost_glass_panel.dart';
@@ -336,7 +338,7 @@ Widget _supportChromeActionButton({
   final iconSize = (chrome * 0.48).clamp(18.0, 30.0);
   final fontSize = (chrome * 0.32).clamp(12.0, 17.0);
   final fg = isDark
-      ? BibleDarkPalette.primaryText
+      ? AppThemeColors.darkText(context, BibleDarkPalette.primaryText)
       : (glass
           ? BibleLightPalette.settingsGlassTextPrimary
           : BibleLightPalette.primaryText);
@@ -685,10 +687,12 @@ class _SettingsFontPresetPicker extends StatelessWidget {
     final currentLabel =
         AppProvider.verseFontLabels[value] ?? AppProvider.verseFontLabels['sans']!;
     final chevronColor = isDark
-        ? BibleDarkPalette.titleGold
+        ? AppThemeColors.darkText(context, BibleDarkPalette.titleGold)
         : BibleLightPalette.settingsGlassTextSecondary;
     final triggerTextStyle = isDark
-        ? labelStyle.copyWith(color: BibleDarkPalette.titleGold)
+        ? labelStyle.copyWith(
+            color: AppThemeColors.darkText(context, BibleDarkPalette.titleGold),
+          )
         : labelStyle;
     final panelRadius = glass ? 12.0 : 8.0;
 
@@ -893,6 +897,8 @@ void showAppSettingsDialog(BuildContext context) {
       }
       bool fontPresetPickerOpen = false;
       double chromeBtnSize = appProvider.chromeButtonSize;
+      double uiBrightness =
+          appProvider.brightnessForTheme(appProvider.themeMode);
 
       return StatefulBuilder(
         builder: (modalContext, setModalState) {
@@ -901,6 +907,7 @@ void showAppSettingsDialog(BuildContext context) {
               // Держим локальное значение в синхроне с провайдером, чтобы якорь и
               // геометрия панели пересчитывались сразу при изменении размера кнопок.
               chromeBtnSize = appProvider.chromeButtonSize;
+              uiBrightness = appProvider.brightnessForTheme(selectedTheme);
               final theme = Theme.of(consumerContext);
               final scheme = theme.colorScheme;
               final isDark = theme.brightness == Brightness.dark;
@@ -908,12 +915,18 @@ void showAppSettingsDialog(BuildContext context) {
               final uiFs = fontSize.clamp(12.0, 28.0);
               final glass = !isDark;
               final textPrimary = isDark
-                  ? BibleDarkPalette.primaryText
+                  ? AppThemeColors.darkText(
+                      consumerContext,
+                      BibleDarkPalette.primaryText,
+                    )
                   : (glass
                       ? BibleLightPalette.settingsGlassTextPrimary
                       : BibleLightPalette.primaryText);
               final textHeading = isDark
-                  ? BibleDarkPalette.titleGold
+                  ? AppThemeColors.darkText(
+                      consumerContext,
+                      BibleDarkPalette.titleGold,
+                    )
                   : (glass
                       ? BibleLightPalette.settingsGlassTextPrimary
                       : BibleLightPalette.primaryDark);
@@ -1116,6 +1129,28 @@ void showAppSettingsDialog(BuildContext context) {
                                               () => chromeBtnSize = value);
                                           appProvider
                                               .changeChromeButtonSize(value);
+                                        },
+                                      ),
+                                      _SettingsSliderRow(
+                                        label: 'Яркость',
+                                        labelStyle: kSettingsHeadingStyle,
+                                        theme: settingsSliderThemeData,
+                                        insetH: settingsFieldPadH,
+                                        thumbRadius: settingsSliderThumbRadius,
+                                        value: uiBrightness,
+                                        min: AppProvider.uiBrightnessMin,
+                                        max: AppProvider.uiBrightnessMax,
+                                        divisions: 20,
+                                        valueLabel:
+                                            '${(uiBrightness * 100).round()}%',
+                                        gapAfter: 8,
+                                        onChanged: (value) {
+                                          setModalState(
+                                              () => uiBrightness = value);
+                                          appProvider.setBrightnessForTheme(
+                                            selectedTheme,
+                                            value,
+                                          );
                                         },
                                       ),
                                       Text(
@@ -1337,19 +1372,25 @@ class _ChromeSidePanelTextTheme {
     required double lineHeight,
     required bool isDark,
     bool? glassTypography,
+    AppProvider? app,
   }) {
     final glass = glassTypography ?? !isDark;
     final uiFs = fontSize.clamp(12.0, 28.0);
+    Color tuneDarkText(Color base) {
+      if (!isDark || app == null) return base;
+      return AppBrightnessTuning.tuneText(base, app.darkTextBrightness);
+    }
+
     final primary = isDark
-        ? BibleDarkPalette.primaryText
+        ? tuneDarkText(BibleDarkPalette.primaryText)
         : (glass
             ? BibleLightPalette.settingsGlassTextPrimary
             : BibleLightPalette.primaryText);
     final heading = isDark
-        ? BibleDarkPalette.titleGold
+        ? tuneDarkText(BibleDarkPalette.titleGold)
         : primary;
     final secondary = isDark
-        ? BibleDarkPalette.secondaryText
+        ? tuneDarkText(BibleDarkPalette.secondaryText)
         : (glass
             ? BibleLightPalette.settingsGlassTextSecondary
             : BibleLightPalette.secondaryText);
@@ -1391,7 +1432,7 @@ class _ChromeSidePanelTextTheme {
       sectionStyle: label(
         size: (uiFs * 0.92).clamp(12.0, 22.0),
         weight: FontWeight.w700,
-        color: isDark ? BibleDarkPalette.titleGold : secondary,
+        color: isDark ? tuneDarkText(BibleDarkPalette.titleGold) : secondary,
       ),
       tocStyle: label(
         size: (uiFs * 0.95).clamp(12.0, 26.0),
@@ -1940,6 +1981,7 @@ class _SupportDialogRouteBodyState extends State<_SupportDialogRouteBody> {
           fontSize: app.fontSize,
           lineHeight: app.lineHeight,
           isDark: isDark,
+          app: app,
         );
         return ScaffoldMessenger(
           key: _supportSnackMessengerKey,
@@ -2475,9 +2517,10 @@ class _HelpDialogRouteBodyState extends State<_HelpDialogRouteBody> {
           lineHeight: app.lineHeight,
           isDark: isDark,
           glassTypography: false,
+          app: app,
         );
         final helpAccentColor = isDark
-            ? BibleDarkPalette.titleGold
+            ? AppThemeColors.darkText(consumerContext, BibleDarkPalette.titleGold)
             : BibleLightPalette.primaryDark;
         final bodyStyle = _helpPanelPlainStyle(text.bodyStyle);
         final tocStyle = _helpPanelPlainStyle(

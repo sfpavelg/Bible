@@ -17,6 +17,10 @@ class AppProvider with ChangeNotifier {
   static const double chromeButtonSizeMin = 32.0;
   static const double chromeButtonSizeMax = 56.0;
 
+  static const double uiBrightnessMin = 0.0;
+  static const double uiBrightnessMax = 1.0;
+  static const double uiBrightnessDefault = 0.5;
+
   /// Высота AppBar с кнопками хрома: [chrome] + поля по вертикали.
   /// Нижняя граница ниже [kToolbarHeight] Material, чтобы шапка сжималась вместе
   /// с уменьшением «Размер кнопок», как нижняя полоса вкладок.
@@ -43,6 +47,8 @@ class AppProvider with ChangeNotifier {
   double _lineHeight = 1.35;
   double _verseSpacing = 6.0;
   double _chromeButtonSize = 40.0;
+  double _lightSurfaceBrightness = uiBrightnessDefault;
+  double _darkTextBrightness = uiBrightnessDefault;
   String _verseFontPreset = 'sans';
   bool _showSeptuagintText = false;
   bool _keepScreenOn = true;
@@ -61,6 +67,8 @@ class AppProvider with ChangeNotifier {
   bool get showSeptuagintText => _showSeptuagintText;
   bool get keepScreenOn => _keepScreenOn;
   double get chromeButtonSize => _chromeButtonSize;
+  double get lightSurfaceBrightness => _lightSurfaceBrightness;
+  double get darkTextBrightness => _darkTextBrightness;
   String get currentBook => _currentBook;
   int get currentChapter => _currentChapter;
   bool get isLoading => _isLoading;
@@ -191,6 +199,59 @@ class AppProvider with ChangeNotifier {
         chrome <= chromeButtonSizeMax) {
       _chromeButtonSize = chrome;
     }
+
+    final lightBrightness = prefs.getDouble('ui_light_surface_brightness');
+    if (lightBrightness != null &&
+        lightBrightness >= uiBrightnessMin &&
+        lightBrightness <= uiBrightnessMax) {
+      _lightSurfaceBrightness = lightBrightness;
+    }
+
+    final darkBrightness = prefs.getDouble('ui_dark_text_brightness');
+    if (darkBrightness != null &&
+        darkBrightness >= uiBrightnessMin &&
+        darkBrightness <= uiBrightnessMax) {
+      _darkTextBrightness = darkBrightness;
+    }
+  }
+
+  double brightnessForTheme(ThemeMode mode) =>
+      mode == ThemeMode.dark ? _darkTextBrightness : _lightSurfaceBrightness;
+
+  void setLightSurfaceBrightness(double value) {
+    _lightSurfaceBrightness =
+        value.clamp(uiBrightnessMin, uiBrightnessMax);
+    notifyListeners();
+    _saveLightSurfaceBrightness();
+  }
+
+  void setDarkTextBrightness(double value) {
+    _darkTextBrightness = value.clamp(uiBrightnessMin, uiBrightnessMax);
+    notifyListeners();
+    _saveDarkTextBrightness();
+  }
+
+  void setBrightnessForTheme(ThemeMode mode, double value) {
+    if (mode == ThemeMode.dark) {
+      setDarkTextBrightness(value);
+    } else {
+      setLightSurfaceBrightness(value);
+    }
+  }
+
+  Future<void> _saveLightSurfaceBrightness() async {
+    final prefs = _prefs ?? await SharedPreferences.getInstance();
+    _prefs = prefs;
+    await prefs.setDouble(
+      'ui_light_surface_brightness',
+      _lightSurfaceBrightness,
+    );
+  }
+
+  Future<void> _saveDarkTextBrightness() async {
+    final prefs = _prefs ?? await SharedPreferences.getInstance();
+    _prefs = prefs;
+    await prefs.setDouble('ui_dark_text_brightness', _darkTextBrightness);
   }
 
   Future<void> setThemeMode(ThemeMode mode) async {

@@ -1,3 +1,4 @@
+import 'package:bible_app/theme/app_theme_colors.dart';
 import 'package:bible_app/theme/bible_dark_palette.dart';
 import 'package:bible_app/theme/bible_light_palette.dart';
 import 'package:flutter/material.dart';
@@ -39,7 +40,7 @@ Widget appChromePickerShell(
     );
   }
   return Material(
-    color: BibleLightPalette.activeBg,
+    color: AppThemeColors.lightSurface(context, BibleLightPalette.activeBg),
     elevation: 0,
     shadowColor: Colors.transparent,
     shape: RoundedRectangleBorder(
@@ -76,12 +77,16 @@ Future<T?> showAppChromePanelDialog<T>({
 
 Color appChromeDialogTitleColor(BuildContext context) {
   final isDark = Theme.of(context).brightness == Brightness.dark;
-  return isDark ? BibleDarkPalette.titleGold : BibleLightPalette.primary;
+  return isDark
+      ? AppThemeColors.darkText(context, BibleDarkPalette.titleGold)
+      : BibleLightPalette.primary;
 }
 
 Color appChromeDialogBodyColor(BuildContext context) {
   final isDark = Theme.of(context).brightness == Brightness.dark;
-  return isDark ? BibleDarkPalette.primaryText : BibleLightPalette.primaryText;
+  return isDark
+      ? AppThemeColors.darkText(context, BibleDarkPalette.primaryText)
+      : BibleLightPalette.primaryText;
 }
 
 ButtonStyle _timePickerChromeButtonStyle({

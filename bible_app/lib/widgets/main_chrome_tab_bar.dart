@@ -1,4 +1,5 @@
 import 'package:bible_app/providers/app_provider.dart';
+import 'package:bible_app/theme/app_theme_colors.dart';
 import 'package:bible_app/theme/bible_dark_palette.dart';
 import 'package:bible_app/theme/bible_light_palette.dart';
 import 'package:flutter/material.dart';
@@ -65,12 +66,16 @@ class MainChromeTabBar extends StatelessWidget {
     final chrome = context.watch<AppProvider>().chromeButtonSize;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final barBg = isDark ? BibleDarkPalette.screenBg : Colors.transparent;
-    final buttonBg =
-        isDark ? BibleDarkPalette.cardBg : BibleLightPalette.bottomIconBg;
+    final buttonBg = isDark
+        ? BibleDarkPalette.cardBg
+        : AppThemeColors.lightSurface(context, BibleLightPalette.bottomIconBg);
     final fgSelected =
         isDark ? BibleDarkPalette.accentGold : BibleLightPalette.primary;
     final fgUnselected = isDark
-        ? BibleDarkPalette.chromeTabInactiveFg
+        ? AppThemeColors.darkText(
+            context,
+            BibleDarkPalette.chromeTabInactiveFg,
+          )
         : BibleLightPalette.iconInactive;
 
     final outlineSelected = isDark

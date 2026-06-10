@@ -7,6 +7,7 @@ import 'package:bible_app/notebook/notebook_repository.dart';
 import 'package:bible_app/notebook/notebook_repository_factory.dart';
 import 'package:bible_app/screens/notebook_editor_panel.dart';
 import 'package:bible_app/providers/app_provider.dart';
+import 'package:bible_app/theme/app_theme_colors.dart';
 import 'package:bible_app/theme/bible_dark_palette.dart';
 import 'package:bible_app/theme/bible_light_palette.dart';
 import 'package:bible_app/widgets/app_chrome_overflow_menu.dart';
@@ -63,6 +64,7 @@ void _showNotebookTopOverlayMessage(
 
 /// Область контента блокнота в светлой теме — как карточка стихов на вкладке «Библия».
 Widget _notebookLightContentShell({
+  required BuildContext context,
   required bool isDark,
   required Widget child,
 }) {
@@ -88,7 +90,7 @@ Widget _notebookLightContentShell({
     child: DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
-        gradient: BibleLightPalette.verseCardGradient,
+        gradient: AppThemeColors.lightVerseCardGradient(context),
         border: Border.all(color: BibleLightPalette.border, width: 1),
         boxShadow: BibleLightPalette.verseCardShadow,
       ),
@@ -2308,6 +2310,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
                 )
               : editing
                   ? _notebookLightContentShell(
+                      context: context,
                       isDark: isDark,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2331,6 +2334,7 @@ class _NotebookScreenState extends State<NotebookScreen> {
                       children: [
                         Expanded(
                           child: _notebookLightContentShell(
+                            context: context,
                             isDark: isDark,
                             child: notebookVisibleRows.isEmpty
                               ? Center(

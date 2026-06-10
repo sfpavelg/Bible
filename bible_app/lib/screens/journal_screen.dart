@@ -14,6 +14,7 @@ import 'package:bible_app/screens/inspiration_plan_screen.dart';
 import 'package:bible_app/models/bible_model.dart';
 import 'package:bible_app/navigation/app_tab_switcher.dart';
 import 'package:bible_app/providers/app_provider.dart';
+import 'package:bible_app/theme/app_theme_colors.dart';
 import 'package:bible_app/theme/bible_dark_palette.dart';
 import 'package:bible_app/theme/bible_light_palette.dart';
 import 'package:bible_app/widgets/app_chrome_overflow_menu.dart';
@@ -1837,14 +1838,18 @@ class _JournalScreenState extends State<JournalScreen>
     HapticFeedback.lightImpact();
     if (!mounted) return;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final sheetBg =
-        isDark ? BibleDarkPalette.cardBg : BibleLightPalette.topBarBg;
-    final titleColor =
-        isDark ? BibleDarkPalette.titleGold : BibleLightPalette.primary;
-    final unselectedBtn =
-        isDark ? BibleDarkPalette.cardBg : BibleLightPalette.chromePillFill;
-    final chromeFg =
-        isDark ? BibleDarkPalette.primaryText : BibleLightPalette.primaryText;
+    final sheetBg = isDark
+        ? BibleDarkPalette.cardBg
+        : AppThemeColors.lightSurface(context, BibleLightPalette.topBarBg);
+    final titleColor = isDark
+        ? AppThemeColors.darkText(context, BibleDarkPalette.titleGold)
+        : BibleLightPalette.primary;
+    final unselectedBtn = isDark
+        ? BibleDarkPalette.cardBg
+        : AppThemeColors.lightSurface(context, BibleLightPalette.chromePillFill);
+    final chromeFg = isDark
+        ? AppThemeColors.darkText(context, BibleDarkPalette.primaryText)
+        : BibleLightPalette.primaryText;
     await showDialog<void>(
       context: context,
       builder: (ctx) {
@@ -2627,13 +2632,16 @@ class _JournalScreenState extends State<JournalScreen>
                                               );
                                             }
                                             final dir = Directionality.of(ctx);
+                                            final textScaler =
+                                                MediaQuery.textScalerOf(ctx);
                                             const minInterItemGap = 10.0;
                                             const badgeGap = 8.0;
+                                            /// Запас: TextPainter без textScaler и погрешность на устройствах (A54 и др.).
+                                            const fitSlack = 20.0;
                                             final displayBlocks = List<String>.from(
                                               readingBlocks,
                                             );
-                                            var totalWidth = 0.0;
-                                            for (final block in displayBlocks) {
+                                            double measureBlockWidth(String block) {
                                               final tp = TextPainter(
                                                 text: TextSpan(
                                                   text: block,
@@ -2641,15 +2649,22 @@ class _JournalScreenState extends State<JournalScreen>
                                                 ),
                                                 maxLines: 1,
                                                 textDirection: dir,
+                                                textScaler: textScaler,
                                               )..layout(maxWidth: double.infinity);
-                                              totalWidth += tp.width;
+                                              return tp.width;
+                                            }
+                                            var totalWidth = 0.0;
+                                            for (final block in displayBlocks) {
+                                              totalWidth += measureBlockWidth(block);
                                             }
                                             final baseGaps = displayBlocks.length <= 1
                                                 ? 0.0
                                                 : minInterItemGap *
                                                     (displayBlocks.length - 1);
                                             final canFitOneLine =
-                                                totalWidth + baseGaps <=
+                                                totalWidth +
+                                                    baseGaps +
+                                                    fitSlack <=
                                                     constraints.maxWidth;
                                             final tpBadge = TextPainter(
                                               text: TextSpan(
@@ -2658,60 +2673,61 @@ class _JournalScreenState extends State<JournalScreen>
                                               ),
                                               maxLines: 1,
                                               textDirection: dir,
+                                              textScaler: textScaler,
                                             )..layout(maxWidth: double.infinity);
                                             final badgeWidth = tpBadge.width + 16 + 2;
                                             final canFitWithBadge = done &&
                                                 canFitOneLine &&
                                                 (totalWidth +
                                                         baseGaps +
+                                                        fitSlack +
                                                         badgeGap +
                                                         badgeWidth) <=
                                                     constraints.maxWidth;
 
-                                            Widget textLine(double maxWidth) {
-                                              if (displayBlocks.length == 1) {
+                                            /// Равные колонки — без обрезки «Матфея …» на узком экране.
+                                            Widget readingBlocksRow(
+                                              List<String> blocks, {
+                                              int maxLines = 3,
+                                            }) {
+                                              if (blocks.isEmpty) {
+                                                return const SizedBox.shrink();
+                                              }
+                                              if (blocks.length == 1) {
                                                 return Text(
-                                                  displayBlocks.first,
-                                                  maxLines: 1,
-                                                  softWrap: false,
+                                                  blocks.first,
+                                                  maxLines: maxLines,
+                                                  softWrap: true,
                                                   style: readingsStyle,
                                                 );
                                               }
-                                              final gap = ((maxWidth - totalWidth) /
-                                                      (displayBlocks.length - 1))
-                                                  .clamp(minInterItemGap, 80.0);
                                               return Row(
                                                 crossAxisAlignment:
                                                     CrossAxisAlignment.start,
                                                 children: [
                                                   for (var i = 0;
-                                                      i < displayBlocks.length;
+                                                      i < blocks.length;
                                                       i++) ...[
-                                                    Text(
-                                                      displayBlocks[i],
-                                                      maxLines: 1,
-                                                      softWrap: false,
-                                                      style: readingsStyle,
+                                                    if (i > 0)
+                                                      const SizedBox(width: 4),
+                                                    Expanded(
+                                                      child: Text(
+                                                        blocks[i],
+                                                        maxLines: maxLines,
+                                                        softWrap: true,
+                                                        style: readingsStyle,
+                                                      ),
                                                     ),
-                                                    if (i < displayBlocks.length - 1)
-                                                      SizedBox(width: gap),
                                                   ],
                                                 ],
                                               );
                                             }
 
-                                            Widget lineText(List<String> blocks) {
-                                              return Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  for (var i = 0; i < blocks.length; i++) ...[
-                                                    Text(blocks[i], style: readingsStyle),
-                                                    if (i < blocks.length - 1)
-                                                      const SizedBox(width: minInterItemGap),
-                                                  ],
-                                                ],
-                                              );
-                                            }
+                                            Widget textLine(double maxWidth) =>
+                                                readingBlocksRow(displayBlocks);
+
+                                            Widget lineText(List<String> blocks) =>
+                                                readingBlocksRow(blocks);
 
                                             if (canFitWithBadge) {
                                               final lineMaxWidth =
@@ -2755,15 +2771,7 @@ class _JournalScreenState extends State<JournalScreen>
                                             var currentWidth = 0.0;
                                             for (var i = 0; i < displayBlocks.length; i++) {
                                               final block = displayBlocks[i];
-                                              final tp = TextPainter(
-                                                text: TextSpan(
-                                                  text: block,
-                                                  style: readingsStyle,
-                                                ),
-                                                maxLines: 1,
-                                                textDirection: dir,
-                                              )..layout(maxWidth: double.infinity);
-                                              final w = tp.width;
+                                              final w = measureBlockWidth(block);
                                               final extra = current.isEmpty
                                                   ? w
                                                   : (minInterItemGap + w);
@@ -2804,6 +2812,7 @@ class _JournalScreenState extends State<JournalScreen>
                                               ),
                                               maxLines: 1,
                                               textDirection: dir,
+                                              textScaler: textScaler,
                                             )..layout(maxWidth: double.infinity);
                                             final lastLineTextWidth = tpLast.width;
                                             final canPutBadgeOnLastLine =
@@ -2829,9 +2838,15 @@ class _JournalScreenState extends State<JournalScreen>
                                                 ],
                                                 if (canPutBadgeOnLastLine)
                                                   Row(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment.start,
                                                     children: [
-                                                      lineText(lastLine),
-                                                      const Spacer(),
+                                                      Expanded(
+                                                        child: lineText(lastLine),
+                                                      ),
+                                                      const SizedBox(
+                                                        width: badgeGap,
+                                                      ),
                                                       doneBadge(),
                                                     ],
                                                   )
@@ -2887,11 +2902,17 @@ class _JournalScreenState extends State<JournalScreen>
     );
   }
 
-  Widget _readProgressFooter(AppProvider app, {required bool isDark}) {
-    final bg =
-        isDark ? BibleDarkPalette.screenBg : BibleLightPalette.topBarBg;
-    final fg =
-        isDark ? BibleDarkPalette.titleGold : BibleLightPalette.primary;
+  Widget _readProgressFooter(
+    BuildContext context,
+    AppProvider app, {
+    required bool isDark,
+  }) {
+    final bg = isDark
+        ? BibleDarkPalette.screenBg
+        : AppThemeColors.lightSurface(context, BibleLightPalette.topBarBg);
+    final fg = isDark
+        ? AppThemeColors.darkText(context, BibleDarkPalette.titleGold)
+        : BibleLightPalette.primary;
     final String line;
     final q = _openQuarter;
     if (q == null) {
@@ -2927,23 +2948,32 @@ class _JournalScreenState extends State<JournalScreen>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final appBarBg =
         isDark ? BibleDarkPalette.screenBg : Colors.transparent;
-    final buttonBg =
-        isDark ? BibleDarkPalette.cardBg : BibleLightPalette.chromePillFill;
-    final chromeFg =
-        isDark ? BibleDarkPalette.primaryText : BibleLightPalette.primaryText;
-    final chromeIconFg =
-        isDark ? BibleDarkPalette.chromeMutedGold : BibleLightPalette.iconActive;
+    final buttonBg = isDark
+        ? BibleDarkPalette.cardBg
+        : AppThemeColors.lightSurface(context, BibleLightPalette.chromePillFill);
+    final chromeFg = isDark
+        ? AppThemeColors.darkText(context, BibleDarkPalette.primaryText)
+        : BibleLightPalette.primaryText;
+    final chromeIconFg = isDark
+        ? AppThemeColors.darkText(context, BibleDarkPalette.chromeMutedGold)
+        : BibleLightPalette.iconActive;
     final lightOutline =
         isDark ? null : BibleLightPalette.chromePillOutlineSide;
     final trackHint = isDark
         ? BibleDarkPalette.divider
-        : BibleLightPalette.activeBg;
-    final hubTitleColor =
-        isDark ? BibleDarkPalette.titleGold : BibleLightPalette.primary;
-    final hubMutedFg =
-        isDark ? BibleDarkPalette.primaryText : BibleLightPalette.primaryText;
-    final hubCardBg =
-        isDark ? BibleDarkPalette.cardBg : BibleLightPalette.cardFillPrimary;
+        : AppThemeColors.lightSurface(context, BibleLightPalette.activeBg);
+    final hubTitleColor = isDark
+        ? AppThemeColors.darkText(context, BibleDarkPalette.titleGold)
+        : BibleLightPalette.primary;
+    final hubMutedFg = isDark
+        ? AppThemeColors.darkText(context, BibleDarkPalette.primaryText)
+        : BibleLightPalette.primaryText;
+    final hubCardBg = isDark
+        ? BibleDarkPalette.cardBg
+        : AppThemeColors.lightSurface(
+            context,
+            BibleLightPalette.cardFillPrimary,
+          );
 
     final inQuarter = _openQuarter != null;
     final uiFs = app.fontSize.clamp(12.0, 28.0);
@@ -3130,7 +3160,7 @@ class _JournalScreenState extends State<JournalScreen>
       bottomNavigationBar: _loading ||
               _plan == _JournalPlanKind.inspiration
           ? null
-          : _readProgressFooter(app, isDark: isDark),
+          : _readProgressFooter(context, app, isDark: isDark),
     );
   }
 }

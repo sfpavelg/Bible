@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:bible_app/models/bible_model.dart';
 import 'package:bible_app/navigation/app_tab_switcher.dart';
 import 'package:bible_app/providers/app_provider.dart';
+import 'package:bible_app/theme/app_theme_colors.dart';
 import 'package:bible_app/theme/bible_dark_palette.dart';
 import 'package:bible_app/theme/bible_light_palette.dart';
 import 'package:bible_app/services/bible_service.dart';
@@ -40,37 +41,40 @@ bool _scrollPositionHasMetrics(ScrollController c) =>
 
 Color _bibleScreenAppBarBg(BuildContext context) => _bibleScreenIsDark(context)
     ? BibleDarkPalette.screenBg
-    : BibleLightPalette.topBarBg;
+    : AppThemeColors.lightSurface(context, BibleLightPalette.topBarBg);
 
 Color _bibleScreenButtonBg(BuildContext context) => _bibleScreenIsDark(context)
     ? BibleDarkPalette.cardBg
-    : BibleLightPalette.chromePillFill;
+    : AppThemeColors.lightSurface(context, BibleLightPalette.chromePillFill);
 
 /// Непрозрачный фон плавающих кнопок поверх стихов и списков.
 Color _bibleScreenOverlayButtonBg(BuildContext context) =>
     _bibleScreenIsDark(context)
         ? BibleDarkPalette.cardBg
-        : BibleLightPalette.chromePillBg;
+        : AppThemeColors.lightSurface(context, BibleLightPalette.chromePillBg);
 
 Color _bibleScreenChromeFg(BuildContext context) =>
     _bibleScreenIsDark(context)
-        ? BibleDarkPalette.primaryText
+        ? AppThemeColors.darkText(context, BibleDarkPalette.primaryText)
         : BibleLightPalette.primaryText;
 
 Color _bibleScreenChromeTitleFg(BuildContext context) =>
     _bibleScreenIsDark(context)
-        ? BibleDarkPalette.titleGold
+        ? AppThemeColors.darkText(context, BibleDarkPalette.titleGold)
         : BibleLightPalette.primaryText;
 
 Color _bibleScreenPanelHeadingFg(BuildContext context) =>
     _bibleScreenIsDark(context)
-        ? BibleDarkPalette.titleGold
+        ? AppThemeColors.darkText(context, BibleDarkPalette.titleGold)
         : BibleLightPalette.primaryDark;
 
 Color _bibleScreenVerseAreaBg(BuildContext context) =>
     _bibleScreenIsDark(context)
         ? BibleDarkPalette.cardBg
-        : BibleLightPalette.cardFillSecondary;
+        : AppThemeColors.lightSurface(
+            context,
+            BibleLightPalette.cardFillSecondary,
+          );
 
 Color _bibleScreenVerseHighlightBg(BuildContext context) =>
     _bibleScreenIsDark(context)
@@ -98,13 +102,13 @@ double _bibleSearchTextCharWidth(String char, TextStyle style) {
 Color _bibleSearchControlPanelTrackColor(BuildContext context) =>
     _bibleScreenIsDark(context)
         ? BibleDarkPalette.cardBg
-        : BibleLightPalette.disabledBg;
+        : AppThemeColors.lightSurface(context, BibleLightPalette.disabledBg);
 
 /// Непрозрачный фон выпадающего списка и области результатов поиска (без cardFillSecondary 70 %).
 Color _bibleSearchSolidSurfaceBg(BuildContext context) =>
     _bibleScreenIsDark(context)
         ? BibleDarkPalette.cardBg
-        : BibleLightPalette.topBarBg;
+        : AppThemeColors.lightSurface(context, BibleLightPalette.topBarBg);
 
 const int _kBibleSearchResultsCap = BibleService.searchResultsCap;
 
@@ -436,7 +440,9 @@ class _BibleBookSelectionChipGrid extends StatelessWidget {
                     return Wrap(
                       spacing: horizontalGap,
                       runSpacing: verticalGap,
-                      children: [for (final book in row) _chip(book)],
+                      children: [
+                        for (final book in row) _chip(context, book),
+                      ],
                     );
                   }
                   return Row(
@@ -444,7 +450,7 @@ class _BibleBookSelectionChipGrid extends StatelessWidget {
                     children: [
                       for (var c = 0; c < row.length; c++) ...[
                         if (c > 0) SizedBox(width: horizontalGap),
-                        Expanded(child: _chip(row[c])),
+                        Expanded(child: _chip(context, row[c])),
                       ],
                     ],
                   );
@@ -457,7 +463,7 @@ class _BibleBookSelectionChipGrid extends StatelessWidget {
     );
   }
 
-  Widget _chip(String book) {
+  Widget _chip(BuildContext context, String book) {
     final isCurrentBook = book == currentBook;
     if (isDark) {
       final borderGold = BorderSide(
@@ -474,7 +480,10 @@ class _BibleBookSelectionChipGrid extends StatelessWidget {
               : BibleDarkPalette.cardBg,
           foregroundColor: isCurrentBook
               ? BibleDarkPalette.accentGoldLight
-              : BibleDarkPalette.primaryText,
+              : AppThemeColors.darkText(
+                  context,
+                  BibleDarkPalette.primaryText,
+                ),
           side: borderGold,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
@@ -491,7 +500,10 @@ class _BibleBookSelectionChipGrid extends StatelessWidget {
           style: TextStyle(
             color: isCurrentBook
                 ? BibleDarkPalette.accentGoldLight
-                : BibleDarkPalette.primaryText,
+                : AppThemeColors.darkText(
+                    context,
+                    BibleDarkPalette.primaryText,
+                  ),
             fontSize: bookAbbrFs,
             fontWeight: isCurrentBook ? FontWeight.bold : FontWeight.normal,
           ),
@@ -1416,15 +1428,13 @@ class _BibleScreenState extends State<BibleScreen> {
     final buttonBg = _bibleScreenButtonBg(context);
     final chromeTextColor = _bibleScreenChromeTitleFg(context);
     const verseBg = Colors.transparent;
-    final verseTextColor =
-        _bibleScreenIsDark(context)
-            ? BibleDarkPalette.primaryText
-            : BibleLightPalette.primaryText;
+    final verseTextColor = _bibleScreenChromeFg(context);
     final iconFg = _bibleScreenIsDark(context)
-        ? BibleDarkPalette.chromeMutedGold
+        ? AppThemeColors.darkText(context, BibleDarkPalette.chromeMutedGold)
         : BibleLightPalette.iconActive;
     final iconFgDisabled = _bibleScreenIsDark(context)
-        ? BibleDarkPalette.chromeMutedGold.withValues(alpha: 0.42)
+        ? AppThemeColors.darkText(context, BibleDarkPalette.chromeMutedGold)
+            .withValues(alpha: 0.42)
         : BibleLightPalette.disabledText;
     final lightChromeOutline = _bibleScreenIsDark(context)
         ? _bibleChromeOutlineSide(context)
@@ -1684,7 +1694,8 @@ class _BibleScreenState extends State<BibleScreen> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
           color: isDark ? BibleDarkPalette.cardBg : null,
-          gradient: isDark ? null : BibleLightPalette.verseCardGradient,
+          gradient:
+              isDark ? null : AppThemeColors.lightVerseCardGradient(context),
           border: Border.all(
             color: isDark
                 ? BibleDarkPalette.cardBorderGold
@@ -2165,7 +2176,10 @@ class _BibleScreenState extends State<BibleScreen> {
                                             : BibleDarkPalette.screenBg)
                                         : (isLight
                                             ? BibleLightPalette.primaryText
-                                            : BibleDarkPalette.primaryText),
+                                            : AppThemeColors.darkText(
+                                                context,
+                                                BibleDarkPalette.primaryText,
+                                              )),
                                     side: isLight
                                         ? BorderSide(
                                             color: isCurrent
@@ -2980,7 +2994,7 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog>
     final verseBg = _bibleSearchSolidSurfaceBg(context);
     final rowHi = _bibleScreenRowHighlight(context);
     final hintColor = _bibleScreenIsDark(context)
-        ? BibleDarkPalette.secondaryText
+        ? AppThemeColors.darkText(context, BibleDarkPalette.secondaryText)
         : BibleLightPalette.disabledText;
     final divColor = _bibleScreenIsDark(context)
         ? BibleDarkPalette.divider
@@ -3042,7 +3056,10 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog>
               final segActiveFg =
                   isDark ? BibleDarkPalette.screenBg : Colors.white;
               final segInactiveFg = isDark
-                  ? BibleDarkPalette.secondaryText
+                  ? AppThemeColors.darkText(
+                      context,
+                      BibleDarkPalette.secondaryText,
+                    )
                   : BibleLightPalette.secondaryText;
               final rowLabelStyle = TextStyle(
                 fontSize: searchPanelLabelFs,
@@ -3052,7 +3069,10 @@ class _BibleSearchDialogState extends State<_BibleSearchDialog>
               );
               final wholeWordLabelStyle = rowLabelStyle.copyWith(
                 color: isDark
-                    ? BibleDarkPalette.titleGold
+                    ? AppThemeColors.darkText(
+                        context,
+                        BibleDarkPalette.titleGold,
+                      )
                     : BibleLightPalette.primaryDark,
               );
               final segmentInset =
